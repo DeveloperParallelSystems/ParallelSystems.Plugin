@@ -18,18 +18,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.2025"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.2026", "ParallelSystemsPlugin.2026\ParallelSystemsPlugin.2026.csproj", "{DFA9DD38-0A24-4372-977C-5FFB2060EF18}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystems.Timesheet.Contracts", "..\Shared\ParallelSystems.Timesheet.Contracts\ParallelSystems.Timesheet.Contracts.csproj", "{9FD6CC9D-B1EE-41E3-A1B0-90FA59D159F1}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
 		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{9FD6CC9D-B1EE-41E3-A1B0-90FA59D159F1}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{9FD6CC9D-B1EE-41E3-A1B0-90FA59D159F1}.Debug|x64.Build.0 = Debug|Any CPU
-		{9FD6CC9D-B1EE-41E3-A1B0-90FA59D159F1}.Release|x64.ActiveCfg = Release|Any CPU
-		{9FD6CC9D-B1EE-41E3-A1B0-90FA59D159F1}.Release|x64.Build.0 = Release|Any CPU
 		{FF1DDF83-D14F-4116-8123-5926AD99EB95}.Debug|x64.ActiveCfg = Debug|x64
 		{FF1DDF83-D14F-4116-8123-5926AD99EB95}.Debug|x64.Build.0 = Debug|x64
 		{FF1DDF83-D14F-4116-8123-5926AD99EB95}.Release|x64.ActiveCfg = Release|x64

@@ -11,10 +11,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Shared\ParallelSystems.Timesheet.Contracts\ParallelSystems.Timesheet.Contracts.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="DocumentFormat.OpenXml" />
     <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>

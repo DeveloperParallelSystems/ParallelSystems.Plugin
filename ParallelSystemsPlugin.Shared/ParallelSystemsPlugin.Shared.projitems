@@ -14,6 +14,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\AutomaticContextResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\EvidenceAccumulator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\LocalOutboxClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Timesheets\TrackerCheckpointModels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\TimesheetTracker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\TrackerSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\WindowsActivityDetector.cs" />

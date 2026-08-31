@@ -61,7 +61,7 @@ The largest remaining cost for large valid packages is expected to be actual sol
 ## Solution Layout
 
 - `RevitPlugin/` - Revit adapters, shared ribbon commands, reports, configuration, Fabrication STEP, authorization, and silent timesheet tracking.
-- `Shared/ParallelSystems.Timesheet.Contracts/` - checkpoint request and response contract.
+- `ParallelSystemsPlugin.Shared/Timesheets/TrackerCheckpointModels.cs` - plugin-owned checkpoint transport models. The server maintains its own matching API models.
 - `Backend/` - ASP.NET Core API, authorization, ingestion, PostgreSQL access, Task Mapping, billing, and Timesheets.
 - `Frontend/` - React monitoring application.
 - `Installer/` - build staging and Inno Setup package.
