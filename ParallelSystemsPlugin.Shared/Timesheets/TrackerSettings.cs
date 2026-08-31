@@ -8,7 +8,7 @@ namespace ParallelSystemsPlugin.Timesheets
     {
         public bool Enabled { get; set; } = true;
         public string ApiBaseUrl { get; set; } = "http://localhost:5185";
-        public string TrackerApiKey { get; set; } = "dev-tracker-key-change-me";
+        public string TrackerApiKey { get; set; } = "TzuOp6FOUBaRuRtHX8/krK3ztrxY/OmSIowsJMdnso/rcXvWtdaQEP5Ee86FQcjx";
         public int SamplingIntervalSeconds { get; set; } = 5;
         public int CheckpointIntervalSeconds { get; set; } = 60;
         public int ActiveInputThresholdSeconds { get; set; } = 90;
