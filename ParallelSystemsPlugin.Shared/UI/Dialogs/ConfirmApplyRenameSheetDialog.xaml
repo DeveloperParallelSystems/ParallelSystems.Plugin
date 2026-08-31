@@ -1,0 +1,65 @@
+﻿<Window x:Class="ParallelSystemsPlugin.UI.Dialogs.ConfirmApplyRenameSheetDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:ParallelSystemsPlugin.UI.Dialogs"
+             mc:Ignorable="d" 
+             Title="Assembly Sheet Fix Preview"
+             Height="450" Width="500"
+            WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Data Grid -->
+            <DataGrid x:Name="FixGrid"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserAddRows="False"
+                  Margin="0,0,0,10">
+
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Assembly"
+                                    Binding="{Binding AssemblyName}" Width="*" />
+
+                    <DataGridTextColumn Header="Current Sheet #"
+                                    Binding="{Binding OldSheetNumber}" Width="150" />
+
+                    <!--<DataGridTextColumn Header="New Sheet #"
+                                    Binding="{Binding NewSheetNumber}" Width="150" />
+
+                    <DataGridTextColumn Header="Sheet Name"
+                                    Binding="{Binding SheetName}" Width="2*" />
+
+                    <DataGridTextColumn Header="Preview"
+                                    Binding="{Binding TabPreview}" Width="2*" />-->
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- Buttons -->
+            <StackPanel Grid.Row="1"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+
+                <Button Content="Cancel"
+                    Width="100"
+                    Margin="0,0,10,0"
+                    Click="Cancel_Click"/>
+
+                <Button Content="Apply Fix On Selected Assembly"
+                    Width="180"
+                    Margin="0,0,10,0"
+                    Click="Apply_Click"/>
+
+                <Button Content="Apply Fix To All"
+                     Width="120"
+                     Click="ApplyFixToAll_Click"/>
+                
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

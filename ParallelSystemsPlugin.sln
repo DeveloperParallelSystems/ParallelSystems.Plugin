@@ -1,0 +1,77 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.Core", "ParallelSystemsPlugin.Core\ParallelSystemsPlugin.Core.csproj", "{FF1DDF83-D14F-4116-8123-5926AD99EB95}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "ParallelSystemsPlugin.Shared", "ParallelSystemsPlugin.Shared\ParallelSystemsPlugin.Shared.shproj", "{27B6359B-22AA-4117-97AF-D3A891EEF930}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.2021", "ParallelSystemsPlugin.2021\ParallelSystemsPlugin.2021.csproj", "{3C7690C7-77BA-4143-B879-3455CF2FB57B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.2022", "ParallelSystemsPlugin.2022\ParallelSystemsPlugin.2022.csproj", "{62E10581-C031-494A-9AFA-3569D24B58A1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.2023", "ParallelSystemsPlugin.2023\ParallelSystemsPlugin.2023.csproj", "{5FC5295E-B12F-4738-9289-50FED1F1B456}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.2024", "ParallelSystemsPlugin.2024\ParallelSystemsPlugin.2024.csproj", "{9A2F75B5-F7A8-4BA6-9740-BFAF97DCECA3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.2025", "ParallelSystemsPlugin.2025\ParallelSystemsPlugin.2025.csproj", "{77354D1A-5427-4498-A5CD-07247BAB235F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.2026", "ParallelSystemsPlugin.2026\ParallelSystemsPlugin.2026.csproj", "{DFA9DD38-0A24-4372-977C-5FFB2060EF18}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystems.Timesheet.Contracts", "..\Shared\ParallelSystems.Timesheet.Contracts\ParallelSystems.Timesheet.Contracts.csproj", "{9FD6CC9D-B1EE-41E3-A1B0-90FA59D159F1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9FD6CC9D-B1EE-41E3-A1B0-90FA59D159F1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9FD6CC9D-B1EE-41E3-A1B0-90FA59D159F1}.Debug|x64.Build.0 = Debug|Any CPU
+		{9FD6CC9D-B1EE-41E3-A1B0-90FA59D159F1}.Release|x64.ActiveCfg = Release|Any CPU
+		{9FD6CC9D-B1EE-41E3-A1B0-90FA59D159F1}.Release|x64.Build.0 = Release|Any CPU
+		{FF1DDF83-D14F-4116-8123-5926AD99EB95}.Debug|x64.ActiveCfg = Debug|x64
+		{FF1DDF83-D14F-4116-8123-5926AD99EB95}.Debug|x64.Build.0 = Debug|x64
+		{FF1DDF83-D14F-4116-8123-5926AD99EB95}.Release|x64.ActiveCfg = Release|x64
+		{FF1DDF83-D14F-4116-8123-5926AD99EB95}.Release|x64.Build.0 = Release|x64
+		{3C7690C7-77BA-4143-B879-3455CF2FB57B}.Debug|x64.ActiveCfg = Debug|x64
+		{3C7690C7-77BA-4143-B879-3455CF2FB57B}.Debug|x64.Build.0 = Debug|x64
+		{3C7690C7-77BA-4143-B879-3455CF2FB57B}.Release|x64.ActiveCfg = Release|x64
+		{3C7690C7-77BA-4143-B879-3455CF2FB57B}.Release|x64.Build.0 = Release|x64
+		{62E10581-C031-494A-9AFA-3569D24B58A1}.Debug|x64.ActiveCfg = Debug|x64
+		{62E10581-C031-494A-9AFA-3569D24B58A1}.Debug|x64.Build.0 = Debug|x64
+		{62E10581-C031-494A-9AFA-3569D24B58A1}.Release|x64.ActiveCfg = Release|x64
+		{62E10581-C031-494A-9AFA-3569D24B58A1}.Release|x64.Build.0 = Release|x64
+		{5FC5295E-B12F-4738-9289-50FED1F1B456}.Debug|x64.ActiveCfg = Debug|x64
+		{5FC5295E-B12F-4738-9289-50FED1F1B456}.Debug|x64.Build.0 = Debug|x64
+		{5FC5295E-B12F-4738-9289-50FED1F1B456}.Release|x64.ActiveCfg = Release|x64
+		{5FC5295E-B12F-4738-9289-50FED1F1B456}.Release|x64.Build.0 = Release|x64
+		{9A2F75B5-F7A8-4BA6-9740-BFAF97DCECA3}.Debug|x64.ActiveCfg = Debug|x64
+		{9A2F75B5-F7A8-4BA6-9740-BFAF97DCECA3}.Debug|x64.Build.0 = Debug|x64
+		{9A2F75B5-F7A8-4BA6-9740-BFAF97DCECA3}.Release|x64.ActiveCfg = Release|x64
+		{9A2F75B5-F7A8-4BA6-9740-BFAF97DCECA3}.Release|x64.Build.0 = Release|x64
+		{77354D1A-5427-4498-A5CD-07247BAB235F}.Debug|x64.ActiveCfg = Debug|x64
+		{77354D1A-5427-4498-A5CD-07247BAB235F}.Debug|x64.Build.0 = Debug|x64
+		{77354D1A-5427-4498-A5CD-07247BAB235F}.Release|x64.ActiveCfg = Release|x64
+		{77354D1A-5427-4498-A5CD-07247BAB235F}.Release|x64.Build.0 = Release|x64
+		{DFA9DD38-0A24-4372-977C-5FFB2060EF18}.Debug|x64.ActiveCfg = Debug|x64
+		{DFA9DD38-0A24-4372-977C-5FFB2060EF18}.Debug|x64.Build.0 = Debug|x64
+		{DFA9DD38-0A24-4372-977C-5FFB2060EF18}.Release|x64.ActiveCfg = Release|x64
+		{DFA9DD38-0A24-4372-977C-5FFB2060EF18}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {AAB1F5B6-430E-4C77-A970-B64C62EFE57B}
+	EndGlobalSection
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		ParallelSystemsPlugin.Shared\ParallelSystemsPlugin.Shared.projitems*{3c7690c7-77ba-4143-b879-3455cf2fb57b}*SharedItemsImports = 5
+		ParallelSystemsPlugin.Shared\ParallelSystemsPlugin.Shared.projitems*{62e10581-c031-494a-9afa-3569d24b58a1}*SharedItemsImports = 5
+		ParallelSystemsPlugin.Shared\ParallelSystemsPlugin.Shared.projitems*{5fc5295e-b12f-4738-9289-50fed1f1b456}*SharedItemsImports = 5
+		ParallelSystemsPlugin.Shared\ParallelSystemsPlugin.Shared.projitems*{9a2f75b5-f7a8-4ba6-9740-bfaf97dceca3}*SharedItemsImports = 5
+		ParallelSystemsPlugin.Shared\ParallelSystemsPlugin.Shared.projitems*{77354d1a-5427-4498-a5cd-07247bab235f}*SharedItemsImports = 5
+		ParallelSystemsPlugin.Shared\ParallelSystemsPlugin.Shared.projitems*{dfa9dd38-0a24-4372-977c-5ffb2060ef18}*SharedItemsImports = 5
+		ParallelSystemsPlugin.Shared\ParallelSystemsPlugin.Shared.projitems*{27b6359b-22aa-4117-97af-d3a891eef930}*SharedItemsImports = 13
+	EndGlobalSection
+EndGlobal

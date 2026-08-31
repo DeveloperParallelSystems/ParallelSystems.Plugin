@@ -1,0 +1,163 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>{27B6359B-22AA-4117-97AF-D3A891EEF930}</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>ParallelSystemsPlugin</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)App.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ReconnectCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Timesheets\AutomaticContextResolver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Timesheets\EvidenceAccumulator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Timesheets\LocalOutboxClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Timesheets\TimesheetTracker.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Timesheets\TrackerSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Timesheets\WindowsActivityDetector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Classes\PdfReportBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Classes\PdfRuntime.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Compatibility\RevitApiCompatibility.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AboutUsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ApplyDetailingCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ApplyEndPrepFilterCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ApplyPipeFilterCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\BOMCheckCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ClearEndPrepFilterCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ClearFittingsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ClearHeaderNDCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ClearPipeFilterCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ClearPipeWeightCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ClearPipesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ExportBomCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\FilterItemsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\GenerateFabricationStepCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ExportFabricationDiagnosticsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\FabricationStatusCommands.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\MapFittingsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\MapHeaderNDCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\MapPipesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\PipeSlopeCheckCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\PipeWeightCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\PublishBomCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\RenameExportCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\RenameImportCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\RenameSheetNumbersCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ShowAboutCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ShowConfigurationsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Converters\RevitColorToBrushConverter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepModels.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationPreflightModels.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationPreflightService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationProcessedRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationDiagnosticsExporter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Diagnostics.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Selection.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Status.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Generation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.StepTopology.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Dimensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Connections.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.PipeGeometry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.FittingGeometry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.ReducerGeometry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.ChamferGeometry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.BranchGeometry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Classification.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.GeometryUtilities.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Performance.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\AssemblyCSVHelpers.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\BackgroundPublishRunner.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\Documents.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\Elements.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\ExcelReportExporter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\PdfLayoutHelpers.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\PdfReportCommon.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\PulldownButton.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\PushButton.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\SplitButton.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomAssemblyRegisterReport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomAccessoryReport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomCutListReport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomFieldMaterialReport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomFittingReport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomLoadingReport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomPipeReport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\LabelReport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\AboutPanelMenu.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\AppDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\DetailingMenu.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\FabricationMenu.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\AboutDialog.xaml.cs">
+      <DependentUpon>AboutDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\Configurations.xaml.cs">
+      <DependentUpon>Configurations.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\ConfirmApplyRenameSheetDialog.xaml.cs">
+      <DependentUpon>ConfirmApplyRenameSheetDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\MessageDialog.xaml.cs">
+      <DependentUpon>MessageDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\FilterItemsDialog.xaml.cs">
+      <DependentUpon>FilterItemsDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\ProgressWindow.xaml.cs">
+      <DependentUpon>ProgressWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\StartupSplashWindow.xaml.cs">
+      <DependentUpon>StartupSplashWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Helper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\ProcurementMenu.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\PropertyMappingMenu.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\SettingsPanelMenu.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\ToolsMenu.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\WindowCentering.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Include="$(MSBuildThisFileDirectory)UI\Dialogs\AboutDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="$(MSBuildThisFileDirectory)UI\Dialogs\Configurations.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="$(MSBuildThisFileDirectory)UI\Dialogs\ConfirmApplyRenameSheetDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="$(MSBuildThisFileDirectory)UI\Dialogs\MessageDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="$(MSBuildThisFileDirectory)UI\Dialogs\FilterItemsDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="$(MSBuildThisFileDirectory)UI\Dialogs\ProgressWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Resource Include="$(MSBuildThisFileDirectory)UI\Assets\ParallelSystemsWebsiteLogo.png" />
+    <Page Include="$(MSBuildThisFileDirectory)UI\Dialogs\StartupSplashWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)Icons\**\*">
+      <Link>Icons\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)Docs\**\*">
+      <Link>Docs\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

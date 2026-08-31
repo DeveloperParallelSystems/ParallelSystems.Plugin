@@ -1,0 +1,100 @@
+<Project>
+
+  <Target Name="CleanStalePdfMigraDocAssemblies"
+          BeforeTargets="ResolveReferences"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_StalePdfMigraDocAssemblies Include="$(TargetDir)PdfSharp*.dll;$(TargetDir)MigraDoc*.dll;$(TargetDir)Microsoft.Extensions.Logging.Abstractions.dll;$(TargetDir)Microsoft.Extensions.DependencyInjection.Abstractions.dll;$(TargetDir)Microsoft.Bcl.AsyncInterfaces.dll;$(TargetDir)System.Security.Cryptography.Pkcs.dll" />
+    </ItemGroup>
+    <Delete Files="@(_StalePdfMigraDocAssemblies)"
+            ContinueOnError="true" />
+  </Target>
+
+  <Target Name="ValidateRevitReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(RevitVersion)' == ''"
+           Text="RevitVersion was not configured for $(MSBuildProjectName)." />
+    <Error Condition="!Exists('$(RevitInstallDir)\RevitAPI.dll')"
+           Text="Revit $(RevitVersion) API was not found at '$(RevitInstallDir)'. Install Revit $(RevitVersion) or override RevitInstallDir." />
+    <Error Condition="!Exists('$(RevitInstallDir)\RevitAPIUI.dll')"
+           Text="RevitAPIUI.dll was not found at '$(RevitInstallDir)'." />
+    <Error Condition="!Exists('$(RevitInstallDir)\AdWindows.dll')"
+           Text="AdWindows.dll was not found at '$(RevitInstallDir)'." />
+  </Target>
+
+  <Target Name="RejectCopiedAutodeskAssemblies" AfterTargets="Build">
+    <Error Condition="Exists('$(TargetDir)RevitAPI.dll') Or Exists('$(TargetDir)RevitAPIUI.dll') Or Exists('$(TargetDir)AdWindows.dll')"
+           Text="Autodesk host assemblies must not be copied to the add-in output." />
+  </Target>
+
+  <Target Name="CheckPdfMigraDocDependencyFiles"
+          AfterTargets="Build"
+          BeforeTargets="DeployParallelSystemsPluginToRevit"
+          Condition="'$(DesignTimeBuild)' != 'true' And '$(TargetFramework)' == 'net48'">
+    <Error Condition="!Exists('$(TargetDir)PdfSharp-gdi.dll') Or !Exists('$(TargetDir)MigraDoc.DocumentObjectModel-gdi.dll') Or !Exists('$(TargetDir)MigraDoc.Rendering-gdi.dll')"
+           Text="[Build $(RevitVersion)] The legacy PDFsharp/MigraDoc 1.50 dependency set is incomplete in $(TargetDir). Clean bin/obj, restore packages, rebuild, and deploy the full output folder." />
+  </Target>
+
+  <Target Name="CheckPdfMigraDocDependencyFilesModern"
+          AfterTargets="Build"
+          BeforeTargets="DeployParallelSystemsPluginToRevit"
+          Condition="'$(DesignTimeBuild)' != 'true' And '$(TargetFramework)' == 'net8.0-windows'">
+    <Error Condition="!Exists('$(TargetDir)PdfSharp.System.dll') Or !Exists('$(TargetDir)PdfSharp-gdi.dll') Or !Exists('$(TargetDir)MigraDoc.DocumentObjectModel.dll') Or !Exists('$(TargetDir)MigraDoc.Rendering-gdi.dll') Or !Exists('$(TargetDir)Microsoft.Extensions.Logging.Abstractions.dll')"
+           Text="[Build $(RevitVersion)] The PDFsharp/MigraDoc 6 dependency set is incomplete in $(TargetDir). Clean bin/obj, restore packages, rebuild, and deploy the full output folder." />
+  </Target>
+
+  <Target Name="DeployParallelSystemsPluginToRevit"
+          AfterTargets="Build"
+          Condition="'$(DeployToRevitOnBuild)' == 'true' And '$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <_RevitAddinRoot>$(APPDATA)\Autodesk\Revit\Addins\$(RevitVersion)</_RevitAddinRoot>
+      <_RevitPluginDirectory>$(_RevitAddinRoot)\ParallelSystemPlugin</_RevitPluginDirectory>
+      <_RevitManifestPath>$(_RevitAddinRoot)\ParallelSystemPlugin.addin</_RevitManifestPath>
+      <_ProjectManifest>$(MSBuildProjectDirectory)\Addin\ParallelSystemPlugin.addin</_ProjectManifest>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_DeploymentFiles Include="$(TargetDir)**\*.*"
+                        Exclude="$(TargetDir)**\RevitAPI.dll;$(TargetDir)**\RevitAPIUI.dll;$(TargetDir)**\AdWindows.dll" />
+      <_PdfMigraDocFiles Include="$(TargetDir)PdfSharp*.dll;$(TargetDir)MigraDoc*.dll;$(TargetDir)Microsoft.Extensions.Logging.Abstractions.dll;$(TargetDir)Microsoft.Extensions.DependencyInjection.Abstractions.dll;$(TargetDir)Microsoft.Bcl.AsyncInterfaces.dll;$(TargetDir)System.Security.Cryptography.Pkcs.dll" />
+    </ItemGroup>
+
+    <Message Importance="High"
+             Text="[PostBuild $(RevitVersion)] Deploying $(TargetFileName) with native MSBuild tasks..." />
+
+    <Error Condition="!Exists('$(TargetPath)')"
+           Text="[PostBuild $(RevitVersion)] Main add-in assembly was not found: $(TargetPath)" />
+    <Error Condition="!Exists('$(_ProjectManifest)')"
+           Text="[PostBuild $(RevitVersion)] Add-in manifest was not found: $(_ProjectManifest)" />
+
+    <Error Condition="'$(TargetFramework)' == 'net48' And (!Exists('$(TargetDir)PdfSharp-gdi.dll') Or !Exists('$(TargetDir)MigraDoc.DocumentObjectModel-gdi.dll') Or !Exists('$(TargetDir)MigraDoc.Rendering-gdi.dll'))"
+           Text="[PostBuild $(RevitVersion)] The legacy PDFsharp/MigraDoc 1.50 dependency set is incomplete in $(TargetDir). Clean, restore, rebuild, then deploy the full output folder." />
+    <Error Condition="'$(TargetFramework)' == 'net8.0-windows' And (!Exists('$(TargetDir)PdfSharp.System.dll') Or !Exists('$(TargetDir)PdfSharp-gdi.dll') Or !Exists('$(TargetDir)MigraDoc.DocumentObjectModel.dll') Or !Exists('$(TargetDir)MigraDoc.Rendering-gdi.dll') Or !Exists('$(TargetDir)Microsoft.Extensions.Logging.Abstractions.dll'))"
+           Text="[PostBuild $(RevitVersion)] The PDFsharp/MigraDoc 6 dependency set is incomplete in $(TargetDir). Clean, restore, rebuild, then deploy the full output folder." />
+
+    <Message Importance="High"
+             Text="[PostBuild $(RevitVersion)] PDF report dependencies: @(_PdfMigraDocFiles->'%(Filename)%(Extension)', ', ')" />
+
+    <MakeDir Directories="$(_RevitAddinRoot)" />
+    <RemoveDir Directories="$(_RevitPluginDirectory)"
+               Condition="Exists('$(_RevitPluginDirectory)')" />
+    <MakeDir Directories="$(_RevitPluginDirectory)" />
+
+    <Copy SourceFiles="@(_DeploymentFiles)"
+          DestinationFiles="@(_DeploymentFiles->'$(_RevitPluginDirectory)\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="false" />
+
+    <Copy SourceFiles="$(_ProjectManifest)"
+          DestinationFiles="$(_RevitManifestPath)"
+          SkipUnchangedFiles="false" />
+
+    <Error Condition="!Exists('$(_RevitPluginDirectory)\$(TargetFileName)')"
+           Text="[PostBuild $(RevitVersion)] Deployment did not produce $(_RevitPluginDirectory)\$(TargetFileName)." />
+    <Error Condition="Exists('$(_RevitPluginDirectory)\RevitAPI.dll') Or Exists('$(_RevitPluginDirectory)\RevitAPIUI.dll') Or Exists('$(_RevitPluginDirectory)\AdWindows.dll')"
+           Text="[PostBuild $(RevitVersion)] Autodesk host assemblies must not be deployed with the add-in." />
+
+    <Message Importance="High"
+             Text="[PostBuild $(RevitVersion)] Deployment completed: $(_RevitPluginDirectory)" />
+    <Message Importance="High"
+             Text="[PostBuild $(RevitVersion)] Manifest: $(_RevitManifestPath)" />
+  </Target>
+</Project>

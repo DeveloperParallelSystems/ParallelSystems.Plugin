@@ -1,0 +1,1014 @@
+﻿<Window x:Class="ParallelSystemsPlugin.UI.Dialogs.Configurations"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:local="clr-namespace:ParallelSystemsPlugin.Converters"
+        xmlns:converterNs="clr-namespace:ParallelSystemsPlugin.Converters"
+        mc:Ignorable="d"
+        ResizeMode="CanResizeWithGrip"
+        Background="#F3F4F6"
+        Title="Configurations"
+        WindowStartupLocation="CenterScreen"
+        Height="880"
+        Width="960"
+        MinHeight="760"
+        MinWidth="820">
+
+    <Window.Resources>
+        <converterNs:RevitColorToBrushConverter x:Key="RevitColorToBrushConverter"/>
+    </Window.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <!-- Tabs -->
+            <RowDefinition Height="60"/>
+            <!-- Buttons -->
+        </Grid.RowDefinitions>
+
+        <TabControl>
+            <TabItem Header="Pipe End Prep">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*"/>
+                        <ColumnDefinition Width="3*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="3*"/>
+                        <RowDefinition Height="300"/>
+                        <RowDefinition Height="60"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Map Param -->
+                    <GroupBox Header="Map Parameters" Grid.Row="0" Grid.Column="0" Margin="5" FontWeight="Bold">
+                        <Grid Margin="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="End 1:" FontSize="15" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="PipeEnd1TextBox" Grid.Column="1" Margin="5" FontSize="15"/>
+
+                            <TextBlock Grid.Row="1" FontSize="15" Text="End 2:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="PipeEnd2TextBox" Grid.Row="1" Grid.Column="1" Margin="5" FontSize="15"/>
+
+                            <TextBlock Grid.Row="2" FontSize="15" Text="End Prep:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="PipeEndPrepTextBox" Grid.Row="2" Grid.Column="1" Margin="5" FontSize="15"/>
+
+                            <Rectangle Grid.Row="3" Grid.ColumnSpan="2" Height="1" Fill="LightGray" VerticalAlignment="Center" Margin="0,10"/>
+
+                            <TextBlock Grid.Row="4" FontSize="15" Text="Unconnected:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="PipeUnconnectedTextBox" Grid.Row="4" Grid.Column="1" Margin="5" FontSize="15"/>
+
+                            <CheckBox Content="Enable Mapping" x:Name="PipeEnableUnconnectedMappingCheckbox" Grid.Row="5" Grid.Column="1" Margin="5"></CheckBox>
+                        </Grid>
+                    </GroupBox>
+
+                    <!-- Ignore Components -->
+                    <GroupBox Header="Ignore Components" Grid.Row="0" Grid.Column="1" Margin="5" FontWeight="Bold">
+                        <DataGrid x:Name="PipeIgnoreComponentsGrid"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserResizeColumns="False"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="None"
+                      RowBackground="#E5E7EB"
+                      AlternatingRowBackground="#F9FAFB"
+                      BorderThickness="0"
+                      Margin="10"
+                      Background="White"
+                      FontSize="15">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name Contains" Binding="{Binding NameContains}" Width="*"/>
+                            </DataGrid.Columns>
+
+                            <!-- Context Menu -->
+                            <DataGrid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Add" Click="AddIgnoreComponentsRow_Click"/>
+                                    <MenuItem Header="Delete" Click="DeleteIgnoreComponentsRow_Click"/>
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
+
+                        </DataGrid>
+                    </GroupBox>
+
+                    <!-- PipeEndPrep -->
+                    <GroupBox Header="Pipe End Prep" Grid.Row="1" Grid.Column="0" Margin="5" Grid.ColumnSpan="2" FontWeight="Bold">
+                        <DataGrid x:Name="PipeEndPrepGrid"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserResizeColumns="False"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="None"
+                      RowBackground="#E5E7EB"
+                      AlternatingRowBackground="#F9FAFB"
+                      CanUserSortColumns="False"
+                      Background="White"
+                      BorderThickness="0"
+                      Margin="10"
+                      FontSize="15">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name Contains" Binding="{Binding NameContains}" Width="*"/>
+                                <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="200"/>
+                            </DataGrid.Columns>
+
+                            <!-- Context Menu -->
+                            <DataGrid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Add" Click="AddPipeEndPrepRow_Click"/>
+                                    <MenuItem Header="Delete" Click="DeletePipeEndPrepRow_Click"/>
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
+                        </DataGrid>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <!--Fittings-->
+            <TabItem Header="Fittings End Prep">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*"/>
+                        <ColumnDefinition Width="3*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="3*"/>
+                        <RowDefinition Height="250"/>
+                        <RowDefinition Height="10"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Map Param -->
+                    <GroupBox Header="Map Parameters" Grid.Row="0" Grid.Column="0" Margin="5" FontWeight="Bold">
+                        <Grid Margin="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="End 1:" FontSize="15" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="FittingsEnd1TextBox" Grid.Column="1" Margin="5" FontSize="15"/>
+
+                            <TextBlock Grid.Row="1" FontSize="15" Text="End 2:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="FittingsEnd2TextBox" Grid.Row="1" Grid.Column="1" Margin="5" FontSize="15"/>
+
+                            <TextBlock Grid.Row="2" FontSize="15" Text="End Prep:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="FittingsEndPrepTextBox" Grid.Row="2" Grid.Column="1" Margin="5" FontSize="15"/>
+
+                            <TextBlock Grid.Row="3" FontSize="15" Text="Header ND:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="FittingsHeaderNDTextBox" Grid.Row="3" Grid.Column="1" Margin="5" FontSize="15"/>
+
+                            <Rectangle Grid.Row="4" Grid.ColumnSpan="2" Height="1" Fill="LightGray" VerticalAlignment="Center" Margin="0,10"/>
+
+                            <TextBlock Grid.Row="5" FontSize="15" Text="Unconnected:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="FittingsUnconnectedTextBox" Grid.Row="5" Grid.Column="1" Margin="5" FontSize="15"/>
+
+                            <CheckBox Content="Enable Mapping" x:Name="FittingsEnableUnconnectedMappingCheckbox" Grid.Row="6" Grid.Column="1" Margin="5"></CheckBox>
+                        </Grid>
+                    </GroupBox>
+
+                    <Grid Grid.Row="0" Grid.Column="1" >
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"></RowDefinition>
+                            <RowDefinition Height="*"></RowDefinition>
+                        </Grid.RowDefinitions>
+                        <!-- Ignore Components -->
+                        <GroupBox Header="Ignore Components" Grid.Row="0" Margin="5" FontWeight="Bold">
+                            <DataGrid x:Name="FittingsIgnoredComponentsGrid"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserResizeColumns="False"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="None"
+                              RowBackground="#E5E7EB"
+                              AlternatingRowBackground="#F9FAFB"
+                              BorderThickness="0"
+                              Margin="10"
+                              Background="White"
+                              FontSize="15">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Name Contains" Binding="{Binding NameContains}" Width="*"/>
+                                </DataGrid.Columns>
+
+                                <!-- Context Menu -->
+                                <DataGrid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Add" Click="AddFittingsIgnoredComponentsRow_Click"/>
+                                        <MenuItem Header="Delete" Click="DeleteFittingsIgnoreComponentsRow_Click"/>
+                                    </ContextMenu>
+                                </DataGrid.ContextMenu>
+
+                            </DataGrid>
+                        </GroupBox>
+
+                        <!-- Allow Mapping To -->
+                        <GroupBox Header="Apply Mappings To" Grid.Row="1" Margin="5" FontWeight="Bold">
+                            <DataGrid x:Name="AllowdMapFittingsElementsGrid"
+                            AutoGenerateColumns="False"
+                            CanUserAddRows="False"
+                            CanUserResizeColumns="False"
+                            HeadersVisibility="Column"
+                            GridLinesVisibility="None"
+                            RowBackground="#E5E7EB"
+                            AlternatingRowBackground="#F9FAFB"
+                            BorderThickness="0"
+                            Margin="10"
+                            Background="White"
+                            FontSize="15">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Name Contains" Binding="{Binding NameContains}" Width="*"/>
+                                </DataGrid.Columns>
+
+                                <!-- Context Menu -->
+                                <DataGrid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Add" Click="AddApplyMappingToRow_Click"/>
+                                        <MenuItem Header="Delete" Click="DeleteApplyMappingToRow_Click"/>
+                                    </ContextMenu>
+                                </DataGrid.ContextMenu>
+
+                            </DataGrid>
+                        </GroupBox>
+                    </Grid>
+                    <!-- PipeEndPrep -->
+                    <GroupBox Header="Fittings End Prep" Grid.Row="1" Grid.Column="0" Margin="5" Grid.ColumnSpan="2" FontWeight="Bold">
+                        <DataGrid x:Name="FittingsEndPrepGrid"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          CanUserResizeColumns="False"
+                          HeadersVisibility="Column"
+                          GridLinesVisibility="None"
+                          RowBackground="#E5E7EB"
+                          AlternatingRowBackground="#F9FAFB"
+                          CanUserSortColumns="False"
+                          Background="White"
+                          BorderThickness="0"
+                          Margin="10"
+                          FontSize="15">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name Contains" Binding="{Binding NameContains}" Width="*"/>
+                                <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="200"/>
+                            </DataGrid.Columns>
+
+                            <!-- Context Menu -->
+                            <DataGrid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Add" Click="AddFittingsEndPrepRow_Click"/>
+                                    <MenuItem Header="Delete" Click="DeleteFittingsEndPrepRow_Click"/>
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
+                        </DataGrid>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <!-- Pipe Weight-->
+            <TabItem Header="Pipe Weight">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3*"/>
+                        <ColumnDefinition Width="3*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="3*"/>
+                        <RowDefinition Height="220"/>
+                        <RowDefinition Height="40"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Map Param -->
+                    <GroupBox Header="Map Parameters" Grid.Row="0" Grid.Column="0" Margin="5" FontWeight="Bold">
+                        <Grid Margin="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="Dry Parameter" FontSize="15" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="DryParameterTextBox" Grid.Column="1" Margin="5" FontSize="15"/>
+
+                            <TextBlock Grid.Row="1" FontSize="15" Text="Wet Parameter:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="WetParameterTextBox" Grid.Row="1" Grid.Column="1" Margin="5" FontSize="15"/>
+
+                            <TextBlock Grid.Row="2" FontSize="15" Text="Number of Decimals:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="PipeWeightNumberDecimalsTextBox" Grid.Row="2" Grid.Column="1" Margin="5" FontSize="15" PreviewTextInput="NumericOnly"/>
+
+                            <TextBlock Grid.Row="3" FontSize="15" Text="Cladding Weight:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="CladdingWeightTextBox" Grid.Row="3" Grid.Column="1" Margin="5" FontSize="15" />
+
+                            <TextBlock Grid.Row="4" FontSize="15" Text="Insulation Weight:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="InsulationWeightTextBox" Grid.Row="4" Grid.Column="1" Margin="5" FontSize="15" />
+
+                            <TextBlock Grid.Row="5" FontSize="15" Text="Fluid Weight:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="FluidWeightTextBox" Grid.Row="5" Grid.Column="1" Margin="5" FontSize="15" />
+
+                            <TextBlock Grid.Row="6" FontSize="15" Text="Total Weight:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="TotalWeightTextBox" Grid.Row="6" Grid.Column="1" Margin="5" FontSize="15" />
+
+                            <TextBlock Grid.Row="7" FontSize="15" Text="Computed Overall Size:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox x:Name="ComputedOverallSizeTextBox" Grid.Row="7" Grid.Column="1" Margin="5" FontSize="15" />
+
+                        </Grid>
+                    </GroupBox>
+
+                    <Grid Grid.Row="0" Grid.Column="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"></RowDefinition>
+                            <RowDefinition Height="*"></RowDefinition>
+                        </Grid.RowDefinitions>
+
+                        <GroupBox Header="Material Properties" Grid.Row="0" Margin="5" FontWeight="Bold">
+                            <Grid Margin="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="200"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"></RowDefinition>
+                                    <RowDefinition Height="Auto"></RowDefinition>
+                                    <RowDefinition Height="Auto"></RowDefinition>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" FontSize="15" Text="Cladding Thickness (m):" VerticalAlignment="Center" Margin="0,5"/>
+                                <TextBox x:Name="PipeWeightCladdingThicknessTextBox" Grid.Row="0" Grid.Column="1" Margin="5" FontSize="15" PreviewTextInput="NumericOnly"/>
+
+                                <TextBlock Grid.Row="1" FontSize="15" Text="Cladding Density (kg/m³):" VerticalAlignment="Center" Margin="0,5"/>
+                                <TextBox x:Name="PipeWeightCladdingDensityTextBox" Grid.Row="1" Grid.Column="1" Margin="5" FontSize="15" PreviewTextInput="NumericOnly"/>
+
+                                <TextBlock Grid.Row="2" FontSize="15" Text="Insulation Density: (kg/m³)" VerticalAlignment="Center" Margin="0,5"/>
+                                <TextBox x:Name="PipeWeightInsulationDensityTextBox" Grid.Row="2" Grid.Column="1" Margin="5" FontSize="15" PreviewTextInput="NumericOnly"/>
+                            </Grid>
+                        </GroupBox>
+
+                        <GroupBox Header="System Abbreviation" Grid.Row="1" Margin="5" FontWeight="Bold">
+                            <DataGrid x:Name="SystemAbbreviationGrid"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserResizeColumns="False"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="None"
+                              RowBackground="#E5E7EB"
+                              AlternatingRowBackground="#F9FAFB"
+                              CanUserSortColumns="False"
+                              Background="White"
+                              BorderThickness="0"
+                              Margin="10"
+                              FontSize="15">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Contains Text" Binding="{Binding AbbreviationContains}" Width="8*"/>
+                                    <DataGridTextColumn Header="Density" Binding="{Binding Density}" Width="5*"/>
+                                </DataGrid.Columns>
+
+                                <!-- Context Menu -->
+                                <DataGrid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Add" Click="AddSystemAbbreviationRow_Click"/>
+                                        <MenuItem Header="Delete" Click="DeleteSystemAbbreviationRow_Click"/>
+                                    </ContextMenu>
+                                </DataGrid.ContextMenu>
+                            </DataGrid>
+                        </GroupBox>
+                    </Grid>
+
+                    <GroupBox Header="Pipe Category" Grid.Row="1" Grid.Column="0" Margin="5" Grid.ColumnSpan="2" FontWeight="Bold">
+                        <DataGrid x:Name="ElementsGrid"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          CanUserResizeColumns="False"
+                          HeadersVisibility="Column"
+                          GridLinesVisibility="None"
+                          RowBackground="#E5E7EB"
+                          AlternatingRowBackground="#F9FAFB"
+                          CanUserSortColumns="False"
+                          Background="White"
+                          BorderThickness="0"
+                          Margin="10"
+                          FontSize="15">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="50"/>
+                                <DataGridTextColumn Header="Pipe Type" Binding="{Binding PipeType}" Width="*"/>
+                                <DataGridTextColumn Header="Dry Weight (kg/m)" Binding="{Binding DryWeight}" Width="150"/>
+                                <DataGridTextColumn Header="Wet Weight (kg/m)" Binding="{Binding WetWeight}" Width="150"/>
+                            </DataGrid.Columns>
+
+                            <!-- Context Menu -->
+                            <DataGrid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Add" Click="AddPipeWeightElementsRow_Click"/>
+                                    <MenuItem Header="Delete" Click="DeletePipeWeightElementsRow_Click"/>
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
+                        </DataGrid>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <!-- Procurement -->
+            <TabItem Header="Procurement">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="330"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- LEFT COLUMN: Project Details + Publish details -->
+                    <Grid Grid.Column="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Project Details -->
+                        <GroupBox Header="Project Details" Grid.Row="0" Margin="5" FontWeight="Bold">
+                            <Grid Margin="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="10"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="20"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Company Logo -->
+                                <TextBlock Grid.Row="0" Grid.Column="0"
+                               Text="Company Logo:" FontSize="15" FontWeight="SemiBold"
+                               VerticalAlignment="Top" Margin="0,4,10,0"/>
+
+                                <StackPanel Grid.Row="0" Grid.Column="1">
+                                    <Border BorderBrush="LightGray"
+                                BorderThickness="1"
+                                CornerRadius="2"
+                                Height="140"
+                                Background="White"
+                                Cursor="Hand"
+                                MouseEnter="LogoBorder_MouseEnter"
+                                MouseLeave="LogoBorder_MouseLeave"
+                                MouseLeftButtonUp="BrowseCompanyLogo_Click">
+                                        <Grid>
+                                            <Image x:Name="ProcCompanyLogoImage"
+                                       Stretch="Uniform"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="ProcCompanyLogoPlaceholder"
+                                           Text="Click to select image"
+                                           Foreground="Gray"
+                                           FontStyle="Italic"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+
+                                <Rectangle Grid.Row="1" Grid.ColumnSpan="2" Height="1" Fill="#E5E7EB" Margin="0,8"/>
+
+                                <!-- Client Logo -->
+                                <TextBlock Grid.Row="2" Grid.Column="0"
+                               Text="Client Logo:" FontSize="15" FontWeight="SemiBold"
+                               VerticalAlignment="Top" Margin="0,4,10,0"/>
+
+                                <StackPanel Grid.Row="2" Grid.Column="1">
+                                    <Border BorderBrush="LightGray"
+                                BorderThickness="1"
+                                CornerRadius="2"
+                                Height="140"
+                                Background="White"
+                                Cursor="Hand"
+                                MouseEnter="LogoBorder_MouseEnter"
+                                MouseLeave="LogoBorder_MouseLeave"
+                                MouseLeftButtonUp="BrowseClientLogo_Click">
+                                        <Grid>
+                                            <Image x:Name="ProcClientLogoImage"
+                                       Stretch="Uniform"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="ProcClientLogoPlaceholder"
+                                           Text="Click to select image"
+                                           Foreground="Gray"
+                                           FontStyle="Italic"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+
+                                <Rectangle Grid.Row="3" Grid.ColumnSpan="2" Height="1" Fill="#E5E7EB" Margin="0,10"/>
+
+                                <!-- Job Number -->
+                                <TextBlock Grid.Row="4" Grid.Column="0"
+                               Text="Job Number:" FontSize="15"
+                               VerticalAlignment="Center" Margin="0,5,10,5"/>
+                                <TextBox Grid.Row="4" Grid.Column="1"
+                             x:Name="ProcJobNumberTextBox"
+                             Margin="0,5" FontSize="15"/>
+
+                                <!-- Job Name -->
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Job Name:" FontSize="15" VerticalAlignment="Center" Margin="0,5,10,5"/>
+                                <TextBox Grid.Row="5" Grid.Column="1" x:Name="ProcJobNameTextBox" Margin="0,5" FontSize="15"/>
+                                <!--<CheckBox x:Name="ChkAutoDetect" FontSize="15" Margin="5" Grid.Row="6" Grid.Column="1" Content="Auto Detect"/>-->
+                                <Button Margin="5" Grid.Row="6" x:Name="BtnAutoDetect" Grid.Column="1" Content="Auto Detect" Click="BtnAutoDetect_Click" ></Button>
+                            </Grid>
+                        </GroupBox>
+ 
+                        <!-- Publish Details -->
+                        <GroupBox Grid.Row="1"
+                      Header="Publish details"
+                      Margin="5,5,5,10"
+                      FontWeight="Bold">
+                            <Grid Margin="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Publish Site -->
+                                <TextBlock Grid.Row="0" Grid.Column="0"
+                               Text="Publish Site:" FontSize="15"
+                               VerticalAlignment="Center" Margin="0,5,10,5"/>
+
+                                <TextBox Grid.Row="0" Grid.Column="1"
+                             x:Name="ProcPublishSiteTextBox"
+                             Margin="0,5,10,5"
+                             FontSize="15"
+                             IsReadOnly="True"/>
+
+                                <Button Grid.Row="0" Grid.Column="2"
+                            Content="Browse..."
+                            Width="110"
+                            Height="28"
+                            Margin="10,5,0,5"
+                            Click="BrowsePublishSite_Click"/>
+
+                                <!-- File Name -->
+                                <TextBlock Grid.Row="1" Grid.Column="0"
+                               Text="File Name:" FontSize="15"
+                               VerticalAlignment="Center" Margin="0,5,10,5"/>
+
+                                <TextBox Grid.Row="1" Grid.Column="1"
+                             x:Name="ProcPublishFileNameTextBox"
+                             Margin="0,5,0,5"
+                             FontSize="15"
+                             Grid.ColumnSpan="2"/>
+
+                                <!-- Export Options (move to the left so both fit) -->
+                                <UniformGrid Grid.Row="2"
+                                 Grid.Column="0"
+                                 Grid.ColumnSpan="3"
+                                 Columns="2"
+                                 HorizontalAlignment="Left"
+                                 Margin="0,10,0,0">
+
+                                    <CheckBox x:Name="ChkExportPdf"
+                                      Content="Export PDF"
+                                      FontSize="15"
+                                      Margin="0,0,20,0"/>
+
+                                    <CheckBox x:Name="ChkExportImage"
+                                      Content="Export Image"
+                                      FontSize="15"/>
+                                </UniformGrid>
+
+                            </Grid>
+                        </GroupBox>
+                    </Grid>
+
+                    <!-- RIGHT COLUMN: Output Details -->
+                    <GroupBox Header="Output Details" Grid.Column="1" Margin="5,5,10,10" FontWeight="Bold">
+                        <Grid Margin="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="10"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Target Folder -->
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="Target Folder:" FontSize="15"
+                               VerticalAlignment="Center" Margin="0,5,10,5"/>
+                                <TextBox Grid.Column="1" x:Name="ProcTargetFolderTextBox"
+                             Margin="0,5" FontSize="15" IsReadOnly="True"/>
+                                <Button Grid.Column="2" Content="Browse..." Width="110" Height="28"
+                            Margin="10,5,0,5"
+                            Click="BrowseTargetFolder_Click"/>
+                            </Grid>
+
+                            <!-- Date -->
+                            <Grid Grid.Row="1" Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="Date:" FontSize="15"
+                               VerticalAlignment="Top" Margin="0,5,10,5"/>
+
+                                <StackPanel Grid.Column="1">
+                                    <DatePicker x:Name="ProcDatePicker"
+                                    Margin="0,5,0,0"
+                                    SelectedDateChanged="ProcDatePicker_SelectedDateChanged"/>
+                                    <TextBox x:Name="ProcDateTextBox"
+                                 Margin="0,6,0,0"
+                                 FontSize="15"
+                                 IsReadOnly="True"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- BOM-CUT LIST parameters -->
+                            <Grid Grid.Row="2" Margin="0,12,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="190"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Stock Length (mm):" FontSize="15"
+                               VerticalAlignment="Center" Margin="0,4,12,4"/>
+                                <TextBox Grid.Row="0" Grid.Column="1" x:Name="ProcCutListMaximumLengthTextBox"
+                             Height="28" Margin="0,4" Padding="4,2" FontSize="15" PreviewTextInput="NumericOnly"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Blade Thickness (mm):" FontSize="15"
+                               VerticalAlignment="Center" Margin="0,4,12,4"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" x:Name="ProcCutListBladeThicknessTextBox"
+                             Height="28" Margin="0,4" Padding="4,2" FontSize="15" PreviewTextInput="NumericOnly"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Negative Allowance (mm):" FontSize="15"
+                               VerticalAlignment="Center" Margin="0,4,12,4"/>
+                                <TextBox Grid.Row="2" Grid.Column="1" x:Name="ProcCutListNegativeAllowanceTextBox"
+                             Height="28" Margin="0,4" Padding="4,2" FontSize="15" PreviewTextInput="NumericOnly"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Offcut Threshold (mm):" FontSize="15"
+                               VerticalAlignment="Center" Margin="0,4,12,4"/>
+                                <TextBox Grid.Row="3" Grid.Column="1" x:Name="ProcOffcutThresholdTextBox"
+                             Height="28" Margin="0,4" Padding="4,2" FontSize="15" PreviewTextInput="NumericOnly"
+                             ToolTip="Minimum reusable offcut length in millimetres."/>
+                            </Grid>
+
+                            <Rectangle Grid.Row="3" Height="1" Fill="#E5E7EB" Margin="0,10,0,6"/>
+
+                            <!-- Reports -->
+                            <GroupBox Grid.Row="4" Header="Reports" FontWeight="Bold" Margin="0,10,0,0">
+                                <StackPanel Margin="5,10,0,0">
+                                    <CheckBox x:Name="ChkBomAssemblyRegister" FontSize="15" Margin="5"
+                  Content="BOM-ASSEMBLY REGISTER"/>
+                                    <CheckBox x:Name="ChkBomCutList" FontSize="15" Margin="5"
+                  Content="BOM-CUT LIST REPORT"/>
+                                    <CheckBox x:Name="ChkBomFittingReport" FontSize="15" Margin="5"
+                  Content="BOM-FITTING REPORT"/>
+                                    <CheckBox x:Name="ChkBomLoadingReport" FontSize="15" Margin="5"
+                  Content="BOM-LOADING REPORT"/>
+                                    <CheckBox x:Name="ChkBomPipeReport" FontSize="15" Margin="5"
+                  Content="BOM-PIPE REPORT"/>
+                                    <CheckBox x:Name="ChkLabelReport" FontSize="15" Margin="5"
+                  Content="LABEL REPORT"/>
+                                    <CheckBox x:Name="ChkBomFieldMaterialReport" FontSize="15" Margin="5"
+                  Content="BOM-FIELD MATERIAL REPORT"/>
+                                    <CheckBox x:Name="ChkBomAccessoryReport" FontSize="15" Margin="5"
+                  Content="BOM-ACCESSORY REPORT"/>
+                                    <Separator Margin="5,10,5,10"/>
+                                    <CheckBox x:Name="ChkIncludeSiteMeasure" FontSize="15" Margin="5"
+                  Content="INCLUDE SITE MEASURE"/>
+
+                                    
+
+                                    <TextBlock Text="OUTPUT FORMAT" FontSize="15" FontWeight="SemiBold" Margin="5,8,5,2"/>
+                                    <StackPanel Orientation="Horizontal" Margin="5">
+                                        <RadioButton x:Name="RdoExportExcel" GroupName="ReportOutputFormat"
+                                                     Content="EXCEL" FontSize="15" Margin="0,0,24,0" IsChecked="True"/>
+                                        <RadioButton x:Name="RdoExportPdf" GroupName="ReportOutputFormat"
+                                                     Content="PDF" FontSize="15"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </GroupBox>
+                        </Grid>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <!-- Procurement -->
+            <TabItem Header="Tools">
+                <Grid ShowGridLines="False">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="3*"/>
+                        <RowDefinition Height="1*"/>
+                        <RowDefinition Height="2*"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*"/>
+                        <ColumnDefinition Width="1*"/>
+                    </Grid.ColumnDefinitions>
+                    <GroupBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="1"  Margin="5" Header="Elevation Check">
+                        <Grid Margin="20">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Header -->
+                            <StackPanel>
+                                <TextBlock Text="Allowed Slope Angles (Degrees)"
+                                   FontSize="16"
+                                   FontWeight="Bold"/>
+                                <TextBlock Text="Add angles that are considered valid."
+                                   Margin="0,5,0,15"
+                                   Foreground="Gray"/>
+                            </StackPanel>
+
+                            <!-- Main Content -->
+                            <Grid Grid.Row="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Allowed Angles List -->
+                                <ListBox x:Name="AnglesListBox"
+                                 Grid.Row="0"
+                                 Margin="0,0,0,10"/>
+
+                                <!-- Add Angle -->
+                                <StackPanel Orientation="Horizontal"
+                                Grid.Row="1"
+                                Margin="0,0,0,10">
+                                    <TextBox x:Name="AngleInputTextBox"
+                                    Width="120"
+                                    Height="28"
+                                    Margin="0,0,10,0"
+                                    VerticalContentAlignment="Center"
+                                    ToolTip="Enter angle in degrees"/>
+                                    <Button Content="Add"
+                                    Width="80"
+                                    Click="AddAngle_Click"/>
+                                    <Button Content="Remove Selected"
+                                    Width="130"
+                                    Margin="10,0,0,0"
+                                    Click="RemoveAngle_Click"/>
+                                </StackPanel>
+
+                                <!-- Tolerance -->
+                                <StackPanel Grid.Row="2"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                                    <TextBlock Text="Tolerance (± degrees):"
+                                     VerticalAlignment="Center"/>
+                                    <TextBox x:Name="ToleranceTextBox"
+                                     Width="80"
+                                     Margin="10,0,0,0"
+                                     Height="28"
+                                     VerticalContentAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </GroupBox>
+                    <Grid Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="1"  Margin="5" >
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="1*"></RowDefinition>
+                            <RowDefinition Height="1*"></RowDefinition>
+                            <RowDefinition Height="1*"></RowDefinition>
+                        </Grid.RowDefinitions>
+
+                        <GroupBox Grid.Row="0" Header="Sheet Check &amp; BOM Check">
+                            <StackPanel Orientation="Vertical">
+
+                                <!-- Row 1 -->
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Width="86"
+                                       VerticalAlignment="Center"
+                                       Text="Filter Contains"/>
+
+                                    <TextBox x:Name="FilterContains"
+                                         Height="25"
+                                         Width="114"/>
+                                </StackPanel>
+
+                                <!-- Row 2 -->
+                                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                    <TextBlock Width="86"
+                                     VerticalAlignment="Center"
+                                     Text="Exclude Text"/>
+
+                                    <TextBox x:Name="ExcludeText"
+                                     Height="25"
+                                     Width="114"/>
+                                </StackPanel>
+
+                            </StackPanel>
+                        </GroupBox>
+
+                    </Grid>
+                    <GroupBox Grid.Row="1" Margin="5" Header="Renaming">
+                        <Grid Margin="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="90"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Label -->
+                            <TextBlock Grid.Row="0"
+                           Grid.Column="0"
+                           VerticalAlignment="Center"
+                           FontSize="14"
+                           Text="File Path:"/>
+
+                            <!-- Path TextBox -->
+                            <TextBox Grid.Row="0"
+                             Grid.Column="1"
+                             Margin="5,0"
+                             Name="ImportExportCsvPath"
+                             Height="25"
+                             VerticalAlignment="Center"/>
+
+                            <!-- Browse Button -->
+                            <Button Grid.Row="0"
+                            Grid.Column="2"
+                            Margin="5,0,0,0"
+                            Width="80"
+                            Height="25"
+                            Content="Browse"
+                            Click="BrowseFile_Click"/>
+                        </Grid>
+                    </GroupBox>
+                    <GroupBox Grid.Row="2" Grid.Column="0" Margin="5" Header="Pipe Length Check">
+                        <Grid ShowGridLines="False">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Max Length -->
+                            <StackPanel Grid.Row="1" Height="30" Orientation="Horizontal" Margin="0 5">
+                                <TextBlock Width="170"
+                                VerticalAlignment="Center"
+                                Text="Pipe Max Length (equal to)"/>
+
+
+                                <TextBox Width="100" Height="25" VerticalAlignment="Center" Name="MaxLengthTextBox" Margin="0,0,30,0" PreviewTextInput="NumericOnly"></TextBox>
+
+                                <Button Width="40"
+                                x:Name="MaxLengthButton"
+                                Height="20"
+                                BorderBrush="Black"
+                                BorderThickness="1"
+                                Margin="5"
+                                Background="{Binding MaxColor, Converter={StaticResource RevitColorToBrushConverter}}"
+                                Click="PickMaxColor_Click"/>
+                            </StackPanel>
+
+                            <!-- Too Long -->
+                            <StackPanel Grid.Row="2" Height="30" Orientation="Horizontal" Margin="0 5">
+
+                                <TextBlock Width="170"
+                            VerticalAlignment="Center"
+                            Text="Pipe Too Long (greater than)"/>
+
+                                <TextBox Name="PipeTooLongTextbox" Height="25" VerticalAlignment="Center" Width="100" Margin="0,0,30,0" PreviewTextInput="NumericOnly"></TextBox>
+
+                                <Button Width="40"
+                             x:Name="TooLongButton"
+                             Height="20"
+                             BorderBrush="Black"
+                             BorderThickness="1"
+                             Margin="5"
+                             Background="{Binding TooLongColor, Converter={StaticResource RevitColorToBrushConverter}}"
+                             Click="PickTooLongColor_Click"/>
+                            </StackPanel>
+
+                            <!-- Too Short -->
+                            <StackPanel Grid.Row="3" Height="30" Orientation="Horizontal" Margin="0 5">
+                                <TextBlock Width="170"
+                            VerticalAlignment="Center"
+                            Text="Pipe Too Short (less than)"/>
+
+                                <TextBox Name="PipeTooShortTextbox" Height="25" VerticalAlignment="Center" Width="100" Margin="0,0,30,0" PreviewTextInput="NumericOnly"></TextBox>
+
+
+                                <Button Width="40"
+                            x:Name="TooShortButton"
+                            Height="20"
+                            BorderBrush="Black"
+                            BorderThickness="1"
+                            Margin="5"
+                            Background="{Binding TooShortColor, Converter={StaticResource RevitColorToBrushConverter}}"
+                            Click="PickTooShortColor_Click"/>
+
+                            </StackPanel>
+
+                        </Grid>
+                    </GroupBox>
+                    <GroupBox Grid.Row="1" Grid.RowSpan="2" Grid.Column="1" Margin="5" Header="End Prep Check">
+                        <DataGrid x:Name="EndPrepFilterGrid"
+                        AutoGenerateColumns="False"
+                        CanUserAddRows="False"
+                        CanUserResizeColumns="False"
+                        HeadersVisibility="Column"
+                        GridLinesVisibility="None"
+                        RowBackground="#E5E7EB"
+                        AlternatingRowBackground="#F9FAFB"
+                        CanUserSortColumns="False"
+                        Background="White"
+                        BorderThickness="0"
+                        Margin="10"
+                        FontSize="15">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Filter"
+                                        Binding="{Binding Name}"
+                                        Width="2*"/>
+                                <DataGridTemplateColumn Header="Color" Width="1*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Width="40" Height="20"
+                                            BorderBrush="Black"
+                                            BorderThickness="1"
+                                            Background="{Binding Color, Converter={StaticResource RevitColorToBrushConverter}}"
+                                            Click="ColorButton_Click"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+
+                            <!-- Context Menu -->
+                            <!--<DataGrid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Add" Click="AddPipeEndPrepRow_Click"/>
+                                    <MenuItem Header="Delete" Click="DeletePipeEndPrepRow_Click"/>
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>-->
+                        </DataGrid>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+        </TabControl>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" >
+            <Button Content="Save" Width="120" Height="35" Margin="10" Background="#3B82F6" Foreground="White" FontWeight="Bold" BorderBrush="#2563EB" Click="Save_Click"/>
+            <Button Content="Reset to Defaults" Width="120" Height="35" Margin="10" Background="Gray" Foreground="White" FontWeight="Bold" BorderBrush="DarkGray" Click="ResetToDefault_Click"/>
+            <Button Content="Cancel" Width="120" Height="35" Margin="10" Background="#F87171" Foreground="White" FontWeight="Bold" BorderBrush="#EF4444" Click="Cancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

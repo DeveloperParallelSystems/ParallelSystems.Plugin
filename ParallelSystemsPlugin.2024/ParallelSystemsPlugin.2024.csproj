@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RevitVersion>2024</RevitVersion>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ParallelSystemsPlugin.2024</AssemblyName>
+    <DefineConstants>$(DefineConstants);REVIT2024;REVIT2022_OR_GREATER;REVIT2024_OR_GREATER;REVIT2024_OR_EARLIER;REVIT_LEGACY_DOTNET</DefineConstants>
+  </PropertyGroup>
+
+  <Import Project="..\Build\RevitAdapter.Common.props" />
+  <Import Project="..\ParallelSystemsPlugin.Shared\ParallelSystemsPlugin.Shared.projitems" Label="Shared" />
+  <Import Project="..\Build\RevitAdapter.Common.targets" />
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RevitVersion>2025</RevitVersion>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <AssemblyName>ParallelSystemsPlugin.2025</AssemblyName>
+    <DefineConstants>$(DefineConstants);REVIT2025;REVIT2022_OR_GREATER;REVIT2024_OR_GREATER;REVIT2025_OR_GREATER;REVIT_MODERN_DOTNET</DefineConstants>
+  </PropertyGroup>
+
+  <Import Project="..\Build\RevitAdapter.Common.props" />
+  <Import Project="..\ParallelSystemsPlugin.Shared\ParallelSystemsPlugin.Shared.projitems" Label="Shared" />
+  <Import Project="..\Build\RevitAdapter.Common.targets" />
+</Project>

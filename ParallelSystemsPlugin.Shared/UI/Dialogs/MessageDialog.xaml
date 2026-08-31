@@ -1,0 +1,262 @@
+﻿<Window x:Class="ParallelSystemPlugin.UI.MessageDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Message"
+        SizeToContent="WidthAndHeight"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        MinWidth="460"
+        MaxWidth="760"
+        MinHeight="160"
+        MaxHeight="760"
+        FontFamily="Segoe UI Variable, Segoe UI, Segoe UI Historic, Arial, Helvetica, sans-serif"
+        FontSize="14"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+        Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+        ShowInTaskbar="False"
+        Topmost="False">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="InfoBrush" Color="#FF2563EB"/>
+        <SolidColorBrush x:Key="WarningBrush" Color="#FFF59E0B"/>
+        <SolidColorBrush x:Key="ErrorBrush" Color="#FFEF4444"/>
+        <SolidColorBrush x:Key="SuccessBrush" Color="#FF22C55E"/>
+
+        <Style x:Key="AccentButton" TargetType="Button">
+            <Setter Property="MinWidth" Value="100"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Grid.RenderTransform>
+                            <Border Background="{TemplateBinding Background}" CornerRadius="12"/>
+                            <Border x:Name="Hover" CornerRadius="12" Background="White" Opacity="0"/>
+                            <Border x:Name="Press" CornerRadius="12" Background="Black" Opacity="0"/>
+                            <ContentPresenter Margin="10,0"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Hover" Property="Opacity" Value="0.12"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Press" Property="Opacity" Value="0.16"/>
+                                <Setter TargetName="Root" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.985" ScaleY="0.985"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.55"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="MinWidth" Value="100"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"/>
+            <Setter Property="BorderThickness" Value="1.5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="10,0"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#0F000000"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#1A000000"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Border" Property="Opacity" Value="0.5"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ChoiceButton" TargetType="Button">
+            <Setter Property="MinHeight" Value="48"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"/>
+            <Setter Property="BorderThickness" Value="1.5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ChoiceBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ChoiceBorder" Property="Background" Value="#0F000000"/>
+                                <Setter TargetName="ChoiceBorder" Property="BorderBrush"
+                                        Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ChoiceBorder" Property="Background" Value="#1A000000"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DialogTitleText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
+        <Style x:Key="DialogBodyText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <DockPanel LastChildFill="True" Margin="0,0,0,12">
+            <Grid Width="28" Height="28" Margin="0,0,10,0">
+                <Path x:Name="PART_IconPath"
+                      Stretch="Uniform"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Data="M12,2 L12,14 M12,16 L12,18"
+                      Width="22"
+                      Height="22"
+                      Fill="{DynamicResource InfoBrush}"/>
+            </Grid>
+
+            <TextBlock x:Name="PART_Title"
+                       Style="{StaticResource DialogTitleText}"
+                       Text="Title"/>
+        </DockPanel>
+
+        <ScrollViewer Grid.Row="1"
+                      MaxHeight="560"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <TextBlock x:Name="PART_Instruction"
+                           Margin="0,0,0,10"
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap"
+                           Visibility="Collapsed"/>
+
+                <TextBlock x:Name="PART_Message"
+                           Style="{StaticResource DialogBodyText}"
+                           Text="Message body goes here."/>
+
+                <StackPanel x:Name="PART_OptionsPanel"
+                            Margin="0,14,0,0"
+                            Visibility="Collapsed"/>
+
+                <Expander x:Name="PART_DetailsExpander"
+                          Header="Show details"
+                          Margin="0,12,0,0"
+                          Visibility="Collapsed">
+                    <Border Margin="0,8,0,0"
+                            Padding="10"
+                            BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <TextBox x:Name="PART_DetailsText"
+                                 MinWidth="400"
+                                 MaxHeight="220"
+                                 IsReadOnly="True"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                                 TextWrapping="Wrap"
+                                 AcceptsReturn="True"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Disabled"/>
+                    </Border>
+                </Expander>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,12,0,0">
+            <Button x:Name="PART_TertiaryButton"
+                    Content="Cancel"
+                    MinWidth="96"
+                    Margin="0,0,8,0"
+                    Style="{StaticResource SecondaryButton}"
+                    Visibility="Collapsed"
+                    Click="OnTertiaryClick"/>
+            <Button x:Name="PART_SecondaryButton"
+                    Content="Cancel"
+                    MinWidth="96"
+                    Margin="0,0,8,0"
+                    Style="{StaticResource SecondaryButton}"
+                    Visibility="Collapsed"
+                    Click="OnSecondaryClick"/>
+            <Button x:Name="PART_PrimaryButton"
+                    Content="OK"
+                    MinWidth="96"
+                    Style="{StaticResource AccentButton}"
+                    IsDefault="True"
+                    Click="OnPrimaryClick"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,25 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.1" />
+  </ItemGroup>
+  <!--
+    Revit 2021-2024 run inside .NET Framework 4.8. Keep them on the
+    legacy MigraDoc/PDFsharp 1.50 DLL names to avoid Revit AppDomain
+    binding them to a mismatched PdfSharp 6 assembly.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageVersion Include="PDFsharp-MigraDoc-GDI" Version="1.50.5147" />
+  </ItemGroup>
+  <!--
+    Revit 2025-2026 run on modern .NET. They use the current MigraDoc 6
+    dependency chain.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <PackageVersion Include="PDFsharp-MigraDoc-GDI" Version="6.2.4" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
+  </ItemGroup>
+</Project>

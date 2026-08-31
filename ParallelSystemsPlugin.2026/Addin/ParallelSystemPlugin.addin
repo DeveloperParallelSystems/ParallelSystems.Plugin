@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>ParallelSystemPlugin</Name>
+    <Assembly>ParallelSystemPlugin\ParallelSystemsPlugin.2026.dll</Assembly>
+    <AddInId>{9157A868-2963-49BD-9371-884BE896B286}</AddInId>
+    <FullClassName>ParallelSystemsPlugin.App</FullClassName>
+    <VendorId>PSYS</VendorId>
+    <VendorDescription>ParallelSystems, www.parallelsystems.com.au</VendorDescription>
+  </AddIn>
+</RevitAddIns>
