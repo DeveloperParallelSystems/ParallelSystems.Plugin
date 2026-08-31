@@ -11,7 +11,7 @@
 - Standardized procurement Excel headers, group bands, project-phase display, red exclusion notes, widths, and report-specific PDF/Excel generation.
 - Added continuous-top capability diagnostics and expanded fabrication JSON/STEP diagnostics for complex shaped-branch topology, surface continuity, validation, and fallback analysis.
 - Expanded Fabrication STEP branch geometry and topology handling, connection resolution, selection support, preflight behavior, and generation diagnostics for current family cases.
-- Temporarily hardcoded development authorization bypass. In this internal build, protected tools are enabled without server authorization and the timesheet tracker is not created, so no new timesheet checkpoints are written to the Outbox or sent to the API.
+- Retained the development authorization bypass in code but hardcoded its check to `false`, so startup and Reconnect always use normal server authorization.
 - Iterated product, assembly, file, informational, splash, tracker fallback, User Manual, developer notes, and changelog versions to 1.17.7.
 
 ## 1.17.6 - Fabrication STEP Large-Package Performance Optimisation (Internal / Unreleased)

@@ -60,9 +60,7 @@ namespace ParallelSystemsPlugin
 
         public static bool IsDevelopmentServerBypassEnabled()
         {
-            // Temporary local development mode: bypass server authorization
-            // without requiring a Windows environment variable.
-            return true;
+            return false;
         }
 
         private void EnableDevelopmentServerBypass()
@@ -71,10 +69,6 @@ namespace ParallelSystemsPlugin
             _authorizationStarted = false;
             _authorizationUnavailableDialogShown = false;
             _isAuthorized = true;
-
-            // Mark services as initialized without creating the timesheet
-            // tracker. Development bypass must not make any authorization or
-            // timesheet HTTP requests while the server is unavailable.
             _servicesStarted = true;
             _timesheetTracker = null;
 
@@ -84,7 +78,7 @@ namespace ParallelSystemsPlugin
                 "Development mode: server authorization is bypassed.";
 
             WriteAuthorizationLog(
-                "Temporary development server bypass enabled. " +
+                "Development server bypass enabled. " +
                 "Authorization and timesheet server startup were skipped.");
         }
 

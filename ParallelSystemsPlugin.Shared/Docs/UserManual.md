@@ -21,7 +21,7 @@ The public plugin version is 1.17.7. The V2 label used in monitoring and deploym
 - Improved package lookup for assembly, member, type, readable, and numeric-reference values. Field Material Report uses the Assembly Register naming rule; loose field material can traverse Victaulic rigid/flex couplings to reach a connected pipe's owning assembly.
 - Added deeper developer diagnostics for shaped-branch topology, continuous-top capability, geometry fallback, and validation analysis.
 - Expanded Fabrication STEP handling for current complex shaped-branch, connection, selection, and topology cases.
-- This internal development build currently bypasses authorization in code and disables timesheet tracker startup. No new timesheet checkpoints are created, queued in Outbox, or uploaded while that bypass remains enabled.
+- Startup and Reconnect use the configured authorization server. The internal development-bypass check is hardcoded to disabled.
 
 The current build also includes the following 1.17.6 Fabrication STEP performance changes:
 
@@ -287,16 +287,9 @@ The Detailing command class remains in the source, but no Detailing panel is cre
 
 ## Startup and Authorization
 
-Authorization is separate from timesheet checkpoint delivery. In this internal 1.17.7 source build, `IsDevelopmentServerBypassEnabled()` temporarily returns `true`, so the normal flow below is bypassed.
+Authorization is separate from timesheet checkpoint delivery. Startup and Reconnect use the configured authorization server. The internal development-bypass check is hardcoded to `false` and is not available through `ApiSettings.json` or another user-editable setting.
 
-While the development bypass is enabled:
-
-- Protected commands are treated as authorized without contacting the authorization server.
-- `TimesheetTracker` is not created.
-- No new checkpoints are written to Outbox or sent to the tracker API.
-- Existing Outbox files remain on disk and are not flushed until normal tracker startup is restored.
-
-The normal production flow, after the hardcoded bypass is removed, is:
+The normal startup flow is:
 
 1. Revit starts and creates the ribbon.
 2. The plugin loads the authorization BaseUrl from:

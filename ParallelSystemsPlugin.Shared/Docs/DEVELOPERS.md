@@ -35,7 +35,7 @@ This RevitPlugin source archive does not contain the wider solution's `Installer
 
 - Procurement: active-view `Filter Items`, Excel/PDF selection, reusable-offcut threshold, corrected Cut List and Pipe Report calculations, package-aware Fitting and Field Material output, bounded Victaulic coupling traversal to a pipe assembly using the Assembly Register naming rule, and standardized workbook layout.
 - Fabrication: continuous-top capability diagnostics, expanded minified JSON diagnostics, branch topology/surface validation, additional geometry fallbacks, and current shaped-branch connection and selection handling.
-- Development workflow: the current source temporarily hardcodes authorization bypass. This must be reverted before production validation or release.
+- Authorization: startup and Reconnect use the configured authorization server. The retained development-only bypass check is hardcoded to `false`.
 
 ## Fabrication STEP Performance in 1.17.6
 
@@ -139,11 +139,9 @@ Any documentation update should be checked against this XAML and its code-behind
 
 ## Authorization Flow
 
-### Temporary 1.17.7 development bypass
+### Optional development bypass
 
-`App.IsDevelopmentServerBypassEnabled()` currently returns `true` directly. `EnableDevelopmentServerBypass()` marks the user authorized, marks services initialized, and deliberately leaves `_timesheetTracker` null. Consequently this build performs no authorization HTTP request, creates no new timesheet checkpoints, writes nothing new to the local Outbox, and does not flush existing Outbox files. This is development-only behavior and must not ship to production.
-
-### Normal production flow
+`App.IsDevelopmentServerBypassEnabled()` is hardcoded to return `false`. The bypass implementation remains available for development changes, but it cannot be enabled through `ApiSettings.json` or another user-editable file. With the current check, startup and Reconnect always use normal authorization and authorized startup creates the timesheet tracker.
 
 - Ribbon creation occurs during `OnStartup`.
 - ApiSettings.json is loaded from the current user's Revit Addins folder for the active Revit year.
@@ -363,7 +361,7 @@ Before release:
 - Open About and confirm `Version: 1.17.7` with no Git suffix.
 - Confirm installed Docs files load.
 - Exercise every active ribbon panel.
-- Remove or disable the hardcoded development bypass, then verify authorization allow, deny, slow-server, and temporary-failure behaviour.
+- Verify authorization allow, deny, slow-server, and temporary-failure behaviour.
 - Test schema 2 and 3 ingestion.
 - Test offline Outbox retry, Failed, and Overflow handling.
 - Run the Fabrication STEP geometry test in Revit 2025 and inspect the STEP downstream.
