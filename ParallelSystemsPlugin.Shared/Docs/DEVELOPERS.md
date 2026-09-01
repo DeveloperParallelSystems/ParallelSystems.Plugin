@@ -141,11 +141,11 @@ Any documentation update should be checked against this XAML and its code-behind
 
 ### Optional development bypass
 
-`App.IsDevelopmentServerBypassEnabled()` first checks whether the `PARALLEL_SYSTEMS_DEVELOPMENT_MODE` environment variable exists. When it exists, the plugin prompts for the password embedded in `App.cs` and caches the result only for the current Revit process. An incorrect password leaves the prompt open for another attempt. Choosing `Do not enable development mode` or closing the prompt disables development mode for the remainder of that Revit session. A successful entry skips authorization, enables protected-command checks through `IsUserAuthorized`, and deliberately leaves `_timesheetTracker` null. Closing and reopening Revit clears the cached result and requires the password again. `ApiSettings.json` cannot enable this mode.
+`App.IsDevelopmentServerBypassEnabled()` first checks whether the `PARALLEL_SYSTEMS_DEVELOPMENT_MODE` environment variable is exactly `1`. When it is, the plugin prompts for the password embedded in `App.cs` and caches the result only for the current Revit process. An incorrect password leaves the prompt open for another attempt. Choosing `Do not enable development mode` or closing the prompt disables development mode for the remainder of that Revit session. A successful entry skips authorization, enables protected-command checks through `IsUserAuthorized`, and deliberately leaves `_timesheetTracker` null. Closing and reopening Revit clears the cached result and requires the password again. `ApiSettings.json` cannot enable this mode.
 
 After development mode is unlocked, `App.BuildRibbon` adds a disabled `DEVELOPMENT MODE ACTIVE / NO TRACKING` indicator panel using the Parallel Systems logo. The indicator is informational and cannot toggle the mode during the session.
 
-Use `Development Tools/Enable-DevelopmentMode.cmd` and `Development Tools/Disable-DevelopmentMode.cmd` to add or remove the per-user environment variable. Restart Revit after running either command because environment changes do not alter an already-running Revit process.
+Use `Development Tools/Enable-DevelopmentMode.cmd` and `Development Tools/Disable-DevelopmentMode.cmd` to add or remove the per-user environment variable. The disable command first broadcasts an empty value before removing the registry entry so Windows Explorer refreshes its inherited environment. Restart Revit and any IDE or terminal used to launch it after running either command.
 
 - Ribbon creation occurs during `OnStartup`.
 - ApiSettings.json is loaded from the current user's Revit Addins folder for the active Revit year.

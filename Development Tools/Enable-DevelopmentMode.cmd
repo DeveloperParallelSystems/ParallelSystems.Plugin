@@ -7,5 +7,5 @@ if errorlevel 1 (
 )
 
 echo Development mode enabled
-echo Restart Revit to apply the change.
+echo Restart Revit and the application used to launch it to apply the change.
 pause
