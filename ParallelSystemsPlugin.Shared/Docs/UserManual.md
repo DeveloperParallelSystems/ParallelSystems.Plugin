@@ -17,6 +17,7 @@ The public plugin version is 1.17.8. The V2 label used in monitoring and deploym
 - Development Mode is enabled through `PARALLEL_SYSTEMS_DEVELOPMENT_MODE=1`, bypasses authorization and protected-command checks, and prevents timesheet tracker startup for that Revit process.
 - Added a topmost retrying password prompt, an explicit opt-out action, and a persistent `DEVELOPMENT MODE ACTIVE / NO TRACKING` ribbon indicator.
 - Added Development Mode enable/disable commands and an internal Word guide.
+- A successful normal-mode Reconnect now starts timesheet tracking and flushes the local Outbox just like successful startup authorization.
 
 The current build also includes the following 1.17.7 procurement and fabrication changes:
 

@@ -33,6 +33,7 @@ InformationalVersion    1.17.8
 
 - Development Mode: environment-variable gating, a per-process password challenge, explicit opt-out behavior, no timesheet tracker startup, and a persistent ribbon indicator.
 - Development tools: enable/disable command files and an internal Word operating guide.
+- Reconnect: successful normal authorization now enters the same `StartAuthorizedServices` path as startup, creating the tracker and requesting an Outbox flush.
 
 ## Release Focus in 1.17.7
 

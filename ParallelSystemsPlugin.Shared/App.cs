@@ -24,6 +24,7 @@ namespace ParallelSystemsPlugin
 
         private static bool _developmentModeChecked;
         private static bool _developmentModeEnabled;
+        private static App _current;
 
         /*
          * Render free services can take close to a minute to wake up.
@@ -63,6 +64,41 @@ namespace ParallelSystemsPlugin
         public static bool IsAuthorizationPending { get; private set; }
 
         public static string AuthorizationStatusMessage { get; private set; }
+
+        public static bool CompleteReconnectAuthorization(
+            UIApplication uiApp)
+        {
+            IsUserAuthorized = true;
+            IsAuthorizationPending = false;
+            AuthorizationStatusMessage =
+                "Authorization was verified through Reconnect.";
+
+            App current = _current;
+            if (current == null || uiApp == null)
+                return false;
+
+            current._authorizationChecked = true;
+            current._authorizationStarted = false;
+            current._authorizationUnavailableDialogShown = false;
+            current._isAuthorized = true;
+            current._nextAuthorizationAttemptUtc = DateTime.MinValue;
+            current._authorizationTask = null;
+
+            try
+            {
+                current._authorizationCancellation?.Cancel();
+            }
+            catch
+            {
+            }
+
+            WriteAuthorizationLog(
+                "Authorization succeeded through the Reconnect command. " +
+                "Starting authorized services.");
+
+            current.StartAuthorizedServices(uiApp);
+            return current._servicesStarted;
+        }
 
         public static bool IsDevelopmentServerBypassEnabled()
         {
@@ -221,6 +257,7 @@ namespace ParallelSystemsPlugin
         public Result OnStartup(UIControlledApplication app)
         {
             StartupSplashWindow splash = null;
+            _current = this;
 
             try
             {
@@ -299,6 +336,9 @@ namespace ParallelSystemsPlugin
             }
             catch (Exception ex)
             {
+                if (ReferenceEquals(_current, this))
+                    _current = null;
+
                 splash?.CloseSafely();
 
                 AppDialog.Error(
@@ -883,6 +923,9 @@ namespace ParallelSystemsPlugin
             IsUserAuthorized = false;
             IsAuthorizationPending = false;
             AuthorizationStatusMessage = null;
+
+            if (ReferenceEquals(_current, this))
+                _current = null;
 
             return Result.Succeeded;
         }

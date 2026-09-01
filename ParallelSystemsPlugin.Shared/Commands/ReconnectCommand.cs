@@ -86,19 +86,29 @@ namespace ParallelSystemPlugin.Commands
                 }
                     
 
-                ParallelSystemsPlugin.App.IsUserAuthorized = response.Allowed;
-
                 if (response.Allowed)
                 {
+                    bool servicesStarted =
+                        ParallelSystemsPlugin.App
+                            .CompleteReconnectAuthorization(uiApp);
+
+                    if (!servicesStarted)
+                    {
+                        return Result.Cancelled;
+                    }
+
                     AppDialog.Success(
                     "Reconnect Successful",
-                    "Your authorization has been verified. You can now continue using the Parallel Systems plugin.");
+                    "Your authorization has been verified. Protected tools " +
+                    "and timesheet tracking are now active.");
 
                     return Result.Succeeded;
                 }
 
                 else
                 {
+                    ParallelSystemsPlugin.App.IsUserAuthorized = false;
+
                     AppDialog.Warn(
                     "Access Not Authorized",
                     $"The Revit user \"{username}\" is not authorized to use the Parallel Systems plugin. " +

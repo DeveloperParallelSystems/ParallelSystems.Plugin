@@ -6,6 +6,7 @@
 - Development Mode bypasses server authorization and protected-command checks, deliberately leaves timesheet tracking disabled, and resets when Revit closes.
 - Added a topmost password prompt with retry handling, an explicit `Do not enable development mode` action, Parallel Systems branding, and a persistent `DEVELOPMENT MODE ACTIVE / NO TRACKING` ribbon indicator.
 - Added enable and disable command files plus an internal Word guide under `Development Tools`.
+- Successful normal-mode Reconnect authorization now starts the same authorized services as startup, including timesheet tracking and Outbox flushing.
 - Iterated product, assembly, file, informational, splash, tracker fallback, User Manual, developer notes, and changelog versions to 1.17.8.
 
 ## 1.17.7 - Procurement Reporting and Fabrication Diagnostics (Internal / Unreleased)
