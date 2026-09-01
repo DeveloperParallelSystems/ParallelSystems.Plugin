@@ -2,7 +2,7 @@
 
 ## Current Internal Build
 
-- Revit plugin version: **1.17.7**
+- Revit plugin version: **1.17.8**
 - Release: **Internal / Unreleased**
 - Monitoring architecture generation: **V2**
 - Production tracker schema: **3**
@@ -10,32 +10,34 @@
 - Supported Revit adapters: **2021 through 2026**
 - Native STEP export: **Revit 2025 and 2026**
 
-The monitoring architecture V2 label is not the Revit plugin release number. Backend and Frontend package metadata can remain 2.0.0 as architecture/application metadata. The user-facing Revit product, Revit assemblies, installer package, About screen, and production tracker pluginVersion must identify the plugin as 1.17.7.
+The monitoring architecture V2 label is not the Revit plugin release number. Backend and Frontend package metadata can remain 2.0.0 as architecture/application metadata. The user-facing Revit product, Revit assemblies, About screen, and production tracker pluginVersion must identify the plugin as 1.17.8.
 
 ## Authoritative Version Sources
 
-`RevitPlugin/Directory.Build.props` sets:
+`ParallelSystems.Plugin/Directory.Build.props` sets:
 
 ```text
-Version                 1.17.7
-AssemblyVersion         1.17.7.0
-FileVersion             1.17.7.0
-InformationalVersion    1.17.7
+Version                 1.17.8
+AssemblyVersion         1.17.8.0
+FileVersion             1.17.8.0
+InformationalVersion    1.17.8
 ```
 
 `IncludeSourceRevisionInInformationalVersion` is false.
 
 `AboutDialog.xaml.cs` reads AssemblyInformationalVersion first, falls back to file/assembly version, removes any +sourceRevision suffix, and trims a final .0 field.
 
-`TimesheetTracker.cs` uses the same assembly informational version, strips a +suffix, trims .0, and sends 1.17.7 in TrackerCheckpointRequest.PluginVersion. It sends SchemaVersion 3 when the tracker is enabled.
+`TimesheetTracker.cs` uses the same assembly informational version, strips a +suffix, trims .0, and sends 1.17.8 in TrackerCheckpointRequest.PluginVersion. It sends SchemaVersion 3 when the tracker is enabled.
 
-This RevitPlugin source archive does not contain the wider solution's `Installer/` or `scripts/` folders. Before producing a complete release package, update the external Inno Setup `AppVersion` to 1.17.7 and update any synthetic checkpoint version labels separately. Do not claim those external files were updated from this archive alone.
+## Release Focus in 1.17.8
+
+- Development Mode: environment-variable gating, a per-process password challenge, explicit opt-out behavior, no timesheet tracker startup, and a persistent ribbon indicator.
+- Development tools: enable/disable command files and an internal Word operating guide.
 
 ## Release Focus in 1.17.7
 
 - Procurement: active-view `Filter Items`, Excel/PDF selection, reusable-offcut threshold, corrected Cut List and Pipe Report calculations, package-aware Fitting and Field Material output, bounded Victaulic coupling traversal to a pipe assembly using the Assembly Register naming rule, and standardized workbook layout.
 - Fabrication: continuous-top capability diagnostics, expanded minified JSON diagnostics, branch topology/surface validation, additional geometry fallbacks, and current shaped-branch connection and selection handling.
-- Authorization: startup and Reconnect use the configured authorization server unless session-only development mode is successfully unlocked at Revit startup.
 
 ## Fabrication STEP Performance in 1.17.6
 
@@ -64,7 +66,6 @@ The largest remaining cost for large valid packages is expected to be actual sol
 - `ParallelSystemsPlugin.Shared/Timesheets/TrackerCheckpointModels.cs` - plugin-owned checkpoint transport models. The server maintains its own matching API models.
 - `Backend/` - ASP.NET Core API, authorization, ingestion, PostgreSQL access, Task Mapping, billing, and Timesheets.
 - `Frontend/` - React monitoring application.
-- `Installer/` - build staging and Inno Setup package.
 - `scripts/` - local stack, tracker configuration, test checkpoint, and failed-message recovery.
 - `docs/` - architecture, mapping, policy, deployment, validation, migration, and tests.
 
@@ -354,7 +355,6 @@ The in-dialog Markdown renderer supports headings beginning with `#`, `##`, and 
 - Deploy backend schema compatibility before rolling out a newer Revit tracker producer.
 - Keep secrets in Render or local secure configuration, not source control.
 - Build only the Revit adapter matching the installed Revit year for a local test.
-- The installer stages only locally installed Revit versions.
 - Revit 2021-2024 cannot perform the native Fabrication STEP export.
 
 ## Validation Requirements
@@ -362,7 +362,7 @@ The in-dialog Markdown renderer supports headings beginning with `#`, `##`, and 
 Before release:
 
 - Build the target Revit adapter on Windows with the installed Revit API assemblies.
-- Open About and confirm `Version: 1.17.7` with no Git suffix.
+- Open About and confirm `Version: 1.17.8` with no Git suffix.
 - Confirm installed Docs files load.
 - Exercise every active ribbon panel.
 - Verify authorization allow, deny, slow-server, and temporary-failure behaviour.
@@ -374,7 +374,6 @@ Before release:
 - Confirm a valid `STD WT-CS` fallback reports Information with zero warnings and that an unresolved family still blocks export.
 - Build the Frontend production bundle.
 - Build Backend and run API/PostgreSQL tests.
-- In the wider solution, compile the Inno Setup installer and verify AppVersion 1.17.7. The installer source is not included in this RevitPlugin-only archive.
 
 ## Coding Boundaries
 

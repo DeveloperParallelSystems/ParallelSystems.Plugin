@@ -83,7 +83,7 @@ namespace ParallelSystemPlugin.UI
                     version = assembly.GetName().Version?.ToString();
 
                 if (string.IsNullOrWhiteSpace(version))
-                    return "1.17.7";
+                    return "1.17.8";
 
                 int suffixIndex = version.IndexOf('+');
                 if (suffixIndex >= 0)
@@ -96,7 +96,7 @@ namespace ParallelSystemPlugin.UI
             }
             catch
             {
-                return "1.17.7";
+                return "1.17.8";
             }
         }
     }

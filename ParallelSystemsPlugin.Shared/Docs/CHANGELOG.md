@@ -1,6 +1,14 @@
 ﻿# Changelog
 
-## 1.17.7 - Procurement Reporting, Fabrication Diagnostics, and Development Workflow (Internal / Unreleased)
+## 1.17.8 - Controlled Development Mode (Internal / Unreleased)
+
+- Added password-protected Development Mode gated by the per-user `PARALLEL_SYSTEMS_DEVELOPMENT_MODE=1` environment variable.
+- Development Mode bypasses server authorization and protected-command checks, deliberately leaves timesheet tracking disabled, and resets when Revit closes.
+- Added a topmost password prompt with retry handling, an explicit `Do not enable development mode` action, Parallel Systems branding, and a persistent `DEVELOPMENT MODE ACTIVE / NO TRACKING` ribbon indicator.
+- Added enable and disable command files plus an internal Word guide under `Development Tools`.
+- Iterated product, assembly, file, informational, splash, tracker fallback, User Manual, developer notes, and changelog versions to 1.17.8.
+
+## 1.17.7 - Procurement Reporting and Fabrication Diagnostics (Internal / Unreleased)
 
 - Added `Filter Items` beside Export BOM so users can review active-view BOM components by family/type and temporarily hide unchecked groups before validating or exporting reports.
 - Reworked Procurement configuration into a larger resizable layout, added an explicit Excel/PDF output choice, made Excel and exclusion of site-measured work the new defaults, and added a configurable reusable-offcut threshold.
@@ -11,9 +19,6 @@
 - Standardized procurement Excel headers, group bands, project-phase display, red exclusion notes, widths, and report-specific PDF/Excel generation.
 - Added continuous-top capability diagnostics and expanded fabrication JSON/STEP diagnostics for complex shaped-branch topology, surface continuity, validation, and fallback analysis.
 - Expanded Fabrication STEP branch geometry and topology handling, connection resolution, selection support, preflight behavior, and generation diagnostics for current family cases.
-- Added session-only development-mode activation through the presence of the `PARALLEL_SYSTEMS_DEVELOPMENT_MODE` environment variable and a one-time password prompt at Revit startup. Successful activation enables the existing development bypass, bypasses protected-command checks, and leaves timesheet tracking disabled until Revit closes.
-- The development-mode prompt now remains open after an incorrect password, uses the Parallel Systems icon, and provides an explicit `Do not enable development mode` action.
-- Added a persistent `DEVELOPMENT MODE ACTIVE / NO TRACKING` ribbon indicator for successfully unlocked development sessions.
 - Iterated product, assembly, file, informational, splash, tracker fallback, User Manual, developer notes, and changelog versions to 1.17.7.
 
 ## 1.17.6 - Fabrication STEP Large-Package Performance Optimisation (Internal / Unreleased)
@@ -81,7 +86,7 @@
 - Added local processed-source status storage for Show Ready while retaining compatibility with legacy DirectShape metadata.
 - Documented Fabrication STEP selection, hollow-geometry generation, 30-degree bevel with 1 mm root face, plain flange joints, validation CSV, Revit 2025+ STEP export, and Show Ready temporary isolation.
 - Rebased About, User Manual, What's New, Developer Notes, architecture, test, and package documentation onto the latest source without replacing newer authorization or fabrication code.
-- Aligned the installer package version and manual test-checkpoint plugin version with 1.17.3.
+- Aligned the manual test-checkpoint plugin version with 1.17.3.
 
 ## 1.17.2 - Task Mapping and Client Billing Corrections
 

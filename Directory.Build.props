@@ -12,12 +12,12 @@
       Plugin release numbering follows the existing 1.x changelog.
       1     = product generation
       17    = feature iteration
-      7     = procurement, diagnostics, and development-workflow revision
+      8     = controlled development-mode revision
     -->
-    <Version>1.17.7</Version>
-    <AssemblyVersion>1.17.7.0</AssemblyVersion>
-    <FileVersion>1.17.7.0</FileVersion>
-    <InformationalVersion>1.17.7</InformationalVersion>
+    <Version>1.17.8</Version>
+    <AssemblyVersion>1.17.8.0</AssemblyVersion>
+    <FileVersion>1.17.8.0</FileVersion>
+    <InformationalVersion>1.17.8</InformationalVersion>
 
     <!-- Prevent the SDK from displaying +<git SHA> in About & Manual. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

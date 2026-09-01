@@ -2,16 +2,23 @@
 
 ## Current Build
 
-- Version: **1.17.7**
+- Version: **1.17.8**
 - Release: **Internal / Unreleased**
 - Supported Revit adapters in this solution: **2021 through 2026**
 - Native Fabrication STEP export: **Revit 2025 and 2026**
 - Monitoring architecture generation: **V2**
 - Monitoring flow: **Revit Plugin -> HTTPS API -> PostgreSQL -> React Web Application**
 
-The public plugin version is 1.17.7. The V2 label used in monitoring and deployment documentation describes the monitoring architecture generation; it is not the Revit plugin release number.
+The public plugin version is 1.17.8. The V2 label used in monitoring and deployment documentation describes the monitoring architecture generation; it is not the Revit plugin release number.
 
-## What Is New in 1.17.7
+## What Is New in 1.17.8
+
+- Added password-protected Development Mode for controlled troubleshooting sessions.
+- Development Mode is enabled through `PARALLEL_SYSTEMS_DEVELOPMENT_MODE=1`, bypasses authorization and protected-command checks, and prevents timesheet tracker startup for that Revit process.
+- Added a topmost retrying password prompt, an explicit opt-out action, and a persistent `DEVELOPMENT MODE ACTIVE / NO TRACKING` ribbon indicator.
+- Added Development Mode enable/disable commands and an internal Word guide.
+
+The current build also includes the following 1.17.7 procurement and fabrication changes:
 
 - Added `Filter Items` to the Export BOM split button. It groups BOM components visible in the active view and temporarily hides unchecked family/type groups so report scope can be reviewed before export.
 - Added an explicit Excel or PDF report-output choice. New configurations default to Excel and exclude site-measured spools and branches.
@@ -21,7 +28,6 @@ The public plugin version is 1.17.7. The V2 label used in monitoring and deploym
 - Improved package lookup for assembly, member, type, readable, and numeric-reference values. Field Material Report uses the Assembly Register naming rule; loose field material can traverse Victaulic rigid/flex couplings to reach a connected pipe's owning assembly.
 - Added deeper developer diagnostics for shaped-branch topology, continuous-top capability, geometry fallback, and validation analysis.
 - Expanded Fabrication STEP handling for current complex shaped-branch, connection, selection, and topology cases.
-- Startup and Reconnect normally use the configured authorization server. Authorized support sessions can enable the internal development bypass for one Revit process.
 
 The current build also includes the following 1.17.6 Fabrication STEP performance changes:
 
@@ -275,7 +281,7 @@ The Detailing command class remains in the source, but no Detailing panel is cre
 
 - User Manual displays this installed guide.
 - What's New displays the installed CHANGELOG.md.
-- About displays the product description, Version 1.17.7, Internal / Unreleased status, and assembly build timestamp.
+- About displays the product description, Version 1.17.8, Internal / Unreleased status, and assembly build timestamp.
 - Open Full Manual opens the installed UserManual.md.
 - Open Change Log opens the installed CHANGELOG.md.
 - Developer Notes opens the installed DEVELOPERS.md.
@@ -330,7 +336,7 @@ The production Revit tracker sends:
 
 ```text
 Tracker schema version: 3
-Plugin version: 1.17.7
+Plugin version: 1.17.8
 ```
 
 The backend accepts tracker schema versions 2 and 3 for deployment compatibility.
@@ -442,11 +448,10 @@ The source solution is separated into:
 - Shared: tracker request and response contracts.
 - Backend: ASP.NET Core API, authorization, tracker ingestion, PostgreSQL access, Task Mapping, billing, and Timesheets endpoints.
 - Frontend: React monitoring application.
-- Installer: adapter staging and Inno Setup installer.
 - scripts: local start/stop, tracker configuration, test checkpoint, and failed-message recovery.
 - docs: architecture, mapping, policy, deployment, validation, migration, and test guidance.
 
-The monitoring architecture is V2, while the Revit plugin release is 1.17.7.
+The monitoring architecture is V2, while the Revit plugin release is 1.17.8.
 
 No MSMQ, old Activity Queue Service, or central workstation SQLite database is part of the active architecture.
 
@@ -509,7 +514,7 @@ No MSMQ, old Activity Queue Service, or central workstation SQLite database is p
 - Confirm Revit was closed before deployment.
 - Rebuild the adapter matching the installed Revit year.
 - Replace both the deployed DLL and PDB.
-- Confirm Directory.Build.props contains Version and InformationalVersion 1.17.7.
+- Confirm Directory.Build.props contains Version and InformationalVersion 1.17.8.
 - Confirm the installed Docs folder was copied beside the DLL.
 - Restart Revit.
 

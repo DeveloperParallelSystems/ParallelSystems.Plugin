@@ -257,7 +257,7 @@
                                    Foreground="{StaticResource DarkGreen}"/>
 
                         <TextBlock x:Name="VersionLabel"
-                                   Text="Version 1.17.7"
+                                   Text="Version 1.17.8"
                                    Margin="0,7,0,0"/>
 
                         <TextBlock Text="Internal / Unreleased"
