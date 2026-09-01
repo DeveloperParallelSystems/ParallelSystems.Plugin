@@ -35,7 +35,7 @@ This RevitPlugin source archive does not contain the wider solution's `Installer
 
 - Procurement: active-view `Filter Items`, Excel/PDF selection, reusable-offcut threshold, corrected Cut List and Pipe Report calculations, package-aware Fitting and Field Material output, bounded Victaulic coupling traversal to a pipe assembly using the Assembly Register naming rule, and standardized workbook layout.
 - Fabrication: continuous-top capability diagnostics, expanded minified JSON diagnostics, branch topology/surface validation, additional geometry fallbacks, and current shaped-branch connection and selection handling.
-- Authorization: startup and Reconnect use the configured authorization server. The retained development-only bypass check is hardcoded to `false`.
+- Authorization: startup and Reconnect use the configured authorization server unless session-only development mode is successfully unlocked at Revit startup.
 
 ## Fabrication STEP Performance in 1.17.6
 
@@ -141,7 +141,11 @@ Any documentation update should be checked against this XAML and its code-behind
 
 ### Optional development bypass
 
-`App.IsDevelopmentServerBypassEnabled()` is hardcoded to return `false`. The bypass implementation remains available for development changes, but it cannot be enabled through `ApiSettings.json` or another user-editable file. With the current check, startup and Reconnect always use normal authorization and authorized startup creates the timesheet tracker.
+`App.IsDevelopmentServerBypassEnabled()` first checks whether the `PARALLEL_SYSTEMS_DEVELOPMENT_MODE` environment variable exists. When it exists, the plugin prompts for the password embedded in `App.cs` and caches the result only for the current Revit process. An incorrect password leaves the prompt open for another attempt. Choosing `Do not enable development mode` or closing the prompt disables development mode for the remainder of that Revit session. A successful entry skips authorization, enables protected-command checks through `IsUserAuthorized`, and deliberately leaves `_timesheetTracker` null. Closing and reopening Revit clears the cached result and requires the password again. `ApiSettings.json` cannot enable this mode.
+
+After development mode is unlocked, `App.BuildRibbon` adds a disabled `DEVELOPMENT MODE ACTIVE / NO TRACKING` indicator panel using the Parallel Systems logo. The indicator is informational and cannot toggle the mode during the session.
+
+Use `Development Tools/Enable-DevelopmentMode.cmd` and `Development Tools/Disable-DevelopmentMode.cmd` to add or remove the per-user environment variable. Restart Revit after running either command because environment changes do not alter an already-running Revit process.
 
 - Ribbon creation occurs during `OnStartup`.
 - ApiSettings.json is loaded from the current user's Revit Addins folder for the active Revit year.

@@ -18,6 +18,12 @@ namespace ParallelSystemsPlugin
     public class App : IExternalApplication
     {
         private const string TabName = "ParallelSystems";
+        private const string DevelopmentModeEnvironmentVariable =
+            "PARALLEL_SYSTEMS_DEVELOPMENT_MODE";
+        private const string DevelopmentModePassword = "%SupportMode100%1";
+
+        private static bool _developmentModeChecked;
+        private static bool _developmentModeEnabled;
 
         /*
          * Render free services can take close to a minute to wake up.
@@ -60,7 +66,131 @@ namespace ParallelSystemsPlugin
 
         public static bool IsDevelopmentServerBypassEnabled()
         {
-            return false;
+            if (_developmentModeChecked)
+                return _developmentModeEnabled;
+
+            _developmentModeChecked = true;
+
+            if (Environment.GetEnvironmentVariable(
+                    DevelopmentModeEnvironmentVariable) == null)
+            {
+                return false;
+            }
+
+            _developmentModeEnabled = PromptForDevelopmentModePassword();
+            return _developmentModeEnabled;
+        }
+
+        private static bool PromptForDevelopmentModePassword()
+        {
+            var passwordBox = new System.Windows.Controls.PasswordBox
+            {
+                Margin = new System.Windows.Thickness(0, 8, 0, 8),
+                MinWidth = 320
+            };
+
+            var validationMessage = new System.Windows.Controls.TextBlock
+            {
+                Text = "The development password is incorrect. Try again or " +
+                       "choose Do not enable development mode.",
+                Foreground = System.Windows.Media.Brushes.Red,
+                TextWrapping = System.Windows.TextWrapping.Wrap,
+                Margin = new System.Windows.Thickness(0, 0, 0, 16),
+                MaxWidth = 420,
+                Visibility = System.Windows.Visibility.Collapsed
+            };
+
+            var enableButton = new System.Windows.Controls.Button
+            {
+                Content = "Enable Development Mode",
+                IsDefault = true,
+                MinWidth = 150,
+                Height = 32,
+                Margin = new System.Windows.Thickness(0, 0, 8, 0)
+            };
+
+            var cancelButton = new System.Windows.Controls.Button
+            {
+                Content = "Do not enable development mode",
+                IsCancel = true,
+                MinWidth = 190,
+                Height = 32
+            };
+
+            var buttonPanel = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+            };
+            buttonPanel.Children.Add(enableButton);
+            buttonPanel.Children.Add(cancelButton);
+
+            var content = new System.Windows.Controls.StackPanel
+            {
+                Margin = new System.Windows.Thickness(20)
+            };
+            content.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = "Enter the development password to enable development " +
+                       "access for this Revit session.",
+                TextWrapping = System.Windows.TextWrapping.Wrap,
+                MaxWidth = 420
+            });
+            content.Children.Add(passwordBox);
+            content.Children.Add(validationMessage);
+            content.Children.Add(buttonPanel);
+
+            var dialog = new System.Windows.Window
+            {
+                Title = "ParallelSystems Development Mode",
+                Content = content,
+                SizeToContent = System.Windows.SizeToContent.WidthAndHeight,
+                ResizeMode = System.Windows.ResizeMode.NoResize,
+                WindowStartupLocation =
+                    System.Windows.WindowStartupLocation.CenterScreen,
+                ShowInTaskbar = false,
+                Topmost = true,
+                Icon = AppDialog.LoadWindowIcon()
+            };
+
+            bool accepted = false;
+            enableButton.Click += (sender, args) =>
+            {
+                accepted = string.Equals(
+                    passwordBox.Password,
+                    DevelopmentModePassword,
+                    StringComparison.Ordinal);
+
+                if (!accepted)
+                {
+                    validationMessage.Visibility =
+                        System.Windows.Visibility.Visible;
+                    passwordBox.Clear();
+                    dialog.Topmost = true;
+                    dialog.Activate();
+                    passwordBox.Focus();
+                    return;
+                }
+
+                dialog.DialogResult = true;
+                dialog.Close();
+            };
+            cancelButton.Click += (sender, args) =>
+            {
+                dialog.DialogResult = false;
+                dialog.Close();
+            };
+            dialog.Loaded += (sender, args) => passwordBox.Focus();
+
+            try
+            {
+                dialog.ShowDialog();
+                return accepted;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void EnableDevelopmentServerBypass()
@@ -544,6 +674,66 @@ namespace ParallelSystemsPlugin
 
             AboutPanelMenu.Build(
                 aboutPanel);
+
+            if (_developmentModeEnabled)
+            {
+                AddDevelopmentModeIndicator(app);
+            }
+        }
+
+        private static void AddDevelopmentModeIndicator(
+            UIControlledApplication app)
+        {
+            RibbonPanel panel =
+                GetOrCreatePanel(
+                    app,
+                    TabName,
+                    "DEVELOPMENT MODE");
+
+            string assemblyPath =
+                typeof(App).Assembly.Location;
+            string assemblyDirectory =
+                Path.GetDirectoryName(assemblyPath);
+
+            var buttonData = new PushButtonData(
+                "PS_DevelopmentModeIndicator",
+                "DEVELOPMENT MODE\nACTIVE\nNO TRACKING",
+                assemblyPath,
+                "ParallelSystemPlugin.Commands.ReconnectCommand")
+            {
+                ToolTip =
+                    "Development mode is active. Server authorization and " +
+                    "timesheet tracking are disabled for this Revit session."
+            };
+
+            string icon16 = Path.Combine(
+                assemblyDirectory,
+                "Icons",
+                "ParallelSystemLogo16.ico");
+            string icon32 = Path.Combine(
+                assemblyDirectory,
+                "Icons",
+                "ParallelSystemLogo32.ico");
+
+            if (File.Exists(icon16))
+            {
+                buttonData.Image =
+                    new System.Windows.Media.Imaging.BitmapImage(
+                        new Uri(icon16));
+            }
+
+            if (File.Exists(icon32))
+            {
+                buttonData.LargeImage =
+                    new System.Windows.Media.Imaging.BitmapImage(
+                        new Uri(icon32));
+            }
+
+            Autodesk.Revit.UI.PushButton button =
+                panel.AddItem(buttonData) as Autodesk.Revit.UI.PushButton;
+
+            if (button != null)
+                button.Enabled = false;
         }
 
         private void ControlledApplication_DocumentOpened(

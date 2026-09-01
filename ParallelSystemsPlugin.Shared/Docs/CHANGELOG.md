@@ -11,7 +11,9 @@
 - Standardized procurement Excel headers, group bands, project-phase display, red exclusion notes, widths, and report-specific PDF/Excel generation.
 - Added continuous-top capability diagnostics and expanded fabrication JSON/STEP diagnostics for complex shaped-branch topology, surface continuity, validation, and fallback analysis.
 - Expanded Fabrication STEP branch geometry and topology handling, connection resolution, selection support, preflight behavior, and generation diagnostics for current family cases.
-- Retained the development authorization bypass in code but hardcoded its check to `false`, so startup and Reconnect always use normal server authorization.
+- Added session-only development-mode activation through the presence of the `PARALLEL_SYSTEMS_DEVELOPMENT_MODE` environment variable and a one-time password prompt at Revit startup. Successful activation enables the existing development bypass, bypasses protected-command checks, and leaves timesheet tracking disabled until Revit closes.
+- The development-mode prompt now remains open after an incorrect password, uses the Parallel Systems icon, and provides an explicit `Do not enable development mode` action.
+- Added a persistent `DEVELOPMENT MODE ACTIVE / NO TRACKING` ribbon indicator for successfully unlocked development sessions.
 - Iterated product, assembly, file, informational, splash, tracker fallback, User Manual, developer notes, and changelog versions to 1.17.7.
 
 ## 1.17.6 - Fabrication STEP Large-Package Performance Optimisation (Internal / Unreleased)

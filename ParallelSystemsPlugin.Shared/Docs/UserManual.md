@@ -21,7 +21,7 @@ The public plugin version is 1.17.7. The V2 label used in monitoring and deploym
 - Improved package lookup for assembly, member, type, readable, and numeric-reference values. Field Material Report uses the Assembly Register naming rule; loose field material can traverse Victaulic rigid/flex couplings to reach a connected pipe's owning assembly.
 - Added deeper developer diagnostics for shaped-branch topology, continuous-top capability, geometry fallback, and validation analysis.
 - Expanded Fabrication STEP handling for current complex shaped-branch, connection, selection, and topology cases.
-- Startup and Reconnect use the configured authorization server. The internal development-bypass check is hardcoded to disabled.
+- Startup and Reconnect normally use the configured authorization server. Authorized support sessions can enable the internal development bypass for one Revit process.
 
 The current build also includes the following 1.17.6 Fabrication STEP performance changes:
 
@@ -287,7 +287,9 @@ The Detailing command class remains in the source, but no Detailing panel is cre
 
 ## Startup and Authorization
 
-Authorization is separate from timesheet checkpoint delivery. Startup and Reconnect use the configured authorization server. The internal development-bypass check is hardcoded to `false` and is not available through `ApiSettings.json` or another user-editable setting.
+Authorization is separate from timesheet checkpoint delivery. Startup and Reconnect normally use the configured authorization server. If the `PARALLEL_SYSTEMS_DEVELOPMENT_MODE` environment variable exists when Revit starts, the plugin asks for the development password. An incorrect password keeps the prompt open for another attempt. Choosing `Do not enable development mode` or closing the prompt continues with normal authorization. A successful entry enables protected commands without server authorization and prevents the timesheet tracker from starting for that Revit session. Closing Revit clears the result, so the password is required again the next time development mode is requested. `ApiSettings.json` cannot enable development mode.
+
+When development mode is active, the ParallelSystems ribbon displays a disabled `DEVELOPMENT MODE ACTIVE / NO TRACKING` indicator so the session state remains visible.
 
 The normal startup flow is:
 
