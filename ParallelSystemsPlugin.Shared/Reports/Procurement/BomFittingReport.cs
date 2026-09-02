@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Plumbing;
@@ -61,7 +62,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             rows = rows.Where(x => includeSiteMeasureAssemblies || !siteMeasureNames.Contains(x.AssemblyName)).ToList();
 
             rows = rows
-                .Where(x => !IsExcludedCategory(x.TypeBucket))
+                .Where(x => !IsExcludedCategory(x.TypeBucket, cfg.IncludeWeldInFittingReport))
                 .ToList();
 
 
@@ -71,14 +72,19 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (DEBUG_MODE)
                 WriteFittingDebugCsv(doc, cfg, rows, "02_AFTER_SITE_MEASURE_FILTER");
 
-            // Group by Material Grade (Material param)
-            var byMat = rows
-                .GroupBy(r => (r.MaterialGrade ?? "").Trim())
-                .OrderBy(g => g.Key)
+            var byPackage = rows
+                .GroupBy(r => string.IsNullOrWhiteSpace(r.PackageName)
+                    ? NO_PACKAGE_ASSIGNED
+                    : r.PackageName.Trim())
+                .OrderBy(g => string.Equals(
+                    g.Key,
+                    NO_PACKAGE_ASSIGNED,
+                    StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             if (DEBUG_MODE)
-                WriteFittingSummaryDebugCsv(cfg, byMat, "03_GROUPED_SUMMARY");
+                WriteFittingSummaryDebugCsv(cfg, byPackage, "03_GROUPED_SUMMARY");
 
             PdfDoc pdf = new PdfDoc();
             DefineStyles(pdf);
@@ -104,11 +110,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             // Header
             DrawHeader(section, cfg, "BOM Fitting Report", dateText);
 
-            foreach (var matGroup in byMat)
+            foreach (var packageGroup in byPackage)
             {
-                AddMaterialGradeHeader(section, matGroup.Key);
+                AddPackageHeader(section, packageGroup.Key);
 
-                var byType = matGroup
+                var byType = packageGroup
                     .GroupBy(x => x.TypeBucket)
                     .OrderBy(g => TypeSortOrder(g.Key))
                     .ThenBy(g => g.Key)
@@ -171,7 +177,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 renderer.PdfDocument.Save(outPath);
 
             if (cfg.ExportReportsToExcel)
-                ExportExcel(cfg, byMat);
+                ExportExcel(cfg, byPackage);
         }
 
 
@@ -241,13 +247,13 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             return false;
         }
 
-        private static void ExportExcel(ProcurementConfig cfg, List<IGrouping<string, FittingRow>> byMat)
+        private static void ExportExcel(ProcurementConfig cfg, List<IGrouping<string, FittingRow>> byPackage)
         {
             string note = "";
             var sheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
                 cfg,
                 "BOM Fitting Report",
-                new[] { "Material Grade", "Category", "Qty", "Size", "Description" },
+                new[] { "Package", "Category", "Qty", "Size", "Description" },
                 note);
             sheet.SetColumnWidth(1, 28);
             sheet.SetColumnWidth(2, 24);
@@ -257,17 +263,17 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             sheet.CenterColumns(3);
 
             bool alt = false;
-            foreach (var materialGroup in byMat)
+            foreach (var packageGroup in byPackage)
             {
                 sheet.Add(
                     ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                    materialGroup.Key ?? "",
+                    packageGroup.Key ?? NO_PACKAGE_ASSIGNED,
                     "",
                     "",
                     "",
                     "");
 
-                var byType = materialGroup
+                var byType = packageGroup
                     .GroupBy(x => x.TypeBucket)
                     .OrderBy(g => TypeSortOrder(g.Key))
                     .ThenBy(g => g.Key)
@@ -321,10 +327,10 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 new[] { sheet });
         }
 
-        private static bool IsExcludedCategory(string category)
+        private static bool IsExcludedCategory(string category, bool includeWeld)
         {
-            return string.Equals(category, "WELD", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(category, "SHAPED BRANCH", StringComparison.OrdinalIgnoreCase);
+            return (!includeWeld && string.Equals(category, "WELD", StringComparison.OrdinalIgnoreCase)) ||
+                   string.Equals(category, "SHAPED BRANCH", StringComparison.OrdinalIgnoreCase);
         }
 
         private static ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind
@@ -435,11 +441,17 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 if (string.IsNullOrWhiteSpace(sizeText))
                     sizeText = ExtractLikelySizeFromText(typeIdentity);
 
+                bool teeSizesAreEqual = AreAllNominalSizesEqual(sizeText);
                 sizeText = NormalizeSizeText(sizeText);
 
                 double sizeSort = ExtractFirstNumber(sizeText);
 
-                string finalDesc = BuildReportDescription(e, bucket, rawDesc, typeIdentity, sizeText);
+                string finalDesc = BuildReportDescription(
+                    e,
+                    bucket,
+                    rawDesc,
+                    typeIdentity,
+                    teeSizesAreEqual);
 
                 // Manual report does not show these "Standard" non-connectors.
                 // They are being picked up by OST_PipeFitting but are not BOM fitting items.
@@ -833,13 +845,20 @@ namespace ParallelSystemsPlugin.Reports.Procurement
     string bucket,
     string rawDesc,
     string typeIdentity,
-    string sizeText)
+    bool teeSizesAreEqual)
         {
             string source = ((typeIdentity ?? "") + " " + (rawDesc ?? "")).Trim();
             string upper = source.ToUpperInvariant();
 
             if (bucket == "CUSTOM FITTING")
                 return "HYDROFLOW FERRULE - SCH10 - SS";
+
+            if (bucket == "TEE" && teeSizesAreEqual)
+            {
+                string bomDescription = GetStringParamInstanceOrType(e, "BOM DESCRIPTION NAME");
+                if (!string.IsNullOrWhiteSpace(bomDescription))
+                    return NormalizeDescription(bomDescription);
+            }
 
             if (bucket == "WELD")
             {
@@ -870,6 +889,16 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             }
 
             return NormalizeDescription(rawDesc);
+        }
+
+        private static bool AreAllNominalSizesEqual(string sizeText)
+        {
+            var sizes = Regex.Matches(sizeText ?? "", @"\d+(?:\.\d+)?")
+                .Cast<Match>()
+                .Select(match => double.Parse(match.Value, CultureInfo.InvariantCulture))
+                .ToList();
+
+            return sizes.Count >= 2 && sizes.All(size => Math.Abs(size - sizes[0]) < 0.001);
         }
 
         private static string GetElbowAngleText(Element e)
@@ -1125,10 +1154,10 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             section.AddParagraph().Format.SpaceAfter = Unit.FromCentimeter(0.35);
         }
 
-        private static void AddMaterialGradeHeader(Section section, string materialGrade)
+        private static void AddPackageHeader(Section section, string packageName)
         {
-            string label = "MaterialGrade: ";
-            string value = string.IsNullOrWhiteSpace(materialGrade) ? "(Blank)" : materialGrade.Trim();
+            string label = "Package: ";
+            string value = string.IsNullOrWhiteSpace(packageName) ? NO_PACKAGE_ASSIGNED : packageName.Trim();
 
             var p = section.AddParagraph(label + value);
             p.Style = "H2";
@@ -1484,7 +1513,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private static void WriteFittingSummaryDebugCsv(
             ProcurementConfig cfg,
-            List<IGrouping<string, FittingRow>> byMat,
+            List<IGrouping<string, FittingRow>> byPackage,
             string stage)
         {
             try
@@ -1501,16 +1530,16 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                 lines.Add(string.Join(",",
                     Csv("Stage"),
-                    Csv("MaterialGrade"),
+                    Csv("Package"),
                     Csv("TypeBucket"),
                     Csv("Qty"),
                     Csv("SizeText"),
                     Csv("Description")
                 ));
 
-                foreach (var matGroup in byMat)
+                foreach (var packageGroup in byPackage)
                 {
-                    var byType = matGroup
+                    var byType = packageGroup
                         .GroupBy(x => x.TypeBucket)
                         .OrderBy(g => TypeSortOrder(g.Key))
                         .ThenBy(g => g.Key)
@@ -1535,7 +1564,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                         {
                             lines.Add(string.Join(",",
                                 Csv(stage),
-                                Csv(matGroup.Key ?? ""),
+                                Csv(packageGroup.Key ?? NO_PACKAGE_ASSIGNED),
                                 Csv(typeGroup.Key ?? ""),
                                 Csv(item.Qty.ToString(CultureInfo.InvariantCulture)),
                                 Csv(item.SizeText),

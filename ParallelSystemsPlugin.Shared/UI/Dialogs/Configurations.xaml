@@ -10,10 +10,10 @@
         Background="#F3F4F6"
         Title="Configurations"
         WindowStartupLocation="CenterScreen"
-        Height="880"
-        Width="960"
-        MinHeight="760"
-        MinWidth="820">
+        Height="980"
+        Width="1040"
+        MinHeight="820"
+        MinWidth="920">
 
     <Window.Resources>
         <converterNs:RevitColorToBrushConverter x:Key="RevitColorToBrushConverter"/>
@@ -703,23 +703,38 @@
 
                             <!-- Reports -->
                             <GroupBox Grid.Row="4" Header="Reports" FontWeight="Bold" Margin="0,10,0,0">
-                                <StackPanel Margin="5,10,0,0">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                <Grid Margin="5,10,5,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="350"/>
+                                        <ColumnDefinition Width="220"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,12,0">
                                     <CheckBox x:Name="ChkBomAssemblyRegister" FontSize="15" Margin="5"
-                  Content="BOM-ASSEMBLY REGISTER"/>
+                  Content="BOM-ASSEMBLY REGISTER" Click="ReportCheckBox_Click"/>
                                     <CheckBox x:Name="ChkBomCutList" FontSize="15" Margin="5"
-                  Content="BOM-CUT LIST REPORT"/>
+                  Content="BOM-CUT LIST REPORT" Click="ReportCheckBox_Click"/>
                                     <CheckBox x:Name="ChkBomFittingReport" FontSize="15" Margin="5"
-                  Content="BOM-FITTING REPORT"/>
+                  Content="BOM-FITTING REPORT" Click="ReportCheckBox_Click"/>
                                     <CheckBox x:Name="ChkBomLoadingReport" FontSize="15" Margin="5"
-                  Content="BOM-LOADING REPORT"/>
+                  Content="BOM-LOADING REPORT" Click="ReportCheckBox_Click"/>
                                     <CheckBox x:Name="ChkBomPipeReport" FontSize="15" Margin="5"
-                  Content="BOM-PIPE REPORT"/>
+                  Content="BOM-PIPE REPORT" Click="ReportCheckBox_Click"/>
                                     <CheckBox x:Name="ChkLabelReport" FontSize="15" Margin="5"
-                  Content="LABEL REPORT"/>
+                  Content="LABEL REPORT" Click="ReportCheckBox_Click"/>
                                     <CheckBox x:Name="ChkBomFieldMaterialReport" FontSize="15" Margin="5"
-                  Content="BOM-FIELD MATERIAL REPORT"/>
+                  Content="BOM-FIELD MATERIAL REPORT" Click="ReportCheckBox_Click"/>
                                     <CheckBox x:Name="ChkBomAccessoryReport" FontSize="15" Margin="5"
-                  Content="BOM-ACCESSORY REPORT"/>
+                  Content="BOM-ACCESSORY REPORT" Click="ReportCheckBox_Click"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
                                     <Separator Margin="5,10,5,10"/>
                                     <CheckBox x:Name="ChkIncludeSiteMeasure" FontSize="15" Margin="5"
                   Content="INCLUDE SITE MEASURE"/>
@@ -734,6 +749,29 @@
                                                      Content="PDF" FontSize="15"/>
                                     </StackPanel>
                                 </StackPanel>
+
+                                <Border x:Name="FittingReportOptionsPanel"
+                                        Grid.Row="0"
+                                        Grid.Column="1"
+                                        Margin="0,3,0,3"
+                                        Padding="12"
+                                        BorderBrush="#CBD5E1"
+                                        BorderThickness="1"
+                                        Background="#F8FAFC"
+                                        Visibility="Collapsed">
+                                    <StackPanel>
+                                        <TextBlock Text="Fitting Report Options"
+                                                   FontSize="15"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,0,0,12"/>
+                                        <CheckBox x:Name="ChkIncludeWeldInFittingReport"
+                                                  Content="Include Weld"
+                                                  FontSize="15"
+                                                  Margin="2"/>
+                                    </StackPanel>
+                                </Border>
+                                </Grid>
+                                </ScrollViewer>
                             </GroupBox>
                         </Grid>
                     </GroupBox>

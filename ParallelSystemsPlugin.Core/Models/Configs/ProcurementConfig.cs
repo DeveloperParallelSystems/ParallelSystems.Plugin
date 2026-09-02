@@ -16,6 +16,7 @@ namespace ParallelSystemsPlugin.Models.Configs
         public bool BomAssemblyRegister { get; set; } = true;
         public bool BomCutList { get; set; } = true;
         public bool BomFittingReport { get; set; } = true;
+        public bool IncludeWeldInFittingReport { get; set; } = false;
         public bool BomLoadingReport { get; set; } = true;
         public bool BomPipeReport { get; set; } = true;
         public bool LabelReport { get; set; } = true;

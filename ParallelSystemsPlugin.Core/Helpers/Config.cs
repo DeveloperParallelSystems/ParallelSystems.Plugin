@@ -286,6 +286,7 @@ namespace ParallelSystemsPlugin.Helpers
                     BomAssemblyRegister = true,
                     BomCutList = true,
                     BomFittingReport = true,
+                    IncludeWeldInFittingReport = false,
                     BomLoadingReport = true,
                     BomPipeReport = true,
                     LabelReport = true,

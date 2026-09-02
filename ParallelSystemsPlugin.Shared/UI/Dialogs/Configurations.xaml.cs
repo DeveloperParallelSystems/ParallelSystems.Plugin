@@ -61,6 +61,12 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             Icon = AppDialog.LoadWindowIcon();
             _doc = doc;
             LoadConfigurationData(Configs.AppConfig.CurrentConfig);
+
+            if (string.IsNullOrWhiteSpace(ProcJobNumberTextBox.Text) &&
+                string.IsNullOrWhiteSpace(ProcJobNameTextBox.Text))
+            {
+                AutoDetectProjectDetails();
+            }
         }
 
         #endregion
@@ -205,6 +211,7 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             ChkBomAssemblyRegister.IsChecked = config.Procurement.BomAssemblyRegister;
             ChkBomCutList.IsChecked = config.Procurement.BomCutList;
             ChkBomFittingReport.IsChecked = config.Procurement.BomFittingReport;
+            ChkIncludeWeldInFittingReport.IsChecked = config.Procurement.IncludeWeldInFittingReport;
             ChkBomLoadingReport.IsChecked = config.Procurement.BomLoadingReport;
             ChkBomPipeReport.IsChecked = config.Procurement.BomPipeReport;
             ChkLabelReport.IsChecked = config.Procurement.LabelReport;
@@ -297,6 +304,8 @@ namespace ParallelSystemsPlugin.UI.Dialogs
                 Filter = "Supported Images|*.png;*.jpg;*.jpeg;*.bmp"
             };
 
+            SetDefaultLogoDirectory(dlg);
+
             if (dlg.ShowDialog() == true)
             {
                 _companyLogoPath = dlg.FileName;
@@ -314,6 +323,8 @@ namespace ParallelSystemsPlugin.UI.Dialogs
                 Filter = "Supported Images|*.png;*.jpg;*.jpeg;*.bmp"
             };
 
+            SetDefaultLogoDirectory(dlg);
+
             if (dlg.ShowDialog() == true)
             {
                 _clientLogoPath = dlg.FileName;
@@ -321,6 +332,22 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             }
 
             RefreshProcurementLogoPlaceholders();
+        }
+
+        private static void SetDefaultLogoDirectory(OpenFileDialog dialog)
+        {
+            if (dialog == null)
+                return;
+
+            string programData = Environment.GetFolderPath(
+                Environment.SpecialFolder.CommonApplicationData);
+            string logoDirectory = Path.Combine(
+                programData,
+                "Parallel Systems",
+                "Images");
+
+            if (Directory.Exists(logoDirectory))
+                dialog.InitialDirectory = logoDirectory;
         }
 
         #endregion
@@ -681,6 +708,7 @@ namespace ParallelSystemsPlugin.UI.Dialogs
                 newConfig.Procurement.BomAssemblyRegister = ChkBomAssemblyRegister.IsChecked == true;
                 newConfig.Procurement.BomCutList = ChkBomCutList.IsChecked == true;
                 newConfig.Procurement.BomFittingReport = ChkBomFittingReport.IsChecked == true;
+                newConfig.Procurement.IncludeWeldInFittingReport = ChkIncludeWeldInFittingReport.IsChecked == true;
                 newConfig.Procurement.BomLoadingReport = ChkBomLoadingReport.IsChecked == true;
                 newConfig.Procurement.BomPipeReport = ChkBomPipeReport.IsChecked == true;
                 newConfig.Procurement.LabelReport = ChkLabelReport.IsChecked == true;
@@ -952,9 +980,18 @@ namespace ParallelSystemsPlugin.UI.Dialogs
 
         private void BtnAutoDetect_Click(object sender, RoutedEventArgs e)
         {
-            string jobNumberOld = ProcJobNumberTextBox.Text?.Trim() ?? "";
-            string jobNameOld = ProcJobNameTextBox.Text?.Trim() ?? "";
+            AutoDetectProjectDetails();
+        }
 
+        private void ReportCheckBox_Click(object sender, RoutedEventArgs e)
+        {
+            FittingReportOptionsPanel.Visibility = ReferenceEquals(sender, ChkBomFittingReport)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        private void AutoDetectProjectDetails()
+        {
             string jobNumberNew = GetProjectNumber(_doc)?.Trim() ?? "";
             string jobNameNew = GetProjectName(_doc)?.Trim() ?? "";
 

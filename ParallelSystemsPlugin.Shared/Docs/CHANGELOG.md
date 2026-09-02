@@ -7,6 +7,10 @@
 - Added a topmost password prompt with retry handling, an explicit `Do not enable development mode` action, Parallel Systems branding, and a persistent `DEVELOPMENT MODE ACTIVE / NO TRACKING` ribbon indicator.
 - Added enable and disable command files plus an internal Word guide under `Development Tools`.
 - Successful normal-mode Reconnect authorization now starts the same authorized services as startup, including timesheet tracking and Outbox flushing.
+- Updated Procurement configuration to auto-detect the Revit Project Number and Project Name when both saved fields are empty, use a larger resizable layout, and reveal report-specific settings when a report is clicked.
+- Added the Fitting Report `Include Weld` option. Fitting Report PDF and Excel output now group by resolved package instead of material grade, place `NO PACKAGE ASSIGNED` last, and use `BOM DESCRIPTION NAME` for equal-size tees when the parameter is populated.
+- Updated Loading Report rows to sort by length from smallest to largest within each package.
+- Logo selection now opens `%ProgramData%\Parallel Systems\Images` by default when the directory exists. The installers deploy the bundled Parallel Systems, Climatech, and Brown Moodie images to that shared location.
 - Iterated product, assembly, file, informational, splash, tracker fallback, User Manual, developer notes, and changelog versions to 1.17.8.
 
 ## 1.17.7 - Procurement Reporting and Fabrication Diagnostics (Internal / Unreleased)

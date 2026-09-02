@@ -18,6 +18,11 @@ The public plugin version is 1.17.8. The V2 label used in monitoring and deploym
 - Added a topmost retrying password prompt, an explicit opt-out action, and a persistent `DEVELOPMENT MODE ACTIVE / NO TRACKING` ribbon indicator.
 - Added Development Mode enable/disable commands and an internal Word guide.
 - A successful normal-mode Reconnect now starts timesheet tracking and flushes the local Outbox just like successful startup authorization.
+- Procurement configuration now auto-detects Project Number and Project Name when both saved values are empty and uses a larger resizable report-settings layout.
+- Report entries can be clicked to reveal report-specific settings. Fitting Report currently provides an `Include Weld` option.
+- Fitting Report PDF and Excel output now use Package instead of Material Grade, place `NO PACKAGE ASSIGNED` after every named package, and use `BOM DESCRIPTION NAME` for an equal-size tee when available.
+- Loading Report sorts assembly lengths from smallest to largest within each package.
+- Company and client logo selection starts in `%ProgramData%\Parallel Systems\Images` when that folder exists. The installer places the bundled logo images there.
 
 The current build also includes the following 1.17.7 procurement and fabrication changes:
 
@@ -220,9 +225,14 @@ The Configurations window contains five active tabs.
 **Procurement**
 
 - Project Details: company logo, client logo, job number, and job name.
+- When both job fields are empty as the window opens, Project Details reads the Revit Project Number and Project Name automatically. The Auto Detect button remains available for manual refresh.
+- Company and client logo selection starts in `%ProgramData%\Parallel Systems\Images` when that directory exists; otherwise the standard Windows file-picker location is used.
 - Publish Details: Publish Site, file name, PDF option, and image option.
-- Output Details: target folder, report date, cut-list maximum length, blade thickness, and negative allowance.
-- Reports: Assembly Register, Cut List, Fitting Report, Loading Report, Pipe Report, Label Report, Field Material Report, Include Site Measure, and Export Reports to Excel.
+- Output Details: target folder, report date, cut-list maximum length, blade thickness, negative allowance, and reusable-offcut threshold.
+- Reports: Assembly Register, Cut List, Fitting Report, Loading Report, Pipe Report, Label Report, Field Material Report, Accessory Report, and Include Site Measure. Select Excel or PDF under Output Format.
+- Clicking a report reveals its available report-specific settings. Fitting Report currently offers `Include Weld`; when disabled, weld rows are omitted.
+- Fitting Report groups PDF and Excel results by resolved package. Named packages are ordered first and `NO PACKAGE ASSIGNED` is always last. Equal-size tees use their `BOM DESCRIPTION NAME` value when populated.
+- Loading Report orders rows within each package by length from smallest to largest.
 
 **Tools**
 

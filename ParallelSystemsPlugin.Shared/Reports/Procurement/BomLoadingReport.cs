@@ -113,6 +113,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             rows = rows
                 .OrderBy(r => r.PackageName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.LengthMm)
                 .ThenBy(r => r.DrawingNumber, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(r => r.MaterialGrade)
                 .ToList();
