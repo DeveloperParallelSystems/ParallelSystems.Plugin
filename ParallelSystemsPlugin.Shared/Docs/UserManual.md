@@ -20,7 +20,7 @@ The public plugin version is 1.17.8. The V2 label used in monitoring and deploym
 - A successful normal-mode Reconnect now starts timesheet tracking and flushes the local Outbox just like successful startup authorization.
 - Procurement configuration now auto-detects Project Number and Project Name when both saved values are empty and uses a larger resizable report-settings layout.
 - Report entries can be clicked to reveal report-specific settings. Fitting Report currently provides an `Include Weld` option.
-- Fitting Report PDF and Excel output now use Package instead of Material Grade, place `NO PACKAGE ASSIGNED` after every named package, and use `BOM DESCRIPTION NAME` for an equal-size tee when available.
+- Fitting Report PDF and Excel output now use Package instead of Material Grade, place `NO PACKAGE ASSIGNED` after every named package, and use `Description BOM` for an equal-size tee when available.
 - Loading Report sorts assembly lengths from smallest to largest within each package.
 - Company and client logo selection starts in `%ProgramData%\Parallel Systems\Images` when that folder exists. The installer places the bundled logo images there.
 
@@ -231,7 +231,7 @@ The Configurations window contains five active tabs.
 - Output Details: target folder, report date, cut-list maximum length, blade thickness, negative allowance, and reusable-offcut threshold.
 - Reports: Assembly Register, Cut List, Fitting Report, Loading Report, Pipe Report, Label Report, Field Material Report, Accessory Report, and Include Site Measure. Select Excel or PDF under Output Format.
 - Clicking a report reveals its available report-specific settings. Fitting Report currently offers `Include Weld`; when disabled, weld rows are omitted.
-- Fitting Report groups PDF and Excel results by resolved package. Named packages are ordered first and `NO PACKAGE ASSIGNED` is always last. Equal-size tees use their `BOM DESCRIPTION NAME` value when populated.
+- Fitting Report groups PDF and Excel results by resolved package. Named packages are ordered first and `NO PACKAGE ASSIGNED` is always last. Equal-size tees use their `Description BOM` value when populated.
 - Loading Report orders rows within each package by length from smallest to largest.
 
 **Tools**

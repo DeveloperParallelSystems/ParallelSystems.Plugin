@@ -855,7 +855,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             if (bucket == "TEE" && teeSizesAreEqual)
             {
-                string bomDescription = GetStringParamInstanceOrType(e, "BOM DESCRIPTION NAME");
+                string bomDescription = GetStringParamInstanceOrType(e, "Description BOM");
                 if (!string.IsNullOrWhiteSpace(bomDescription))
                     return NormalizeDescription(bomDescription);
             }
