@@ -416,48 +416,5 @@ namespace ParallelSystemsPlugin.Helpers
             return fittings;
         }
 
-        #region ApiConfig
-        public static string GetApiConfigPath()
-        {
-            string revitYear = Configs.RevitConfig.RevitYear;
-
-            string folder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "Autodesk",
-                "Revit",
-                "Addins",
-                revitYear,
-                "ParallelSystemPlugin",
-                "Config");
-
-            if (!Directory.Exists(folder))
-                Directory.CreateDirectory(folder);
-
-            return Path.Combine(folder, "ApiSettings.json");
-        }
-
-        public static ApiSettings LoadApiSettings()
-        {
-            string path = GetApiConfigPath();
-
-            ApiSettings apiSettings = new ApiSettings();
-
-            if (!File.Exists(path))
-            {
-                string defaultJson = JsonConvert.SerializeObject(
-                    apiSettings,
-                    Formatting.Indented
-                );
-
-                File.WriteAllText(path, defaultJson, Encoding.UTF8);
-            }
-
-            string json = File.ReadAllText(path, Encoding.UTF8);
-
-            var config = JsonConvert.DeserializeObject<ApiSettings>(json);
-
-            return config ?? apiSettings;
-        }
-        #endregion
     }
 }

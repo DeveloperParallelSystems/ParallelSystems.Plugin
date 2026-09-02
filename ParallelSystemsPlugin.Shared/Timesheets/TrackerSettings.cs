@@ -7,7 +7,7 @@ namespace ParallelSystemsPlugin.Timesheets
     internal sealed class TrackerSettings
     {
         public bool Enabled { get; set; } = true;
-        public string ApiBaseUrl { get; set; } = "http://localhost:5185";
+        public string ApiBaseUrl { get; set; } = "http://3.24.250.195";
         public string TrackerApiKey { get; set; } = "TzuOp6FOUBaRuRtHX8/krK3ztrxY/OmSIowsJMdnso/rcXvWtdaQEP5Ee86FQcjx";
         public int SamplingIntervalSeconds { get; set; } = 5;
         public int CheckpointIntervalSeconds { get; set; } = 60;
@@ -37,6 +37,14 @@ namespace ParallelSystemsPlugin.Timesheets
                 if (File.Exists(SettingsPath))
                 {
                     settings = JsonConvert.DeserializeObject<TrackerSettings>(File.ReadAllText(SettingsPath));
+                }
+                else
+                {
+                    settings = new TrackerSettings();
+                    Directory.CreateDirectory(ProgramDataFolder);
+                    File.WriteAllText(
+                        SettingsPath,
+                        JsonConvert.SerializeObject(settings, Formatting.Indented));
                 }
             }
             catch

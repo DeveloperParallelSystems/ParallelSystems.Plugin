@@ -3,7 +3,6 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json;
 using ParallelSystemPlugin.UI;
-using ParallelSystemsPlugin.Configs;
 using System;
 using System.Net;
 using System.Net.Http;
@@ -197,14 +196,14 @@ namespace ParallelSystemPlugin.Commands
             }
 
             if (string.IsNullOrWhiteSpace(
-                    ApiConfig.ApiSettings?.BaseUrl))
+                    ParallelSystemsPlugin.App.TrackerSettings?.ApiBaseUrl))
             {
                 throw new InvalidOperationException(
                     "The API BaseUrl is missing from the configuration.");
             }
 
             string baseUrl =
-                ApiConfig.ApiSettings.BaseUrl
+                ParallelSystemsPlugin.App.TrackerSettings.ApiBaseUrl
                     .Trim()
                     .TrimEnd('/');
 

@@ -3,7 +3,6 @@ using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using Newtonsoft.Json;
 using ParallelSystemPlugin.UI;
-using ParallelSystemsPlugin.Configs;
 using ParallelSystemsPlugin.Timesheets;
 using ParallelSystemsPlugin.UI;
 using System;
@@ -60,6 +59,8 @@ namespace ParallelSystemsPlugin
         private bool _servicesStarted;
 
         public static bool IsUserAuthorized { get; set; }
+
+        internal static TrackerSettings TrackerSettings { get; private set; }
 
         public static bool IsAuthorizationPending { get; private set; }
 
@@ -285,8 +286,7 @@ namespace ParallelSystemsPlugin
                 Configs.RevitConfig.RevitYear =
                     app.ControlledApplication.VersionNumber;
 
-                ApiConfig.ApiSettings =
-                    Helpers.Config.LoadApiSettings();
+                TrackerSettings = Timesheets.TrackerSettings.Load();
 
                 Helpers.Config.Load(true);
 
@@ -1023,14 +1023,14 @@ namespace ParallelSystemsPlugin
             CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(
-                    ApiConfig.ApiSettings?.BaseUrl))
+                    TrackerSettings?.ApiBaseUrl))
             {
                 throw new InvalidOperationException(
                     "The API BaseUrl is missing from the configuration.");
             }
 
             string baseUrl =
-                ApiConfig.ApiSettings.BaseUrl.Trim().TrimEnd('/');
+                TrackerSettings.ApiBaseUrl.Trim().TrimEnd('/');
 
             string encodedUsername =
                 Uri.EscapeDataString(username);
@@ -1141,7 +1141,7 @@ namespace ParallelSystemsPlugin
         private static string GetAuthorizationBaseUrlForDisplay()
         {
             string baseUrl =
-                ApiConfig.ApiSettings?.BaseUrl;
+                TrackerSettings?.ApiBaseUrl;
 
             return string.IsNullOrWhiteSpace(baseUrl)
                 ? "(not configured)"

@@ -294,7 +294,7 @@ The Detailing command class remains in the source, but no Detailing panel is cre
 
 ## Startup and Authorization
 
-Authorization is separate from timesheet checkpoint delivery. Startup and Reconnect normally use the configured authorization server. If the `PARALLEL_SYSTEMS_DEVELOPMENT_MODE` environment variable is set to `1` when Revit starts, the plugin asks for the development password. An incorrect password keeps the prompt open for another attempt. Choosing `Do not enable development mode` or closing the prompt continues with normal authorization. A successful entry enables protected commands without server authorization and prevents the timesheet tracker from starting for that Revit session. Closing Revit clears the result, so the password is required again the next time development mode is requested. `ApiSettings.json` cannot enable development mode.
+Authorization is separate from timesheet checkpoint delivery. Startup and Reconnect normally use the configured authorization server. If the `PARALLEL_SYSTEMS_DEVELOPMENT_MODE` environment variable is set to `1` when Revit starts, the plugin asks for the development password. An incorrect password keeps the prompt open for another attempt. Choosing `Do not enable development mode` or closing the prompt continues with normal authorization. A successful entry enables protected commands without server authorization and prevents the timesheet tracker from starting for that Revit session. Closing Revit clears the result, so the password is required again the next time development mode is requested. Tracker settings cannot enable development mode.
 
 When development mode is active, the ParallelSystems ribbon displays a disabled `DEVELOPMENT MODE ACTIVE / NO TRACKING` indicator so the session state remains visible.
 
@@ -304,7 +304,7 @@ The normal startup flow is:
 2. The plugin loads the authorization BaseUrl from:
 
 ```text
-%APPDATA%\Autodesk\Revit\Addins\<RevitYear>\ParallelSystemPlugin\Config\ApiSettings.json
+%PROGRAMDATA%\Parallel Systems\Timesheet\tracker.settings.json
 ```
 
 3. Authorization begins from Revit Idling.
@@ -460,7 +460,7 @@ No MSMQ, old Activity Queue Service, or central workstation SQLite database is p
 
 ### Commands Show Authorization Pending or Access Denied
 
-- Confirm ApiSettings.json contains the correct authorization BaseUrl.
+- Confirm tracker.settings.json contains the correct ApiBaseUrl.
 - Confirm the URL is reachable from the workstation.
 - Allow a sleeping cloud service time to wake.
 - Check Authorization.log for URL, timeout, HTTP status, or response errors.

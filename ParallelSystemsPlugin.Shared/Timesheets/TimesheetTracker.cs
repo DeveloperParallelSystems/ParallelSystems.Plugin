@@ -87,7 +87,7 @@ namespace ParallelSystemsPlugin.Timesheets
         {
             try
             {
-                var settings = TrackerSettings.Load();
+                var settings = App.TrackerSettings ?? TrackerSettings.Load();
                 return settings.Enabled ? new TimesheetTracker(settings) : null;
             }
             catch
