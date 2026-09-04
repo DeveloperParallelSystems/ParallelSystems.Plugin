@@ -317,7 +317,7 @@ namespace ParallelSystemPlugin.UI
             string normalized = version.Trim();
 
             // Defensively hide SDK-generated source revision suffixes such as
-            // 1.17.8+e21376d. Directory.Build.props also disables that suffix.
+            // 1.17.9+e21376d. Directory.Build.props also disables that suffix.
             int sourceRevisionIndex = normalized.IndexOf('+');
             if (sourceRevisionIndex >= 0)
                 normalized = normalized.Substring(0, sourceRevisionIndex);

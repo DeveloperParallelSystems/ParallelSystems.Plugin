@@ -250,6 +250,37 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         private static void ExportExcel(ProcurementConfig cfg, List<IGrouping<string, FittingRow>> byPackage)
         {
             string note = "";
+            var worksheets = new List<ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet>
+            {
+                BuildExcelSheet(cfg, byPackage, note, null)
+            };
+
+            if (byPackage.Count > 1)
+            {
+                foreach (var packageGroup in byPackage)
+                {
+                    worksheets.Add(BuildExcelSheet(
+                        cfg,
+                        new[] { packageGroup },
+                        note,
+                        packageGroup.Key));
+                }
+            }
+
+            ParallelSystemsPlugin.Helpers.ExcelReportExporter.SaveWorkbook(
+                ParallelSystemsPlugin.Helpers.ExcelReportExporter.BuildOutputPath(cfg, "BOM-FITTING REPORT"),
+                worksheets);
+        }
+
+        private static ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet BuildExcelSheet(
+            ProcurementConfig cfg,
+            IEnumerable<IGrouping<string, FittingRow>> packageGroups,
+            string note,
+            string worksheetName)
+        {
+            var packageGroupList = packageGroups.ToList();
+            bool isMasterList = string.IsNullOrWhiteSpace(worksheetName) && packageGroupList.Count > 1;
+
             var sheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
                 cfg,
                 "BOM Fitting Report",
@@ -261,57 +292,105 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             sheet.SetColumnWidth(4, 14);
             sheet.SetColumnWidth(5, 45);
             sheet.CenterColumns(3);
+            if (!string.IsNullOrWhiteSpace(worksheetName))
+                sheet.Name = worksheetName;
 
             bool alt = false;
-            foreach (var packageGroup in byPackage)
+            if (isMasterList)
             {
-                sheet.Add(
-                    ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                    packageGroup.Key ?? NO_PACKAGE_ASSIGNED,
-                    "",
-                    "",
-                    "",
-                    "");
-
-                var byType = packageGroup
-                    .GroupBy(x => x.TypeBucket)
-                    .OrderBy(g => TypeSortOrder(g.Key))
-                    .ThenBy(g => g.Key)
+                var masterRows = packageGroupList
+                    .SelectMany(package => package.Select(item => new
+                    {
+                        Package = package.Key ?? NO_PACKAGE_ASSIGNED,
+                        Item = item
+                    }))
+                    .GroupBy(x => new
+                    {
+                        x.Package,
+                        x.Item.TypeBucket,
+                        x.Item.SizeText,
+                        x.Item.Description
+                    })
+                    .Select(g => new
+                    {
+                        g.Key.Package,
+                        Category = g.Key.TypeBucket ?? "",
+                        Qty = g.Count(),
+                        SizeText = g.Key.SizeText ?? "",
+                        Description = g.Key.Description ?? "",
+                        SizeSort = g.Max(x => x.Item.SizeSort)
+                    })
+                    .OrderBy(x => TypeSortOrder(x.Category))
+                    .ThenBy(x => x.Category, StringComparer.OrdinalIgnoreCase)
+                    .ThenByDescending(x => x.SizeSort)
+                    .ThenBy(x => x.Description, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(x => x.Package, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                foreach (var typeGroup in byType)
+                foreach (var item in masterRows)
                 {
                     sheet.Add(
-                        GetExcelCategoryRowKind(typeGroup.Key),
+                        alt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                        item.Package,
+                        item.Category,
+                        item.Qty,
+                        item.SizeText,
+                        item.Description);
+                    alt = !alt;
+                }
+            }
+            else
+            {
+                foreach (var packageGroup in packageGroupList)
+                {
+                    sheet.Add(
+                        ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                        packageGroup.Key ?? NO_PACKAGE_ASSIGNED,
                         "",
-                        typeGroup.Key ?? "",
                         "",
                         "",
                         "");
 
-                    var aggregated = typeGroup
-                        .GroupBy(x => new { x.SizeText, x.Description })
-                        .Select(g => new
-                        {
-                            Qty = g.Count(),
-                            SizeText = g.Key.SizeText ?? "",
-                            Desc = g.Key.Description ?? "",
-                            SizeSort = g.Max(z => z.SizeSort)
-                        })
-                        .OrderByDescending(x => x.SizeSort)
-                        .ThenBy(x => x.Desc)
+                    var byType = packageGroup
+                        .GroupBy(x => x.TypeBucket)
+                        .OrderBy(g => TypeSortOrder(g.Key))
+                        .ThenBy(g => g.Key)
                         .ToList();
 
-                    foreach (var item in aggregated)
+                    foreach (var typeGroup in byType)
                     {
                         sheet.Add(
-                            alt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                            GetExcelCategoryRowKind(typeGroup.Key),
+                            "",
+                            typeGroup.Key ?? "",
                             "",
                             "",
-                            item.Qty,
-                            item.SizeText,
-                            item.Desc);
-                        alt = !alt;
+                            "");
+
+                        var aggregated = typeGroup
+                            .GroupBy(x => new { x.SizeText, x.Description })
+                            .Select(g => new
+                            {
+                                Qty = g.Count(),
+                                SizeText = g.Key.SizeText ?? "",
+                                Desc = g.Key.Description ?? "",
+                                SizeSort = g.Max(z => z.SizeSort)
+                            })
+                            .OrderByDescending(x => x.SizeSort)
+                            .ThenBy(x => x.Desc)
+                            .ToList();
+
+                        foreach (var item in aggregated)
+                        {
+                            sheet.Add(
+                                alt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                                "",
+                                "",
+                                item.Qty,
+                                item.SizeText,
+                                item.Desc);
+                            alt = !alt;
+                        }
                     }
                 }
             }
@@ -322,9 +401,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 sheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Note, note);
             }
 
-            ParallelSystemsPlugin.Helpers.ExcelReportExporter.SaveWorkbook(
-                ParallelSystemsPlugin.Helpers.ExcelReportExporter.BuildOutputPath(cfg, "BOM-FITTING REPORT"),
-                new[] { sheet });
+            return sheet;
         }
 
         private static bool IsExcludedCategory(string category, bool includeWeld)

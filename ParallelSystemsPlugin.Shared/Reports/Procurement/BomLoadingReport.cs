@@ -74,6 +74,12 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             public double LengthMm { get; set; } = 0.0;
         }
 
+        private sealed class LoadingExcelSheetResult
+        {
+            public ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet Sheet { get; set; }
+            public List<int> DataRowOffsets { get; set; }
+        }
+
         public static void Generate(RvtDoc doc, ProcurementConfig cfg)
         {
             ParallelSystemsPlugin.Classes.PdfRuntime.EnsureInitialized();
@@ -188,17 +194,64 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 renderer.PdfDocument.Save(outPath);
 
             if (cfg.ExportReportsToExcel)
-                ExportExcel(cfg, rows, totalQty, totalWeight, totalLen);
+                ExportExcel(cfg, rows);
         }
 
         private static void ExportExcel(
             ProcurementConfig cfg,
+            List<Row> rows)
+        {
+            var sheetResults = new List<LoadingExcelSheetResult>
+            {
+                BuildLoadingExcelSheet(cfg, rows, null)
+            };
+
+            var packageGroups = rows
+                .GroupBy(r => r.PackageName ?? "", StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => string.Equals(g.Key, NO_PACKAGE_ASSIGNED, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (packageGroups.Count > 1)
+            {
+                foreach (var package in packageGroups)
+                {
+                    sheetResults.Add(BuildLoadingExcelSheet(
+                        cfg,
+                        package.ToList(),
+                        ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(package.Key)));
+                }
+            }
+
+            string excelPath = ParallelSystemsPlugin.Helpers.ExcelReportExporter.BuildOutputPath(
+                cfg,
+                "BOM-LOADING REPORT");
+
+            ParallelSystemsPlugin.Helpers.ExcelReportExporter.SaveWorkbook(
+                excelPath,
+                sheetResults.Select(result => result.Sheet));
+
+            NormalizeLoadingScheduleExcelLayout(excelPath);
+
+            int firstDataRow = FindFirstLoadingDataRow(excelPath);
+
+            AddLoadingScheduleCheckboxes(
+                excelPath,
+                firstDataRow,
+                sheetResults.Select(result => (IList<int>)result.DataRowOffsets).ToList());
+        }
+
+        private static LoadingExcelSheetResult BuildLoadingExcelSheet(
+            ProcurementConfig cfg,
             List<Row> rows,
-            int totalQty,
-            double totalWeight,
-            double totalLen)
+            string worksheetName)
         {
             string note = LOADING_WEIGHT_NOTE;
+            bool isMasterList = string.IsNullOrWhiteSpace(worksheetName) && rows
+                .Select(r => r.PackageName ?? "")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Skip(1)
+                .Any();
 
             var sheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
                 cfg,
@@ -218,36 +271,26 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     "LOAD"
                 },
                 note);
+            if (!string.IsNullOrWhiteSpace(worksheetName))
+                sheet.Name = worksheetName;
 
             bool alt = false;
             var dataRowOffsets = new List<int>();
             int nextRowOffset = 0;
 
-            foreach (var package in rows.GroupBy(r => r.PackageName, StringComparer.OrdinalIgnoreCase))
+            if (isMasterList)
             {
-                sheet.Add(
-                    ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                    package.Key ?? NO_PACKAGE_ASSIGNED,
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "");
-                nextRowOffset++;
-
-                foreach (var r in package)
+                foreach (var r in rows
+                    .OrderBy(x => x.LengthMm)
+                    .ThenBy(x => x.DrawingNumber, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase))
                 {
                     dataRowOffsets.Add(nextRowOffset);
                     sheet.Add(
                         alt
                             ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData
                             : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                        "",
+                        r.PackageName ?? NO_PACKAGE_ASSIGNED,
                         r.DrawingNumber ?? "",
                         r.MaterialGrade ?? "",
                         r.Qty,
@@ -263,6 +306,49 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     nextRowOffset++;
                 }
             }
+            else
+            {
+                foreach (var package in rows.GroupBy(r => r.PackageName, StringComparer.OrdinalIgnoreCase))
+                {
+                    sheet.Add(
+                        ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                        package.Key ?? NO_PACKAGE_ASSIGNED,
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "");
+                    nextRowOffset++;
+
+                    foreach (var r in package)
+                    {
+                        dataRowOffsets.Add(nextRowOffset);
+                        sheet.Add(
+                            alt
+                                ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData
+                                : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                            "",
+                            r.DrawingNumber ?? "",
+                            r.MaterialGrade ?? "",
+                            r.Qty,
+                            r.WeightKg,
+                            r.LengthMm,
+                            "",
+                            "",
+                            "",
+                            "",
+                            "");
+
+                        alt = !alt;
+                        nextRowOffset++;
+                    }
+                }
+            }
 
             sheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Blank);
 
@@ -271,9 +357,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 "",
                 "TOTAL",
                 "",
-                totalQty,
-                Math.Round(totalWeight, 1),
-                Math.Round(totalLen, 0),
+                rows.Sum(r => r.Qty),
+                Math.Round(rows.Sum(r => r.WeightKg), 1),
+                Math.Round(rows.Sum(r => r.LengthMm), 0),
                 "",
                 "",
                 "",
@@ -286,23 +372,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 sheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Note, note);
             }
 
-            string excelPath = ParallelSystemsPlugin.Helpers.ExcelReportExporter.BuildOutputPath(
-                cfg,
-                "BOM-LOADING REPORT");
-
-            ParallelSystemsPlugin.Helpers.ExcelReportExporter.SaveWorkbook(
-                excelPath,
-                new[] { sheet });
-
-            // Fix excessive column spacing first.
-            NormalizeLoadingScheduleExcelLayout(excelPath);
-
-            int firstDataRow = FindFirstLoadingDataRow(excelPath);
-
-            AddLoadingScheduleCheckboxes(
-                excelPath,
-                firstDataRow: firstDataRow,
-                dataRowOffsets: dataRowOffsets);
+            return new LoadingExcelSheetResult
+            {
+                Sheet = sheet,
+                DataRowOffsets = dataRowOffsets
+            };
         }
 
         private static void NormalizeLoadingScheduleExcelLayout(string xlsxPath)
@@ -317,19 +391,21 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 if (workbookPart == null)
                     throw new InvalidOperationException("WorkbookPart is missing.");
 
-                WorksheetPart worksheetPart = workbookPart.WorksheetParts.FirstOrDefault();
+                List<WorksheetPart> worksheetParts = workbookPart.WorksheetParts.ToList();
 
-                if (worksheetPart == null)
+                if (worksheetParts.Count == 0)
                     throw new InvalidOperationException("WorksheetPart is missing.");
 
-                OpenXmlWorksheet worksheet = worksheetPart.Worksheet;
-
-                foreach (OpenXmlColumns oldColumns in worksheet.Elements<OpenXmlColumns>().ToList())
+                foreach (WorksheetPart worksheetPart in worksheetParts)
                 {
-                    oldColumns.Remove();
-                }
+                    OpenXmlWorksheet worksheet = worksheetPart.Worksheet;
 
-                var columns = new OpenXmlColumns();
+                    foreach (OpenXmlColumns oldColumns in worksheet.Elements<OpenXmlColumns>().ToList())
+                    {
+                        oldColumns.Remove();
+                    }
+
+                    var columns = new OpenXmlColumns();
 
                 AddColumnWidth(columns, 1, 1, 18.0); // A - Package
                 AddColumnWidth(columns, 2, 2, 24.0); // B - Drawing Number
@@ -341,18 +417,19 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 // G:K - CUT, FAB, WELD, QA, LOAD
                 AddColumnWidth(columns, 7, 11, 7.0);
 
-                OpenXmlSheetData sheetData = worksheet.Elements<OpenXmlSheetData>().FirstOrDefault();
+                    OpenXmlSheetData sheetData = worksheet.Elements<OpenXmlSheetData>().FirstOrDefault();
 
-                if (sheetData != null)
-                {
-                    worksheet.InsertBefore(columns, sheetData);
-                }
-                else
-                {
-                    worksheet.PrependChild(columns);
-                }
+                    if (sheetData != null)
+                    {
+                        worksheet.InsertBefore(columns, sheetData);
+                    }
+                    else
+                    {
+                        worksheet.PrependChild(columns);
+                    }
 
-                worksheet.Save();
+                    worksheet.Save();
+                }
             }
         }
 
@@ -374,12 +451,12 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         private static void AddLoadingScheduleCheckboxes(
             string xlsxPath,
             int firstDataRow,
-            IList<int> dataRowOffsets)
+            IList<IList<int>> sheetDataRowOffsets)
         {
             if (string.IsNullOrWhiteSpace(xlsxPath) || !File.Exists(xlsxPath))
                 throw new FileNotFoundException("Excel file was not found.", xlsxPath);
 
-            if (dataRowOffsets == null || dataRowOffsets.Count == 0)
+            if (sheetDataRowOffsets == null || sheetDataRowOffsets.Count == 0)
                 return;
 
             using (SpreadsheetDocument document = SpreadsheetDocument.Open(xlsxPath, true))
@@ -389,10 +466,24 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 if (workbookPart == null)
                     throw new InvalidOperationException("WorkbookPart is missing.");
 
-                WorksheetPart worksheetPart = workbookPart.WorksheetParts.FirstOrDefault();
+                var workbookSheets = workbookPart.Workbook.Sheets
+                    .Elements<DocumentFormat.OpenXml.Spreadsheet.Sheet>()
+                    .ToList();
 
-                if (worksheetPart == null)
+                if (workbookSheets.Count == 0)
                     throw new InvalidOperationException("WorksheetPart is missing.");
+
+                int sheetCount = Math.Min(workbookSheets.Count, sheetDataRowOffsets.Count);
+                for (int sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++)
+                {
+                    IList<int> dataRowOffsets = sheetDataRowOffsets[sheetIndex];
+                    if (dataRowOffsets == null || dataRowOffsets.Count == 0)
+                        continue;
+
+                    WorksheetPart worksheetPart =
+                        workbookPart.GetPartById(workbookSheets[sheetIndex].Id) as WorksheetPart;
+                    if (worksheetPart == null)
+                        continue;
 
                 foreach (VmlDrawingPart oldVmlPart in worksheetPart.VmlDrawingParts.ToList())
                 {
@@ -428,6 +519,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 });
 
                 worksheet.Save();
+                }
             }
         }
 

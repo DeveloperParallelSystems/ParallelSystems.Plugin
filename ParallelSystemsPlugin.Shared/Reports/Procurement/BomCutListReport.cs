@@ -247,67 +247,93 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             if (p.ExportReportsToExcel)
             {
-                var cutSheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
-                    p,
-                    "BOM-CUT LIST Details",
-                    new[] { "Package", "Assembly Name", "Size", "Material", "End Prep", "Cut Length"},
-                    note);
-
-                // This report shows its first group description on row 6 and its
-                // column headings on row 7.
-                var cutHeaderRow = cutSheet.Rows.Last();
-                cutSheet.Rows.RemoveAt(cutSheet.Rows.Count - 1);
-                bool cutHeaderAdded = false;
-
-                bool cutAlt = false;
-                foreach (var g in groups)
+                var worksheets = new List<ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet>
                 {
-                    cutSheet.Add(
-                        ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Group,
-                        string.Format(CultureInfo.InvariantCulture, "Package: {0} | Material: {1} | Size: {2} | Stock Length: {3} | Blade: {4} | Negative Allowance: {5}",
-                            g.Key.Package ?? "",
-                            g.Key.Material ?? "",
-                            g.Key.SizeText ?? "",
+                    BuildCutListExcelSheet(
+                        p,
+                        pieces,
+                        maxLen,
+                        blade,
+                        negAllow,
+                        note,
+                        totalWasteText,
+                        null)
+                };
+
+                var packageGroups = pieces
+                    .GroupBy(piece => piece.Package ?? "", StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(group => string.IsNullOrWhiteSpace(group.Key) ? 1 : 0)
+                    .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (packageGroups.Count > 1)
+                {
+                    foreach (var packageGroup in packageGroups)
+                    {
+                        List<PipePiece> packagePieces = packageGroup.ToList();
+                        worksheets.Add(BuildCutListExcelSheet(
+                            p,
+                            packagePieces,
                             maxLen,
                             blade,
-                            negAllow));
-
-                    if (!cutHeaderAdded)
-                    {
-                        cutSheet.Rows.Add(cutHeaderRow);
-                        cutHeaderAdded = true;
-                    }
-
-                    List<PackedBin> excelBins = PackPieces(g.ToList(), maxLen, blade, OptimizationMode.BestFitDecreasing);
-                    int pipeId = 0;
-                    foreach (var bin in excelBins)
-                    {
-                        cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.GroupBlue, $"Pipe Id: {pipeId}");
-                        double waste = Math.Max(0, maxLen - bin.UsedMm);
-                        double wastePct = (maxLen <= 0) ? 0 : (waste / maxLen) * 100.0;
-                        string wasteText = string.Format(CultureInfo.InvariantCulture, "{0}mm ({1}%)", Math.Round(waste), Math.Round(wastePct));
-
-                        foreach (var item in bin.Items)
-                        {
-                            cutSheet.Add(
-                                cutAlt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                                g.Key.Package ?? "",
-                                item.AssemblyName ?? "",
-                                g.Key.SizeText ?? "",
-                                g.Key.Material ?? "",
-                                item.PipeEndPrep ?? "",
-                                Math.Round(item.AdjustedLengthMm));
-                            cutAlt = !cutAlt;
-                        }
-
-                        cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Total, $"Waste: {Math.Round(waste)}mm ({Math.Round(wastePct)}%)");
-                        cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Blank);
-                        pipeId++;
+                            negAllow,
+                            note,
+                            BuildTotalWasteText(packagePieces, maxLen, blade),
+                            ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(packageGroup.Key)));
                     }
                 }
 
-                if (!cutHeaderAdded)
-                    cutSheet.Rows.Add(cutHeaderRow);
+                ParallelSystemsPlugin.Helpers.ExcelReportExporter.SaveWorkbook(
+                    ParallelSystemsPlugin.Helpers.ExcelReportExporter.BuildOutputPath(p, reportName),
+                    worksheets);
+            }
+        }
+
+        private static ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet BuildCutListExcelSheet(
+            ProcurementConfig config,
+            IList<PipePiece> pieces,
+            double maxLen,
+            double blade,
+            double negAllow,
+            string note,
+            string totalWasteText,
+            string worksheetName)
+        {
+            bool isMasterList = string.IsNullOrWhiteSpace(worksheetName) && pieces
+                .Select(x => x.Package ?? "")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Skip(1)
+                .Any();
+
+            var cutSheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
+                config,
+                "BOM-CUT LIST Details",
+                new[] { "Package", "Assembly Name", "Size", "Material", "End Prep", "Cut Length" },
+                note);
+            if (!string.IsNullOrWhiteSpace(worksheetName))
+                cutSheet.Name = worksheetName;
+
+            if (isMasterList)
+            {
+                bool masterAlt = false;
+                foreach (PipePiece item in pieces
+                    .OrderBy(x => x.AssemblyName ?? "", StringComparer.OrdinalIgnoreCase)
+                    .ThenByDescending(x => x.SizeSort)
+                    .ThenBy(x => x.Material ?? "", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(x => x.Package ?? "", StringComparer.OrdinalIgnoreCase))
+                {
+                    cutSheet.Add(
+                        masterAlt
+                            ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData
+                            : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                        item.Package ?? "",
+                        item.AssemblyName ?? "",
+                        item.SizeText ?? "",
+                        item.Material ?? "",
+                        item.PipeEndPrep ?? "",
+                        Math.Round(item.AdjustedLengthMm));
+                    masterAlt = !masterAlt;
+                }
 
                 cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Total, totalWasteText);
 
@@ -317,10 +343,98 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.RedNote, note);
                 }
 
-                ParallelSystemsPlugin.Helpers.ExcelReportExporter.SaveWorkbook(
-                    ParallelSystemsPlugin.Helpers.ExcelReportExporter.BuildOutputPath(p, reportName),
-                    new[] { cutSheet });
+                return cutSheet;
             }
+
+            var groups = pieces
+                .GroupBy(x => new { x.Package, x.Material, x.SizeText, x.SizeSort })
+                .OrderBy(g => g.Key.Package)
+                .ThenBy(g => g.Key.Material)
+                .ThenByDescending(g => g.Key.SizeSort)
+                .ToList();
+
+            var cutHeaderRow = cutSheet.Rows.Last();
+            cutSheet.Rows.RemoveAt(cutSheet.Rows.Count - 1);
+            bool cutHeaderAdded = false;
+            bool cutAlt = false;
+
+            foreach (var g in groups)
+            {
+                cutSheet.Add(
+                    ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Group,
+                    string.Format(CultureInfo.InvariantCulture, "Package: {0} | Material: {1} | Size: {2} | Stock Length: {3} | Blade: {4} | Negative Allowance: {5}",
+                        g.Key.Package ?? "",
+                        g.Key.Material ?? "",
+                        g.Key.SizeText ?? "",
+                        maxLen,
+                        blade,
+                        negAllow));
+
+                if (!cutHeaderAdded)
+                {
+                    cutSheet.Rows.Add(cutHeaderRow);
+                    cutHeaderAdded = true;
+                }
+
+                List<PackedBin> excelBins = PackPieces(g.ToList(), maxLen, blade, OptimizationMode.BestFitDecreasing);
+                int pipeId = 0;
+                foreach (var bin in excelBins)
+                {
+                    cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.GroupBlue, $"Pipe Id: {pipeId}");
+                    double waste = Math.Max(0, maxLen - bin.UsedMm);
+                    double wastePct = (maxLen <= 0) ? 0 : (waste / maxLen) * 100.0;
+
+                    foreach (var item in bin.Items)
+                    {
+                        cutSheet.Add(
+                            cutAlt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                            g.Key.Package ?? "",
+                            item.AssemblyName ?? "",
+                            g.Key.SizeText ?? "",
+                            g.Key.Material ?? "",
+                            item.PipeEndPrep ?? "",
+                            Math.Round(item.AdjustedLengthMm));
+                        cutAlt = !cutAlt;
+                    }
+
+                    cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Total, $"Waste: {Math.Round(waste)}mm ({Math.Round(wastePct)}%)");
+                    cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Blank);
+                    pipeId++;
+                }
+            }
+
+            if (!cutHeaderAdded)
+                cutSheet.Rows.Add(cutHeaderRow);
+
+            cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Total, totalWasteText);
+
+            if (!string.IsNullOrWhiteSpace(note))
+            {
+                cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Blank);
+                cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.RedNote, note);
+            }
+
+            return cutSheet;
+        }
+
+        private static string BuildTotalWasteText(
+            IList<PipePiece> pieces,
+            double maxLen,
+            double blade)
+        {
+            List<PackedBin> bins = pieces
+                .GroupBy(x => new { x.Package, x.Material, x.SizeText, x.SizeSort })
+                .SelectMany(group => PackPieces(
+                    group.ToList(),
+                    maxLen,
+                    blade,
+                    OptimizationMode.BestFitDecreasing))
+                .ToList();
+
+            double totalWaste = bins.Sum(bin => Math.Round(Math.Max(0, maxLen - bin.UsedMm)));
+            double totalStock = bins.Count * maxLen;
+            double totalWastePct = totalStock > 0 ? (totalWaste / totalStock) * 100.0 : 0;
+            return $"TOTAL WASTE: {Math.Round(totalWaste)} mm ({totalWastePct:F1}%)";
         }
 
         // =========================

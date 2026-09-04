@@ -402,6 +402,52 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             string note = "";
             bool groupByFrame = rows.Any(r => !string.IsNullOrWhiteSpace(r.FrameNumber));
 
+            var worksheets = new List<ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet>
+            {
+                BuildAssemblyRegisterExcelSheet(cfg, rows, groupByFrame, note, null)
+            };
+
+            if (!groupByFrame)
+            {
+                var packageGroups = rows
+                    .GroupBy(r => r.Package ?? "", StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(g => string.IsNullOrWhiteSpace(g.Key) ? 1 : 0)
+                    .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (packageGroups.Count > 1)
+                {
+                    foreach (var packageGroup in packageGroups)
+                    {
+                        worksheets.Add(BuildAssemblyRegisterExcelSheet(
+                            cfg,
+                            packageGroup.ToList(),
+                            false,
+                            note,
+                            ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(packageGroup.Key)));
+                    }
+                }
+            }
+
+            ParallelSystemsPlugin.Helpers.ExcelReportExporter.SaveWorkbook(
+                ParallelSystemsPlugin.Helpers.ExcelReportExporter.BuildOutputPath(cfg, "BOM-ASSEMBLY REGISTER"),
+                worksheets);
+        }
+
+        private static ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet BuildAssemblyRegisterExcelSheet(
+            ProcurementConfig cfg,
+            List<ReportRow> rows,
+            bool groupByFrame,
+            string note,
+            string worksheetName)
+        {
+            bool isMasterList = string.IsNullOrWhiteSpace(worksheetName) &&
+                !groupByFrame &&
+                rows.Select(r => r.Package ?? "")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Skip(1)
+                    .Any();
+
             var sheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
                 cfg,
                 "Assembly Register",
@@ -416,8 +462,44 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 note);
 
             sheet.CenterColumns(3);
+            if (!string.IsNullOrWhiteSpace(worksheetName))
+                sheet.Name = worksheetName;
 
             bool alt = false;
+
+            if (isMasterList)
+            {
+                foreach (var r in rows
+                    .OrderBy(x => x.AssemblyNumber ?? "", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(x => x.Package ?? "", StringComparer.OrdinalIgnoreCase))
+                {
+                    sheet.Add(
+                        alt
+                            ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData
+                            : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                        GetDisplayGroup(r, false),
+                        r.AssemblyNumber ?? "",
+                        r.Qty,
+                        r.MaterialGrade ?? "",
+                        "");
+
+                    alt = !alt;
+                }
+
+                if (!string.IsNullOrWhiteSpace(note))
+                {
+                    sheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Blank);
+                    sheet.Add(
+                        ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Note,
+                        note,
+                        "",
+                        "",
+                        "",
+                        "");
+                }
+
+                return sheet;
+            }
 
             var groupedByPackage = rows
                 .GroupBy(r => GetDisplayGroup(r, groupByFrame))
@@ -466,9 +548,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     "");
             }
 
-            ParallelSystemsPlugin.Helpers.ExcelReportExporter.SaveWorkbook(
-                ParallelSystemsPlugin.Helpers.ExcelReportExporter.BuildOutputPath(cfg, "BOM-ASSEMBLY REGISTER"),
-                new[] { sheet });
+            return sheet;
         }
 
         // ========================= PDF Rendering =========================

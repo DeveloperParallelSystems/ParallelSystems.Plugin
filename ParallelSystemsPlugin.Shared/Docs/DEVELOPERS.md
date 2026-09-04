@@ -2,7 +2,7 @@
 
 ## Current Internal Build
 
-- Revit plugin version: **1.17.8**
+- Revit plugin version: **1.17.9**
 - Release: **Internal / Unreleased**
 - Monitoring architecture generation: **V2**
 - Production tracker schema: **3**
@@ -10,24 +10,28 @@
 - Supported Revit adapters: **2021 through 2026**
 - Native STEP export: **Revit 2025 and 2026**
 
-The monitoring architecture V2 label is not the Revit plugin release number. Backend and Frontend package metadata can remain 2.0.0 as architecture/application metadata. The user-facing Revit product, Revit assemblies, About screen, and production tracker pluginVersion must identify the plugin as 1.17.8.
+The monitoring architecture V2 label is not the Revit plugin release number. Backend and Frontend package metadata can remain 2.0.0 as architecture/application metadata. The user-facing Revit product, Revit assemblies, About screen, and production tracker pluginVersion must identify the plugin as 1.17.9.
 
 ## Authoritative Version Sources
 
 `ParallelSystems.Plugin/Directory.Build.props` sets:
 
 ```text
-Version                 1.17.8
-AssemblyVersion         1.17.8.0
-FileVersion             1.17.8.0
-InformationalVersion    1.17.8
+Version                 1.17.9
+AssemblyVersion         1.17.9.0
+FileVersion             1.17.9.0
+InformationalVersion    1.17.9
 ```
 
 `IncludeSourceRevisionInInformationalVersion` is false.
 
 `AboutDialog.xaml.cs` reads AssemblyInformationalVersion first, falls back to file/assembly version, removes any +sourceRevision suffix, and trims a final .0 field.
 
-`TimesheetTracker.cs` uses the same assembly informational version, strips a +suffix, trims .0, and sends 1.17.8 in TrackerCheckpointRequest.PluginVersion. It sends SchemaVersion 3 when the tracker is enabled.
+`TimesheetTracker.cs` uses the same assembly informational version, strips a +suffix, trims .0, and sends 1.17.9 in TrackerCheckpointRequest.PluginVersion. It sends SchemaVersion 3 when the tracker is enabled.
+
+## Release Focus in 1.17.9
+
+- Multi-package Procurement Excel reports use a flat, ungrouped master list as the first worksheet and add package-specific worksheets, with package-only totals and safe unique worksheet names. Single-package reports retain only the first worksheet.
 
 ## Release Focus in 1.17.8
 
@@ -363,7 +367,7 @@ The in-dialog Markdown renderer supports headings beginning with `#`, `##`, and 
 Before release:
 
 - Build the target Revit adapter on Windows with the installed Revit API assemblies.
-- Open About and confirm `Version: 1.17.8` with no Git suffix.
+- Open About and confirm `Version: 1.17.9` with no Git suffix.
 - Confirm installed Docs files load.
 - Exercise every active ribbon panel.
 - Verify authorization allow, deny, slow-server, and temporary-failure behaviour.

@@ -191,6 +191,13 @@ namespace ParallelSystemsPlugin.Helpers
             return Path.Combine(cfg.TargetFolder, safeName + ".xlsx");
         }
 
+        public static string GetPackageWorksheetName(string packageName)
+        {
+            return string.IsNullOrWhiteSpace(packageName)
+                ? "NO PACKAGE ASSIGNED"
+                : packageName.Trim();
+        }
+
         public static void SaveWorkbook(string outPath, IEnumerable<ExcelWorksheet> worksheets)
         {
             if (string.IsNullOrWhiteSpace(outPath)) throw new ArgumentNullException(nameof(outPath));
@@ -202,6 +209,8 @@ namespace ParallelSystemsPlugin.Helpers
             var sheets = (worksheets ?? Enumerable.Empty<ExcelWorksheet>()).ToList();
             if (sheets.Count == 0)
                 sheets.Add(new ExcelWorksheet("Sheet1"));
+
+            EnsureUniqueWorksheetNames(sheets);
 
             if (File.Exists(outPath))
                 File.Delete(outPath);
@@ -616,8 +625,36 @@ namespace ParallelSystemsPlugin.Helpers
         private static string SafeWorksheetName(string name)
         {
             string cleaned = new string((name ?? "Sheet").Select(ch => ":\\/?*[]".IndexOf(ch) >= 0 ? '-' : ch).ToArray()).Trim();
+            cleaned = cleaned.Trim('\'');
             if (string.IsNullOrWhiteSpace(cleaned)) cleaned = "Sheet";
-            return cleaned.Length > 31 ? cleaned.Substring(0, 31) : cleaned;
+            if (cleaned.Length > 31)
+                cleaned = cleaned.Substring(0, 31);
+
+            cleaned = cleaned.Trim('\'');
+            return string.IsNullOrWhiteSpace(cleaned) ? "Sheet" : cleaned;
+        }
+
+        private static void EnsureUniqueWorksheetNames(IList<ExcelWorksheet> sheets)
+        {
+            var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (ExcelWorksheet sheet in sheets)
+            {
+                string baseName = SafeWorksheetName(sheet?.Name);
+                string uniqueName = baseName;
+                int suffixNumber = 2;
+
+                while (!usedNames.Add(uniqueName))
+                {
+                    string suffix = " (" + suffixNumber.ToString(CultureInfo.InvariantCulture) + ")";
+                    int baseLength = Math.Max(1, 31 - suffix.Length);
+                    uniqueName = baseName.Substring(0, Math.Min(baseName.Length, baseLength)) + suffix;
+                    suffixNumber++;
+                }
+
+                if (sheet != null)
+                    sheet.Name = uniqueName;
+            }
         }
 
         private static string SanitizeFileName(string name)

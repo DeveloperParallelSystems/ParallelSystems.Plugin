@@ -1,5 +1,10 @@
 ﻿# Changelog
 
+## 1.17.9 - Package-Specific Excel Worksheets (Internal / Unreleased)
+
+- Multi-package Excel reports now use a flat, ungrouped master list as the first worksheet and add one package-specific worksheet per resolved package. Single-package reports do not add a redundant package sheet. Package names are used for worksheet tabs, `NO PACKAGE ASSIGNED` is last, and Excel-invalid, duplicate, or overlength names are handled safely.
+- Iterated product, assembly, file, informational, splash, tracker fallback, User Manual, developer notes, and changelog versions to 1.17.9.
+
 ## 1.17.8 - Controlled Development Mode (Internal / Unreleased)
 
 - Added password-protected Development Mode gated by the per-user `PARALLEL_SYSTEMS_DEVELOPMENT_MODE=1` environment variable.

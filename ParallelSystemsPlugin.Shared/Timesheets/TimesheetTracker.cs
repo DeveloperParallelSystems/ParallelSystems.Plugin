@@ -65,7 +65,7 @@ namespace ParallelSystemsPlugin.Timesheets
                     value = assembly.GetName().Version?.ToString();
 
                 if (string.IsNullOrWhiteSpace(value))
-                    return "1.17.8";
+                    return "1.17.9";
 
                 int suffix = value.IndexOf('+');
                 if (suffix >= 0)
@@ -79,7 +79,7 @@ namespace ParallelSystemsPlugin.Timesheets
             }
             catch
             {
-                return "1.17.8";
+                return "1.17.9";
             }
         }
 

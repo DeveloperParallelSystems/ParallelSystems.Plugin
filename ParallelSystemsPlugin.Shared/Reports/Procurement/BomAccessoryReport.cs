@@ -62,7 +62,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                         .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "",
                     Quantity = x.Count()
                 })
-                .OrderBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => string.Equals(
+                    x.PackageName,
+                    NoPackageAssigned,
+                    StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                .ThenBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(x => ParseSize(x.Size))
                 .ThenBy(x => x.Description, StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -135,17 +139,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private static void ExportExcel(RvtDoc doc, ProcurementConfig cfg, IList<AccessoryRow> rows)
         {
-            var sheet = ExcelReportExporter.CreateReportSheet(
-                cfg,
-                "ACCESSORY REPORT",
-                new[] { "Size", "Description", "Qty", "Image" },
-                "");
-            sheet.SetColumnWidth(1, 14);
-            sheet.SetColumnWidth(2, 60);
-            sheet.SetColumnWidth(3, 10);
-            sheet.SetColumnWidth(4, 32);
-            sheet.CenterColumns(1, 3);
-
             string previewFolder = Path.Combine(
                 Path.GetTempPath(),
                 "ParallelSystems-AccessoryPreviews-" + Guid.NewGuid().ToString("N"));
@@ -154,37 +147,32 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             {
                 Directory.CreateDirectory(previewFolder);
 
-                foreach (var package in rows.GroupBy(x => x.PackageName))
+                var worksheets = new List<ExcelReportExporter.ExcelWorksheet>
                 {
-                    sheet.Add(ExcelReportExporter.RowKind.Group, "Package: " + package.Key);
-                    bool alternate = false;
-                    foreach (AccessoryRow item in package)
+                    BuildAccessoryExcelSheet(cfg, rows, previewFolder, null)
+                };
+
+                var packageGroups = rows
+                    .GroupBy(x => x.PackageName ?? "", StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(g => string.Equals(g.Key, NoPackageAssigned, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                    .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (packageGroups.Count > 1)
+                {
+                    foreach (var package in packageGroups)
                     {
-                        sheet.Add(
-                            alternate ? ExcelReportExporter.RowKind.AlternateData : ExcelReportExporter.RowKind.Data,
-                            item.Size ?? "",
-                            item.Description ?? "",
-                            item.Quantity,
-                            "");
-
-                        int rowNumber = sheet.RowCount;
-                        string previewPath = CreateAccessoryPreviewImage(
-                            item,
+                        worksheets.Add(BuildAccessoryExcelSheet(
+                            cfg,
+                            package.ToList(),
                             previewFolder,
-                            rowNumber);
-                        if (!string.IsNullOrWhiteSpace(previewPath))
-                        {
-                            sheet.SetRowHeight(rowNumber, 150);
-                            sheet.AddImage(previewPath, rowNumber, 4, 210, 190);
-                        }
-
-                        alternate = !alternate;
+                            ExcelReportExporter.GetPackageWorksheetName(package.Key)));
                     }
                 }
 
                 ExcelReportExporter.SaveWorkbook(
                     ExcelReportExporter.BuildOutputPath(cfg, "BOM-ACCESSORY REPORT"),
-                    new[] { sheet });
+                    worksheets);
             }
             finally
             {
@@ -198,6 +186,106 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     // Temporary preview cleanup must not invalidate a completed report.
                 }
             }
+        }
+
+        private static ExcelReportExporter.ExcelWorksheet BuildAccessoryExcelSheet(
+            ProcurementConfig cfg,
+            IList<AccessoryRow> rows,
+            string previewFolder,
+            string worksheetName)
+        {
+            bool isMasterList = string.IsNullOrWhiteSpace(worksheetName) && rows
+                .Select(x => x.PackageName ?? "")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Skip(1)
+                .Any();
+
+            var sheet = ExcelReportExporter.CreateReportSheet(
+                cfg,
+                "ACCESSORY REPORT",
+                isMasterList
+                    ? new[] { "Package", "Size", "Description", "Qty", "Image" }
+                    : new[] { "Size", "Description", "Qty", "Image" },
+                "");
+            if (isMasterList)
+            {
+                sheet.SetColumnWidth(1, 28);
+                sheet.SetColumnWidth(2, 14);
+                sheet.SetColumnWidth(3, 60);
+                sheet.SetColumnWidth(4, 10);
+                sheet.SetColumnWidth(5, 32);
+                sheet.CenterColumns(2, 4);
+            }
+            else
+            {
+                sheet.SetColumnWidth(1, 14);
+                sheet.SetColumnWidth(2, 60);
+                sheet.SetColumnWidth(3, 10);
+                sheet.SetColumnWidth(4, 32);
+                sheet.CenterColumns(1, 3);
+            }
+            if (!string.IsNullOrWhiteSpace(worksheetName))
+                sheet.Name = worksheetName;
+
+            if (isMasterList)
+            {
+                bool alternate = false;
+                foreach (AccessoryRow item in rows
+                    .OrderBy(x => ParseSize(x.Size))
+                    .ThenBy(x => x.Description, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase))
+                {
+                    sheet.Add(
+                        alternate ? ExcelReportExporter.RowKind.AlternateData : ExcelReportExporter.RowKind.Data,
+                        item.PackageName ?? NoPackageAssigned,
+                        item.Size ?? "",
+                        item.Description ?? "",
+                        item.Quantity,
+                        "");
+
+                    int rowNumber = sheet.RowCount;
+                    string previewPath = CreateAccessoryPreviewImage(item, previewFolder, rowNumber);
+                    if (!string.IsNullOrWhiteSpace(previewPath))
+                    {
+                        sheet.SetRowHeight(rowNumber, 150);
+                        sheet.AddImage(previewPath, rowNumber, 5, 210, 190);
+                    }
+
+                    alternate = !alternate;
+                }
+
+                return sheet;
+            }
+
+            foreach (var package in rows.GroupBy(x => x.PackageName))
+            {
+                sheet.Add(ExcelReportExporter.RowKind.Group, "Package: " + package.Key);
+                bool alternate = false;
+                foreach (AccessoryRow item in package)
+                {
+                    sheet.Add(
+                        alternate ? ExcelReportExporter.RowKind.AlternateData : ExcelReportExporter.RowKind.Data,
+                        item.Size ?? "",
+                        item.Description ?? "",
+                        item.Quantity,
+                        "");
+
+                    int rowNumber = sheet.RowCount;
+                    string previewPath = CreateAccessoryPreviewImage(
+                        item,
+                        previewFolder,
+                        rowNumber);
+                    if (!string.IsNullOrWhiteSpace(previewPath))
+                    {
+                        sheet.SetRowHeight(rowNumber, 150);
+                        sheet.AddImage(previewPath, rowNumber, 4, 210, 190);
+                    }
+
+                    alternate = !alternate;
+                }
+            }
+
+            return sheet;
         }
 
         private static string CreateAccessoryPreviewImage(
@@ -248,7 +336,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                         string path = Path.Combine(
                             folder,
-                            "accessory-" + rowNumber.ToString(CultureInfo.InvariantCulture) + ".png");
+                            "accessory-" + rowNumber.ToString(CultureInfo.InvariantCulture) + "-" +
+                            Guid.NewGuid().ToString("N") + ".png");
                         output.Save(path, ImageFormat.Png);
                         return path;
                     }

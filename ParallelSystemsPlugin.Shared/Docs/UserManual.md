@@ -2,16 +2,20 @@
 
 ## Current Build
 
-- Version: **1.17.8**
+- Version: **1.17.9**
 - Release: **Internal / Unreleased**
 - Supported Revit adapters in this solution: **2021 through 2026**
 - Native Fabrication STEP export: **Revit 2025 and 2026**
 - Monitoring architecture generation: **V2**
 - Monitoring flow: **Revit Plugin -> HTTPS API -> PostgreSQL -> React Web Application**
 
-The public plugin version is 1.17.8. The V2 label used in monitoring and deployment documentation describes the monitoring architecture generation; it is not the Revit plugin release number.
+The public plugin version is 1.17.9. The V2 label used in monitoring and deployment documentation describes the monitoring architecture generation; it is not the Revit plugin release number.
 
-## What Is New in 1.17.8
+## What Is New in 1.17.9
+
+- Multi-package Excel reports use a flat, ungrouped master list as the first worksheet and add one worksheet for each package. The master list shows the package on each applicable data row without package bands or package-separated sections. A single-package report does not add a redundant package sheet. Package tabs contain only that package's rows and package-specific totals, with `NO PACKAGE ASSIGNED` last.
+
+The current build also includes the following 1.17.8 changes:
 
 - Added password-protected Development Mode for controlled troubleshooting sessions.
 - Development Mode is enabled through `PARALLEL_SYSTEMS_DEVELOPMENT_MODE=1`, bypasses authorization and protected-command checks, and prevents timesheet tracker startup for that Revit process.
@@ -233,6 +237,8 @@ The Configurations window contains five active tabs.
 - Clicking a report reveals its available report-specific settings. Fitting Report currently offers `Include Weld`; when disabled, weld rows are omitted.
 - Fitting Report groups PDF and Excel results by resolved package. Named packages are ordered first and `NO PACKAGE ASSIGNED` is always last. Equal-size tees use their `Description BOM` value when populated.
 - Loading Report orders rows within each package by length from smallest to largest.
+- Fitting Report, Accessory Report, Loading Report, and Cut List Excel workbooks retain their complete consolidated worksheet first, followed by one worksheet per package. Assembly Register does the same when package grouping is active; frame-grouped Assembly Registers remain unchanged. Each package worksheet retains the report layout and contains only that package's data and totals.
+- Package names become worksheet names. Names are adjusted only when Excel requires invalid-character replacement, the 31-character limit, or a uniqueness suffix. `NO PACKAGE ASSIGNED` is the final package worksheet.
 
 **Tools**
 
@@ -292,7 +298,7 @@ The Detailing command class remains in the source, but no Detailing panel is cre
 
 - User Manual displays this installed guide.
 - What's New displays the installed CHANGELOG.md.
-- About displays the product description, Version 1.17.8, Internal / Unreleased status, and assembly build timestamp.
+- About displays the product description, Version 1.17.9, Internal / Unreleased status, and assembly build timestamp.
 - Open Full Manual opens the installed UserManual.md.
 - Open Change Log opens the installed CHANGELOG.md.
 - Developer Notes opens the installed DEVELOPERS.md.
@@ -347,7 +353,7 @@ The production Revit tracker sends:
 
 ```text
 Tracker schema version: 3
-Plugin version: 1.17.8
+Plugin version: 1.17.9
 ```
 
 The backend accepts tracker schema versions 2 and 3 for deployment compatibility.
@@ -462,7 +468,7 @@ The source solution is separated into:
 - scripts: local start/stop, tracker configuration, test checkpoint, and failed-message recovery.
 - docs: architecture, mapping, policy, deployment, validation, migration, and test guidance.
 
-The monitoring architecture is V2, while the Revit plugin release is 1.17.8.
+The monitoring architecture is V2, while the Revit plugin release is 1.17.9.
 
 No MSMQ, old Activity Queue Service, or central workstation SQLite database is part of the active architecture.
 
@@ -525,7 +531,7 @@ No MSMQ, old Activity Queue Service, or central workstation SQLite database is p
 - Confirm Revit was closed before deployment.
 - Rebuild the adapter matching the installed Revit year.
 - Replace both the deployed DLL and PDB.
-- Confirm Directory.Build.props contains Version and InformationalVersion 1.17.8.
+- Confirm Directory.Build.props contains Version and InformationalVersion 1.17.9.
 - Confirm the installed Docs folder was copied beside the DLL.
 - Restart Revit.
 
