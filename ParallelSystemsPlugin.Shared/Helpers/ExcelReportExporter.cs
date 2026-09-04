@@ -259,12 +259,14 @@ namespace ParallelSystemsPlugin.Helpers
             sb.Append("<cols>");
             for (int c = 1; c <= columnCount; c++)
             {
-                double width;
-                if (!sheet.ColumnWidths.TryGetValue(c, out width))
-                    width = GetColumnWidth(c);
+                double autoWidth = GetAutoColumnWidth(sheet, c);
+                double configuredWidth;
+                double width = sheet.ColumnWidths.TryGetValue(c, out configuredWidth)
+                    ? Math.Max(configuredWidth, autoWidth)
+                    : autoWidth;
 
                 sb.Append("<col min=\"").Append(c).Append("\" max=\"").Append(c).Append("\" width=\"")
-                  .Append(width.ToString(CultureInfo.InvariantCulture)).Append("\" customWidth=\"1\"/>");
+                  .Append(width.ToString(CultureInfo.InvariantCulture)).Append("\" bestFit=\"1\" customWidth=\"1\"/>");
             }
             sb.Append("</cols>");
             sb.Append("<sheetData>");
@@ -595,11 +597,63 @@ namespace ParallelSystemsPlugin.Helpers
             }
         }
 
-        private static double GetColumnWidth(int columnNumber)
+        private static double GetAutoColumnWidth(ExcelWorksheet sheet, int columnNumber)
         {
-            if (columnNumber == 1) return 18;
-            if (columnNumber == 2) return 26;
-            return 20;
+            const double minimumWidth = 8.0;
+            const double maximumWidth = 80.0;
+            double longest = 0;
+
+            foreach (ExcelRow row in sheet?.Rows ?? new List<ExcelRow>())
+            {
+                if (!ShouldMeasureForAutoWidth(row.Kind) ||
+                    row.Values == null ||
+                    columnNumber > row.Values.Count)
+                {
+                    continue;
+                }
+
+                string text = Convert.ToString(
+                    row.Values[columnNumber - 1],
+                    CultureInfo.InvariantCulture) ?? "";
+
+                foreach (string line in text.Replace("\r", "").Split('\n'))
+                {
+                    double measured = MeasureExcelTextWidth(line);
+                    if (row.Kind == RowKind.Header)
+                        measured += 1.5;
+
+                    longest = Math.Max(longest, measured);
+                }
+            }
+
+            return Math.Min(maximumWidth, Math.Max(minimumWidth, longest + 2.0));
+        }
+
+        private static bool ShouldMeasureForAutoWidth(RowKind kind)
+        {
+            return kind == RowKind.Metadata ||
+                   kind == RowKind.Header ||
+                   kind == RowKind.Data ||
+                   kind == RowKind.AlternateData ||
+                   kind == RowKind.Total;
+        }
+
+        private static double MeasureExcelTextWidth(string text)
+        {
+            double width = 0;
+            foreach (char character in text ?? "")
+            {
+                if (character > 255)
+                    width += 2.0;
+                else if (character == ' ')
+                    width += 0.6;
+                else if (char.IsUpper(character))
+                    width += 1.1;
+                else
+                    width += 1.0;
+            }
+
+            return width;
         }
 
         private static string GetColumnName(int columnNumber)

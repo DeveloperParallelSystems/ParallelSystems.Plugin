@@ -14,6 +14,8 @@ The public plugin version is 1.17.9. The V2 label used in monitoring and deploym
 ## What Is New in 1.17.9
 
 - Multi-package Excel reports use a flat, ungrouped master list as the first worksheet and add one worksheet for each package. The master list shows the package on each applicable data row without package bands or package-separated sections. A single-package report does not add a redundant package sheet. Package tabs contain only that package's rows and package-specific totals, with `NO PACKAGE ASSIGNED` last.
+- Excel report columns automatically adjust to their visible content, including every package worksheet, so users do not need to resize columns manually after export.
+- An optional modern branded installer provides a larger, cleaner setup wizard while retaining automatic Revit detection, configuration preservation, shared-image deployment, and the existing upgrade identity.
 
 The current build also includes the following 1.17.8 changes:
 

@@ -26,8 +26,6 @@ using PdfHeaderFooter = MigraDoc.DocumentObjectModel.HeaderFooter;
 using MigraColor = MigraDoc.DocumentObjectModel.Color;
 using OpenXmlWorksheet = DocumentFormat.OpenXml.Spreadsheet.Worksheet;
 using OpenXmlLegacyDrawing = DocumentFormat.OpenXml.Spreadsheet.LegacyDrawing;
-using OpenXmlColumns = DocumentFormat.OpenXml.Spreadsheet.Columns;
-using OpenXmlColumn = DocumentFormat.OpenXml.Spreadsheet.Column;
 using OpenXmlSheetData = DocumentFormat.OpenXml.Spreadsheet.SheetData;
 
 using System.Diagnostics;
@@ -231,8 +229,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 excelPath,
                 sheetResults.Select(result => result.Sheet));
 
-            NormalizeLoadingScheduleExcelLayout(excelPath);
-
             int firstDataRow = FindFirstLoadingDataRow(excelPath);
 
             AddLoadingScheduleCheckboxes(
@@ -377,75 +373,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 Sheet = sheet,
                 DataRowOffsets = dataRowOffsets
             };
-        }
-
-        private static void NormalizeLoadingScheduleExcelLayout(string xlsxPath)
-        {
-            if (string.IsNullOrWhiteSpace(xlsxPath) || !File.Exists(xlsxPath))
-                throw new FileNotFoundException("Excel file was not found.", xlsxPath);
-
-            using (SpreadsheetDocument document = SpreadsheetDocument.Open(xlsxPath, true))
-            {
-                WorkbookPart workbookPart = document.WorkbookPart;
-
-                if (workbookPart == null)
-                    throw new InvalidOperationException("WorkbookPart is missing.");
-
-                List<WorksheetPart> worksheetParts = workbookPart.WorksheetParts.ToList();
-
-                if (worksheetParts.Count == 0)
-                    throw new InvalidOperationException("WorksheetPart is missing.");
-
-                foreach (WorksheetPart worksheetPart in worksheetParts)
-                {
-                    OpenXmlWorksheet worksheet = worksheetPart.Worksheet;
-
-                    foreach (OpenXmlColumns oldColumns in worksheet.Elements<OpenXmlColumns>().ToList())
-                    {
-                        oldColumns.Remove();
-                    }
-
-                    var columns = new OpenXmlColumns();
-
-                AddColumnWidth(columns, 1, 1, 18.0); // A - Package
-                AddColumnWidth(columns, 2, 2, 24.0); // B - Drawing Number
-                AddColumnWidth(columns, 3, 3, 22.0); // C - Material Grade
-                AddColumnWidth(columns, 4, 4, 8.0);  // D - Qty
-                AddColumnWidth(columns, 5, 5, 10.0); // E - Weight
-                AddColumnWidth(columns, 6, 6, 12.0); // F - Length
-
-                // G:K - CUT, FAB, WELD, QA, LOAD
-                AddColumnWidth(columns, 7, 11, 7.0);
-
-                    OpenXmlSheetData sheetData = worksheet.Elements<OpenXmlSheetData>().FirstOrDefault();
-
-                    if (sheetData != null)
-                    {
-                        worksheet.InsertBefore(columns, sheetData);
-                    }
-                    else
-                    {
-                        worksheet.PrependChild(columns);
-                    }
-
-                    worksheet.Save();
-                }
-            }
-        }
-
-        private static void AddColumnWidth(
-            OpenXmlColumns columns,
-            uint min,
-            uint max,
-            double width)
-        {
-            columns.Append(new OpenXmlColumn
-            {
-                Min = min,
-                Max = max,
-                Width = width,
-                CustomWidth = true
-            });
         }
 
         private static void AddLoadingScheduleCheckboxes(

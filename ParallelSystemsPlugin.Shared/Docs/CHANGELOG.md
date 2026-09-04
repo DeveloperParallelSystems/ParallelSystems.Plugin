@@ -3,6 +3,8 @@
 ## 1.17.9 - Package-Specific Excel Worksheets (Internal / Unreleased)
 
 - Multi-package Excel reports now use a flat, ungrouped master list as the first worksheet and add one package-specific worksheet per resolved package. Single-package reports do not add a redundant package sheet. Package names are used for worksheet tabs, `NO PACKAGE ASSIGNED` is last, and Excel-invalid, duplicate, or overlength names are handled safely.
+- All generated Excel reports now auto-fit column widths from their visible headers, metadata, and table values while retaining practical sizing for image and description columns.
+- Added an optional modern branded plugin installer with a larger wizard, refreshed typography and colors, a clearer welcome experience, and the existing detected-Revit and configuration-preservation safeguards.
 - Iterated product, assembly, file, informational, splash, tracker fallback, User Manual, developer notes, and changelog versions to 1.17.9.
 
 ## 1.17.8 - Controlled Development Mode (Internal / Unreleased)
