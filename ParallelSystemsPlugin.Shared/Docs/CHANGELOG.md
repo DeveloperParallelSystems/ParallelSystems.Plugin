@@ -1,5 +1,13 @@
 ﻿# Changelog
 
+## 1.17.10 - Flange Configuration and STEP Bolt Holes (Internal / Unreleased)
+
+- Added a read-only `Configurations > Fabrication` flange reference containing the published standard, nominal size, class/table, outside diameter, pitch-circle diameter, hole count, hole/bolt diameter, and material-specific minimum thickness values.
+- Added Standard, Nominal Size, and Class/Table filters so the flange reference can be narrowed without changing its published values.
+- Added catalog-driven flange bolt-hole generation to Fabrication STEP. The exporter resolves an explicit flange standard and class/table from Revit type metadata, resolves nominal size from physical piping connectors, and requires one exact catalog row instead of guessing.
+- Bolt-hole cutters now use the configured hole count, diameter, and pitch-circle diameter, with evenly spaced holes straddling the flange centreline axes. Invalid, ambiguous, or incomplete catalog matches remain blocking rather than producing unverified geometry.
+- Updated the Fabrication documentation and iterated product, assembly, file, informational, splash, tracker fallback, User Manual, developer notes, and changelog versions to 1.17.10.
+
 ## 1.17.9 - Package-Specific Excel Worksheets (Internal / Unreleased)
 
 - Multi-package Excel reports now use a flat, ungrouped master list as the first worksheet and add one package-specific worksheet per resolved package. Single-package reports do not add a redundant package sheet. Package names are used for worksheet tabs, `NO PACKAGE ASSIGNED` is last, and Excel-invalid, duplicate, or overlength names are handled safely.

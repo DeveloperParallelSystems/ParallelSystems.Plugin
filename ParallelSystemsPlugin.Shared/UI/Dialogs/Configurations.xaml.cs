@@ -44,6 +44,10 @@ namespace ParallelSystemsPlugin.UI.Dialogs
         public List<double> AllowedAngles { get; private set; }
         public double Tolerance { get; private set; }
 
+        private IReadOnlyList<FlangeDimensionConfiguration>
+            _flangeConfigurations =
+                new List<FlangeDimensionConfiguration>();
+
         private string _companyLogoPath = "";
         private string _clientLogoPath = "";
 
@@ -67,6 +71,8 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             {
                 AutoDetectProjectDetails();
             }
+
+            InitializeFabricationConfigurations();
         }
 
         #endregion
@@ -264,6 +270,142 @@ namespace ParallelSystemsPlugin.UI.Dialogs
 
             FilterContains.Text = config.ToolsConfig.SheetCheckAndBomCheckConfig.FilterContains;
             ExcludeText.Text = config.ToolsConfig.SheetCheckAndBomCheckConfig.ExcludeText;
+        }
+
+        private void InitializeFabricationConfigurations()
+        {
+            _flangeConfigurations =
+                FlangeDimensionConfigurationCatalog.All;
+
+            List<string> standards = new List<string>
+            {
+                "All standards"
+            };
+
+            standards.AddRange(
+                _flangeConfigurations
+                    .Select(x => x.Standard)
+                    .Distinct()
+                    .OrderBy(x => x));
+
+            List<string> sizes = new List<string>
+            {
+                "All sizes"
+            };
+
+            sizes.AddRange(
+                _flangeConfigurations
+                    .Select(x => x.NominalSizeMm)
+                    .Distinct()
+                    .OrderBy(x => x)
+                    .Select(x =>
+                        x.ToString(CultureInfo.InvariantCulture) +
+                        " mm"));
+
+            List<string> classes = new List<string>
+            {
+                "All classes / tables"
+            };
+
+            classes.AddRange(
+                _flangeConfigurations
+                    .Select(x => x.ClassOrTable)
+                    .Distinct()
+                    .OrderBy(x => x));
+
+            FabricationStandardFilter.ItemsSource = standards;
+            FabricationSizeFilter.ItemsSource = sizes;
+            FabricationClassFilter.ItemsSource = classes;
+            FabricationStandardFilter.SelectedIndex = 0;
+            FabricationSizeFilter.SelectedIndex = 0;
+            FabricationClassFilter.SelectedIndex = 0;
+
+            ApplyFabricationFilter();
+        }
+
+        private void FabricationFilter_SelectionChanged(
+            object sender,
+            SelectionChangedEventArgs e)
+        {
+            ApplyFabricationFilter();
+        }
+
+        private void ApplyFabricationFilter()
+        {
+            if (FabricationFlangeGrid == null)
+                return;
+
+            IEnumerable<FlangeDimensionConfiguration> filtered =
+                _flangeConfigurations ??
+                new List<FlangeDimensionConfiguration>();
+
+            string selectedStandard =
+                FabricationStandardFilter?.SelectedItem as string;
+
+            if (!string.IsNullOrWhiteSpace(selectedStandard) &&
+                !string.Equals(
+                    selectedStandard,
+                    "All standards",
+                    StringComparison.Ordinal))
+            {
+                filtered = filtered.Where(x =>
+                    string.Equals(
+                        x.Standard,
+                        selectedStandard,
+                        StringComparison.Ordinal));
+            }
+
+            string selectedSize =
+                FabricationSizeFilter?.SelectedItem as string;
+
+            if (!string.IsNullOrWhiteSpace(selectedSize) &&
+                !string.Equals(
+                    selectedSize,
+                    "All sizes",
+                    StringComparison.Ordinal))
+            {
+                string sizeValue = selectedSize.Replace(
+                    " mm",
+                    string.Empty);
+
+                int nominalSize;
+
+                if (int.TryParse(
+                        sizeValue,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out nominalSize))
+                {
+                    filtered = filtered.Where(
+                        x => x.NominalSizeMm == nominalSize);
+                }
+            }
+
+            string selectedClass =
+                FabricationClassFilter?.SelectedItem as string;
+
+            if (!string.IsNullOrWhiteSpace(selectedClass) &&
+                !string.Equals(
+                    selectedClass,
+                    "All classes / tables",
+                    StringComparison.Ordinal))
+            {
+                filtered = filtered.Where(x =>
+                    string.Equals(
+                        x.ClassOrTable,
+                        selectedClass,
+                        StringComparison.Ordinal));
+            }
+
+            List<FlangeDimensionConfiguration> rows =
+                filtered.ToList();
+
+            FabricationFlangeGrid.ItemsSource = rows;
+            FabricationResultCountTextBlock.Text =
+                rows.Count.ToString(CultureInfo.InvariantCulture) +
+                (rows.Count == 1
+                    ? " configuration"
+                    : " configurations");
         }
 
         private void RefreshProcurementLogoPlaceholders()

@@ -65,6 +65,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Connections.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.PipeGeometry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.FittingGeometry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.FlangeGeometry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.ReducerGeometry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.ChamferGeometry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.BranchGeometry.cs" />

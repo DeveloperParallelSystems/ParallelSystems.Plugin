@@ -2,7 +2,7 @@
 
 ## Current Internal Build
 
-- Revit plugin version: **1.17.9**
+- Revit plugin version: **1.17.10**
 - Release: **Internal / Unreleased**
 - Monitoring architecture generation: **V2**
 - Production tracker schema: **3**
@@ -10,24 +10,30 @@
 - Supported Revit adapters: **2021 through 2026**
 - Native STEP export: **Revit 2025 and 2026**
 
-The monitoring architecture V2 label is not the Revit plugin release number. Backend and Frontend package metadata can remain 2.0.0 as architecture/application metadata. The user-facing Revit product, Revit assemblies, About screen, and production tracker pluginVersion must identify the plugin as 1.17.9.
+The monitoring architecture V2 label is not the Revit plugin release number. Backend and Frontend package metadata can remain 2.0.0 as architecture/application metadata. The user-facing Revit product, Revit assemblies, About screen, and production tracker pluginVersion must identify the plugin as 1.17.10.
 
 ## Authoritative Version Sources
 
 `ParallelSystems.Plugin/Directory.Build.props` sets:
 
 ```text
-Version                 1.17.9
-AssemblyVersion         1.17.9.0
-FileVersion             1.17.9.0
-InformationalVersion    1.17.9
+Version                 1.17.10
+AssemblyVersion         1.17.10.0
+FileVersion             1.17.10.0
+InformationalVersion    1.17.10
 ```
 
 `IncludeSourceRevisionInInformationalVersion` is false.
 
 `AboutDialog.xaml.cs` reads AssemblyInformationalVersion first, falls back to file/assembly version, removes any +sourceRevision suffix, and trims a final .0 field.
 
-`TimesheetTracker.cs` uses the same assembly informational version, strips a +suffix, trims .0, and sends 1.17.9 in TrackerCheckpointRequest.PluginVersion. It sends SchemaVersion 3 when the tracker is enabled.
+`TimesheetTracker.cs` uses the same assembly informational version, strips a +suffix, trims .0, and sends 1.17.10 in TrackerCheckpointRequest.PluginVersion. It sends SchemaVersion 3 when the tracker is enabled.
+
+## Release Focus in 1.17.10
+
+- Configuration: a read-only Fabrication tab exposes the PDF-derived flange catalog with Standard, Nominal Size, and Class/Table filters.
+- Fabrication STEP: carbon-flange bolt-hole cutters require one exact standard/class-table/nominal-size catalog match and use its hole count, diameter, and pitch-circle diameter. Hole axes are distributed evenly with a half-pitch angular offset so they straddle the flange centreline axes.
+- Validation: missing metadata, disagreeing physical connector sizes, ambiguous catalog rows, unusable dimensions, or Boolean cutters that do not remove material remain blocking conditions rather than guessed geometry.
 
 ## Release Focus in 1.17.9
 
@@ -131,15 +137,18 @@ Header ND and Detailing command classes remain in source but are not built onto 
 
 ## Configuration UI
 
-`UI/Dialogs/Configurations.xaml` contains five active TabItems:
+`UI/Dialogs/Configurations.xaml` contains six active TabItems:
 
 - Pipe End Prep
 - Fittings End Prep
 - Pipe Weight
 - Procurement
+- Fabrication
 - Tools
 
 The Procurement tab provides an Excel/PDF radio choice plus stock length, blade thickness, negative allowance, and offcut-threshold inputs. New configuration defaults select Excel, exclude site-measured work, and use a 2500 mm reusable-offcut threshold.
+
+The Fabrication tab binds the immutable `FlangeDimensionConfigurationCatalog.All` reference to a read-only grid. Its Standard, Nominal Size, and Class/Table selectors filter the in-memory view only; version 1.17.10 does not persist user edits or overrides.
 
 Any documentation update should be checked against this XAML and its code-behind rather than copied from an older manual.
 
@@ -268,6 +277,7 @@ Fabrication/FabricationStepService.Connections.cs
 Fabrication/FabricationStepService.StepTopology.cs
 Fabrication/FabricationStepService.PipeGeometry.cs
 Fabrication/FabricationStepService.FittingGeometry.cs
+Fabrication/FabricationStepService.FlangeGeometry.cs
 Fabrication/FabricationStepService.ReducerGeometry.cs
 Fabrication/FabricationStepService.ChamferGeometry.cs
 Fabrication/FabricationStepService.BranchGeometry.cs
@@ -367,7 +377,7 @@ The in-dialog Markdown renderer supports headings beginning with `#`, `##`, and 
 Before release:
 
 - Build the target Revit adapter on Windows with the installed Revit API assemblies.
-- Open About and confirm `Version: 1.17.9` with no Git suffix.
+- Open About and confirm `Version: 1.17.10` with no Git suffix.
 - Confirm installed Docs files load.
 - Exercise every active ribbon panel.
 - Verify authorization allow, deny, slow-server, and temporary-failure behaviour.

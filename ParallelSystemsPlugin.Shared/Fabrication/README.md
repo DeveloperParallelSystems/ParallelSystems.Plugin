@@ -16,6 +16,7 @@ The fabrication implementation is organised as partial `FabricationStepService` 
 | `FabricationStepService.Connections.cs` | Connector traversal, weld skipping, branch/coupling relationships, physical branch-axis resolution, controlled STD WT-CS dimensions, and adjacent fitting dimension overrides |
 | `FabricationStepService.PipeGeometry.cs` | Pipe solids and pipe-end preparation |
 | `FabricationStepService.FittingGeometry.cs` | Generic fitting bores and fitting solids, shaped-branch flush trimming, and post-trim saddle-bore cleanup |
+| `FabricationStepService.FlangeGeometry.cs` | Exact flange catalog resolution and bolt-hole cutter generation |
 | `FabricationStepService.ReducerGeometry.cs` | Butt-weld and capillary concentric reducer construction |
 | `FabricationStepService.ChamferGeometry.cs` | 30-degree bevel generation and verification |
 | `FabricationStepService.BranchGeometry.cs` | SET-ON branch and side-coupling openings/continuity, near-side wall protection, and circular outlet-axis bore cleanup |
@@ -56,3 +57,8 @@ The fabrication implementation is organised as partial `FabricationStepService` 
 - Use a selected/connected branch pipe as the first dimension authority. The explicit `STD WT-CS` controlled table is a deterministic fallback only for correctly classified families with a valid nominal size.
 - Record a successful controlled fallback as Information. Do not suppress blocking issues when classification or dimensions remain unsafe.
 - A connected carbon flange may inherit the resolved shaped-branch outlet bore; do not invent an unrelated flange ID.
+- Resolve flange bolt patterns only from an explicit standard/class-table
+  identity plus the connector nominal size. Generate the configured cylindrical
+  cutters on the catalog PCD with holes straddling the connector centreline
+  axes, and block export if the catalog row is ambiguous, incomplete, or any
+  cutter fails to remove flange material.

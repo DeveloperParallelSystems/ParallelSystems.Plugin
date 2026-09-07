@@ -241,6 +241,36 @@ namespace ParallelSystemsPlugin.Fabrication
                 return null;
             }
 
+            List<Solid> flangeBoltHoleCutters =
+                new List<Solid>();
+            string flangeBoltHoleDescription = null;
+
+            if (IsFlangeLike(doc, element))
+            {
+                string flangeBoltHoleError;
+
+                if (!TryCreateFlangeBoltHoleCutters(
+                        doc,
+                        element,
+                        bores,
+                        out flangeBoltHoleCutters,
+                        out flangeBoltHoleDescription,
+                        out flangeBoltHoleError))
+                {
+                    issues.Add(new FabricationIssue
+                    {
+                        Severity =
+                            FabricationIssueSeverity.Blocking,
+                        ElementId = element.Id,
+                        ElementName =
+                            GetElementDisplayName(element),
+                        Message = flangeBoltHoleError
+                    });
+
+                    return null;
+                }
+            }
+
             // The generic two-connector bore can stop at the shaped-branch
             // header connector/reference plane. When that plane is offset from
             // the physical saddle, a thin circular diaphragm remains visible
@@ -405,6 +435,52 @@ namespace ParallelSystemsPlugin.Fabrication
                     boreMaterialRemoved = true;
             }
 
+            bool flangeBoltHoleMaterialRemoved = false;
+            int flangeBoltHolesCut = 0;
+
+            foreach (Solid boltHoleCutter in
+                     flangeBoltHoleCutters)
+            {
+                bool removed;
+
+                currentSolids = SubtractCutterFromSolids(
+                    currentSolids,
+                    boltHoleCutter,
+                    out removed);
+
+                if (!removed)
+                {
+                    issues.Add(new FabricationIssue
+                    {
+                        Severity =
+                            FabricationIssueSeverity.Blocking,
+                        ElementId = element.Id,
+                        ElementName =
+                            GetElementDisplayName(element),
+                        Message =
+                            "A configured flange bolt-hole cutter did not " +
+                            "intersect the retained flange body. The STEP " +
+                            "export was stopped rather than emitting an " +
+                            "incomplete bolt pattern."
+                    });
+
+                    return null;
+                }
+
+                flangeBoltHoleMaterialRemoved = true;
+                flangeBoltHolesCut++;
+            }
+
+            if (flangeBoltHoleMaterialRemoved)
+            {
+                cutterDescription +=
+                    "; " +
+                    flangeBoltHoleDescription +
+                    "; verified holes cut " +
+                    flangeBoltHolesCut.ToString(
+                        CultureInfo.InvariantCulture);
+            }
+
             bool shapedBranchHeaderIntrusionRemoved = false;
 
             if (shapedBranchConnection != null &&
@@ -543,6 +619,7 @@ namespace ParallelSystemsPlugin.Fabrication
             bool geometryModified =
                 boreMaterialRemoved ||
                 chamferMaterialRemoved ||
+                flangeBoltHoleMaterialRemoved ||
                 shapedBranchHeaderIntrusionRemoved;
 
             return new FabricationElementGeometry
@@ -1289,11 +1366,36 @@ namespace ParallelSystemsPlugin.Fabrication
                     }
                 }
 
+                XYZ radialBasisX = null;
+                XYZ radialBasisY = null;
+
+                try
+                {
+                    Transform connectorCoordinateSystem =
+                        connector.CoordinateSystem;
+
+                    if (connectorCoordinateSystem != null)
+                    {
+                        radialBasisX =
+                            connectorCoordinateSystem.BasisX;
+                        radialBasisY =
+                            connectorCoordinateSystem.BasisY;
+                    }
+                }
+                catch
+                {
+                    // Flange bolt-hole generation can derive a stable
+                    // perpendicular basis if a connector family does not
+                    // expose its coordinate system.
+                }
+
                 result.Add(new ConnectorBore
                 {
                     Origin = chamferOrigin,
                     OriginalConnectorOrigin = connector.Origin,
                     OutwardDirection = outwardDirection,
+                    RadialBasisX = radialBasisX,
+                    RadialBasisY = radialBasisY,
                     NominalDiameter = nominal,
                     OutsideDiameter = outside,
                     InsideDiameter = inside,
@@ -2026,6 +2128,8 @@ namespace ParallelSystemsPlugin.Fabrication
             public XYZ Origin { get; set; }
             public XYZ OriginalConnectorOrigin { get; set; }
             public XYZ OutwardDirection { get; set; }
+            public XYZ RadialBasisX { get; set; }
+            public XYZ RadialBasisY { get; set; }
             public double NominalDiameter { get; set; }
             public double OutsideDiameter { get; set; }
             public double InsideDiameter { get; set; }

@@ -778,7 +778,154 @@
                 </Grid>
             </TabItem>
 
-            <!-- Procurement -->
+            <!-- Fabrication -->
+            <TabItem Header="Fabrication">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0"
+                            Padding="14"
+                            Margin="0,0,0,10"
+                            Background="#EFF6FF"
+                            BorderBrush="#BFDBFE"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock Text="Flange Configurations"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           Foreground="#1E3A5F"/>
+                                <TextBlock Margin="0,4,0,0"
+                                           Foreground="#475569"
+                                           TextWrapping="Wrap"
+                                           Text="Published flange drilling and minimum-thickness values. These configurations are read-only for now; the data model is ready for a future editor."/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center"
+                                        Margin="20,0,0,0">
+                                <StackPanel Margin="0,0,12,0">
+                                    <TextBlock Text="Standard"
+                                               Margin="0,0,0,4"
+                                               FontWeight="SemiBold"/>
+                                    <ComboBox x:Name="FabricationStandardFilter"
+                                              Width="155"
+                                              SelectionChanged="FabricationFilter_SelectionChanged"/>
+                                </StackPanel>
+                                <StackPanel Margin="0,0,12,0">
+                                    <TextBlock Text="Nominal size"
+                                               Margin="0,0,0,4"
+                                               FontWeight="SemiBold"/>
+                                    <ComboBox x:Name="FabricationSizeFilter"
+                                              Width="125"
+                                              SelectionChanged="FabricationFilter_SelectionChanged"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="Class / Table"
+                                               Margin="0,0,0,4"
+                                               FontWeight="SemiBold"/>
+                                    <ComboBox x:Name="FabricationClassFilter"
+                                              Width="145"
+                                              SelectionChanged="FabricationFilter_SelectionChanged"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <DataGrid x:Name="FabricationFlangeGrid"
+                              Grid.Row="1"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserReorderColumns="True"
+                              CanUserResizeColumns="True"
+                              CanUserSortColumns="True"
+                              EnableRowVirtualization="True"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal"
+                              HorizontalGridLinesBrush="#E2E8F0"
+                              RowBackground="White"
+                              AlternatingRowBackground="#F8FAFC"
+                              BorderBrush="#CBD5E1"
+                              BorderThickness="1"
+                              FrozenColumnCount="3"
+                              FontSize="13"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Standard"
+                                                Binding="{Binding Standard}"
+                                                Width="125"/>
+                            <DataGridTextColumn Header="Nominal (mm)"
+                                                Binding="{Binding NominalSizeMm}"
+                                                Width="95"/>
+                            <DataGridTextColumn Header="Class / Table"
+                                                Binding="{Binding ClassOrTable}"
+                                                Width="105"/>
+                            <DataGridTextColumn Header="Outside Ø (mm)"
+                                                Binding="{Binding OutsideDiameterMm}"
+                                                Width="105"/>
+                            <DataGridTextColumn Header="PCD (mm)"
+                                                Binding="{Binding PitchCircleDiameterMm}"
+                                                Width="90"/>
+                            <DataGridTextColumn Header="Holes"
+                                                Binding="{Binding NumberOfHoles}"
+                                                Width="65"/>
+                            <DataGridTextColumn Header="Hole Ø"
+                                                Binding="{Binding HoleDiameter}"
+                                                Width="145"/>
+                            <DataGridTextColumn Header="Bolt Ø"
+                                                Binding="{Binding BoltDiameter}"
+                                                Width="145"/>
+                            <DataGridTextColumn Header="Cast iron min. (mm)"
+                                                Binding="{Binding CastIronThicknessMm}"
+                                                Width="130"/>
+                            <DataGridTextColumn Header="Ductile iron min. (mm)"
+                                                Binding="{Binding DuctileIronThicknessMm}"
+                                                Width="140"/>
+                            <DataGridTextColumn Header="Copper alloy min. (mm)"
+                                                Binding="{Binding CopperAlloyThicknessMm}"
+                                                Width="145"/>
+                            <DataGridTextColumn Header="Steel min. (mm)"
+                                                Binding="{Binding SteelThicknessMm}"
+                                                Width="115"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <Grid Grid.Row="2" Margin="2,10,2,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Foreground="#64748B"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Text="Guide notes: AS 4087 PN14/PN16 drilling aligns with AS 2129 Table D; PN21/PN35 aligns with Tables F/H. ISO drilling is compatible with AS/NZS 4331, BS 4504 and DIN 2533. ANSI B16.5 Class 150 drilling is compatible with ANSI B16.1 Class 125. For 50 mm ISO, cast/ductile iron uses 155 mm OD; for 65 mm ISO, steel flanges use 8 holes."/>
+                        <TextBlock x:Name="FabricationResultCountTextBlock"
+                                   Grid.Column="1"
+                                   Margin="20,0,0,0"
+                                   VerticalAlignment="Bottom"
+                                   Foreground="#475569"
+                                   FontWeight="SemiBold"/>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- Tools -->
             <TabItem Header="Tools">
                 <Grid ShowGridLines="False">
                     <Grid.RowDefinitions>

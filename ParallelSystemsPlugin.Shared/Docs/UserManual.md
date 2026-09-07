@@ -2,16 +2,23 @@
 
 ## Current Build
 
-- Version: **1.17.9**
+- Version: **1.17.10**
 - Release: **Internal / Unreleased**
 - Supported Revit adapters in this solution: **2021 through 2026**
 - Native Fabrication STEP export: **Revit 2025 and 2026**
 - Monitoring architecture generation: **V2**
 - Monitoring flow: **Revit Plugin -> HTTPS API -> PostgreSQL -> React Web Application**
 
-The public plugin version is 1.17.9. The V2 label used in monitoring and deployment documentation describes the monitoring architecture generation; it is not the Revit plugin release number.
+The public plugin version is 1.17.10. The V2 label used in monitoring and deployment documentation describes the monitoring architecture generation; it is not the Revit plugin release number.
 
-## What Is New in 1.17.9
+## What Is New in 1.17.10
+
+- Added a read-only flange reference under `Configurations > Fabrication`, including standard, nominal size, class/table, flange outside diameter, pitch-circle diameter, hole count, hole and bolt diameter, and material-specific minimum thicknesses.
+- Added Standard, Nominal Size, and Class/Table filters to make the flange reference easier to review.
+- Fabrication STEP now generates flange bolt holes from an exact catalog match using the flange standard and class/table in Revit metadata and the nominal size reported by its physical piping connectors.
+- Bolt holes use the catalog count, diameter, and pitch-circle diameter and are evenly spaced while straddling the flange centreline axes. Missing or ambiguous configuration data blocks unverified hole generation.
+
+The current build also includes the following 1.17.9 changes:
 
 - Multi-package Excel reports use a flat, ungrouped master list as the first worksheet and add one worksheet for each package. The master list shows the package on each applicable data row without package bands or package-separated sections. A single-package report does not add a redundant package sheet. Package tabs contain only that package's rows and package-specific totals, with `NO PACKAGE ASSIGNED` last.
 - Excel report columns automatically adjust to their visible content, including every package worksheet, so users do not need to resize columns manually after export.
@@ -146,6 +153,8 @@ The Fabrication panel is implemented as one split button with three commands.
 - Applies the approved butt-weld rule where applicable: a 30-degree bevel measured from the end face with a 1 mm root face.
 - Keeps flange joints, tap-half coupling joints, and copper capillary reducer joints plain-ended.
 - Supports flange-to-flange through bores, SET-ON shaped branches, tap-half side couplings, concentric butt-weld reducers, and plain-end copper capillary concentric reducers.
+- For a recognized flange, resolves one exact configuration from its Revit standard, class/table, and physical connector nominal size, then cuts the configured quantity and diameter of bolt holes on the configured pitch-circle diameter.
+- Flange bolt holes are distributed evenly and straddle the flange centreline axes. The export blocks that flange's bolt-hole generation when its metadata is missing, its connector sizes disagree, or no unique catalog row exists.
 - For SET-ON shaped branches, the physical branch outlet axis is intersected with the selected header cylinder. This supports adjustable families whose header connector is unconnected or omitted.
 - Cuts the required branch opening through the near-side header wall only; the opposite wall is preserved. The opening remains circular or elliptical according to the branch angle and curved header surface.
 - Trims the shaped branch flush to the header outside surface, then performs a final coaxial bore cleanup so no sleeve, saddle lip, or thin membrane blocks either flow path.
@@ -205,7 +214,7 @@ When the required information cannot be resolved, the command reports the affect
 
 **Configurations**
 
-The Configurations window contains five active tabs.
+The Configurations window contains six active tabs.
 
 **Pipe End Prep**
 
@@ -241,6 +250,12 @@ The Configurations window contains five active tabs.
 - Loading Report orders rows within each package by length from smallest to largest.
 - Fitting Report, Accessory Report, Loading Report, and Cut List Excel workbooks retain their complete consolidated worksheet first, followed by one worksheet per package. Assembly Register does the same when package grouping is active; frame-grouped Assembly Registers remain unchanged. Each package worksheet retains the report layout and contains only that package's data and totals.
 - Package names become worksheet names. Names are adjusted only when Excel requires invalid-character replacement, the 31-character limit, or a uniqueness suffix. `NO PACKAGE ASSIGNED` is the final package worksheet.
+
+**Fabrication**
+
+- Displays the published flange configuration reference used by Fabrication STEP, including drilling and minimum-thickness values.
+- Filters the reference by Standard, Nominal Size, and Class/Table.
+- Is read-only in version 1.17.10. The displayed values cannot currently be edited or overridden from the Configurations window.
 
 **Tools**
 
@@ -300,7 +315,7 @@ The Detailing command class remains in the source, but no Detailing panel is cre
 
 - User Manual displays this installed guide.
 - What's New displays the installed CHANGELOG.md.
-- About displays the product description, Version 1.17.9, Internal / Unreleased status, and assembly build timestamp.
+- About displays the product description, Version 1.17.10, Internal / Unreleased status, and assembly build timestamp.
 - Open Full Manual opens the installed UserManual.md.
 - Open Change Log opens the installed CHANGELOG.md.
 - Developer Notes opens the installed DEVELOPERS.md.
@@ -355,7 +370,7 @@ The production Revit tracker sends:
 
 ```text
 Tracker schema version: 3
-Plugin version: 1.17.9
+Plugin version: 1.17.10
 ```
 
 The backend accepts tracker schema versions 2 and 3 for deployment compatibility.
@@ -470,7 +485,7 @@ The source solution is separated into:
 - scripts: local start/stop, tracker configuration, test checkpoint, and failed-message recovery.
 - docs: architecture, mapping, policy, deployment, validation, migration, and test guidance.
 
-The monitoring architecture is V2, while the Revit plugin release is 1.17.9.
+The monitoring architecture is V2, while the Revit plugin release is 1.17.10.
 
 No MSMQ, old Activity Queue Service, or central workstation SQLite database is part of the active architecture.
 
@@ -533,7 +548,7 @@ No MSMQ, old Activity Queue Service, or central workstation SQLite database is p
 - Confirm Revit was closed before deployment.
 - Rebuild the adapter matching the installed Revit year.
 - Replace both the deployed DLL and PDB.
-- Confirm Directory.Build.props contains Version and InformationalVersion 1.17.9.
+- Confirm Directory.Build.props contains Version and InformationalVersion 1.17.10.
 - Confirm the installed Docs folder was copied beside the DLL.
 - Restart Revit.
 
