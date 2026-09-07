@@ -100,6 +100,168 @@ namespace ParallelSystemsPlugin.Fabrication
                     suggestedName = doc.Title;
             }
 
+            return CompleteSelection(
+                uiDoc,
+                sourceIds,
+                suggestedName,
+                FabricationExportMode.Spool,
+                selectedAssemblies
+                    .Select(x => x.Name)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                new List<FabricationSelectionExclusion>(),
+                sourceIds.Count,
+                0);
+        }
+
+        public static FabricationSelection CollectModuleSelection(
+            UIDocument uiDoc)
+        {
+            if (uiDoc == null)
+                return null;
+
+            Document doc = uiDoc.Document;
+            ICollection<ElementId> selectedIds =
+                uiDoc.Selection.GetElementIds();
+
+            List<Element> selectedElements = selectedIds
+                .Select(doc.GetElement)
+                .Where(x => x != null)
+                .ToList();
+
+            if (selectedElements.Count == 0)
+            {
+                IList<Reference> picked = uiDoc.Selection.PickObjects(
+                    ObjectType.Element,
+                    new ModuleSelectionFilter(),
+                    "Select the module support assembly and all spool " +
+                    "assemblies to combine into one Module STEP file.");
+
+                selectedElements = picked
+                    .Select(x => doc.GetElement(x.ElementId))
+                    .Where(x => x != null)
+                    .ToList();
+            }
+
+            List<AssemblyInstance> selectedAssemblies = selectedElements
+                .OfType<AssemblyInstance>()
+                .GroupBy(x => x.Id)
+                .Select(x => x.First())
+                .ToList();
+
+            if (selectedAssemblies.Count < 2)
+            {
+                AppDialog.Warn(
+                    "Module STEP",
+                    "Select at least two Revit assemblies: the module/support " +
+                    "assembly and the spool assemblies that belong in the " +
+                    "combined module.");
+
+                return null;
+            }
+
+            HashSet<ElementId> sourceIds = new HashSet<ElementId>();
+            List<FabricationSelectionExclusion> exclusions =
+                new List<FabricationSelectionExclusion>();
+
+            string suggestedName = null;
+
+            foreach (AssemblyInstance assembly in selectedAssemblies)
+            {
+                bool containsModuleSupport = false;
+
+                foreach (ElementId memberId in assembly.GetMemberIds())
+                {
+                    Element member = doc.GetElement(memberId);
+
+                    if (IsModuleSupportElement(member))
+                        containsModuleSupport = true;
+
+                    AddModuleSelectionCandidate(
+                        doc,
+                        member,
+                        sourceIds,
+                        exclusions);
+                }
+
+                // The support assembly normally carries the module/package
+                // name, while the piping assemblies carry spool suffixes.
+                if (containsModuleSupport &&
+                    string.IsNullOrWhiteSpace(suggestedName))
+                {
+                    suggestedName = assembly.Name;
+                }
+            }
+
+            foreach (Element element in selectedElements
+                         .Where(x => !(x is AssemblyInstance)))
+            {
+                AddModuleSelectionCandidate(
+                    doc,
+                    element,
+                    sourceIds,
+                    exclusions);
+            }
+
+            int pipingElementCount = sourceIds
+                .Select(doc.GetElement)
+                .Count(IsSupportedSourceElement);
+
+            int supportElementCount = sourceIds
+                .Select(doc.GetElement)
+                .Count(IsModuleSupportElement);
+
+            if (pipingElementCount == 0 || supportElementCount == 0)
+            {
+                AppDialog.Warn(
+                    "Module STEP",
+                    "The selected module must contain at least one supported " +
+                    "pipe/fitting and at least one supported bracket or " +
+                    "support component.");
+
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(suggestedName))
+            {
+                suggestedName = selectedAssemblies
+                    .Select(x => x.Name)
+                    .FirstOrDefault(x =>
+                        !string.IsNullOrWhiteSpace(x));
+            }
+
+            if (string.IsNullOrWhiteSpace(suggestedName))
+                suggestedName = doc.ActiveView?.Name ?? doc.Title;
+
+            return CompleteSelection(
+                uiDoc,
+                sourceIds,
+                suggestedName,
+                FabricationExportMode.Module,
+                selectedAssemblies
+                    .Select(x => x.Name)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x)
+                    .ToList(),
+                exclusions,
+                pipingElementCount,
+                supportElementCount);
+        }
+
+        private static FabricationSelection CompleteSelection(
+            UIDocument uiDoc,
+            HashSet<ElementId> sourceIds,
+            string suggestedName,
+            FabricationExportMode exportMode,
+            IList<string> selectedAssemblyNames,
+            IList<FabricationSelectionExclusion> exclusions,
+            int pipingElementCount,
+            int supportElementCount)
+        {
+            Document doc = uiDoc.Document;
+
             HashSet<ElementId> calculationContextIds =
                 new HashSet<ElementId>(sourceIds);
 
@@ -209,13 +371,89 @@ namespace ParallelSystemsPlugin.Fabrication
 
             return new FabricationSelection
             {
+                ExportMode = exportMode,
                 SourceElementIds = sourceIds.ToList(),
                 CalculationContextElementIds =
                     calculationContextIds.ToList(),
                 ExplicitHeaderPipeIdsByBranch =
                     explicitHeaderPipeIdsByBranch,
+                SelectedAssemblyNames =
+                    selectedAssemblyNames ?? new List<string>(),
+                Exclusions =
+                    exclusions ??
+                    new List<FabricationSelectionExclusion>(),
+                PipingElementCount = pipingElementCount,
+                SupportElementCount = supportElementCount,
                 SuggestedFileName = SanitizeFileName(suggestedName)
             };
+        }
+
+        private static void AddModuleSelectionCandidate(
+            Document doc,
+            Element element,
+            ISet<ElementId> sourceIds,
+            IList<FabricationSelectionExclusion> exclusions)
+        {
+            if (element == null || sourceIds == null)
+                return;
+
+            if (IsButterflyValveElement(doc, element))
+            {
+                AddModuleSelectionExclusion(
+                    exclusions,
+                    element,
+                    "Butterfly valve omitted by the Module STEP rule.");
+                return;
+            }
+
+            if (IsStandaloneWoodBlockElement(doc, element))
+            {
+                AddModuleSelectionExclusion(
+                    exclusions,
+                    element,
+                    "Standalone wood block omitted by the Module STEP rule.");
+                return;
+            }
+
+            if (IsSupportedSourceElement(element) ||
+                IsModuleSupportElement(element))
+            {
+                sourceIds.Add(element.Id);
+                return;
+            }
+
+            string reason = IsPipingNetworkElement(element)
+                ? "Connection-marker/helper geometry omitted."
+                : "Unsupported module member omitted (" +
+                  (element.Category?.Name ?? element.GetType().Name) + ").";
+
+            AddModuleSelectionExclusion(
+                exclusions,
+                element,
+                reason);
+        }
+
+        private static void AddModuleSelectionExclusion(
+            IList<FabricationSelectionExclusion> exclusions,
+            Element element,
+            string reason)
+        {
+            if (exclusions == null || element == null)
+                return;
+
+            if (exclusions.Any(x =>
+                    x?.ElementId != null &&
+                    x.ElementId.Equals(element.Id)))
+            {
+                return;
+            }
+
+            exclusions.Add(new FabricationSelectionExclusion
+            {
+                ElementId = element.Id,
+                ElementName = GetElementDisplayName(element),
+                Reason = reason
+            });
         }
 
         private static bool IsSupportedSourceElement(Element element)
@@ -240,6 +478,76 @@ namespace ParallelSystemsPlugin.Fabrication
                        (int)BuiltInCategory.OST_PipeFitting ||
                    categoryValue ==
                        (int)BuiltInCategory.OST_PipeAccessory;
+        }
+
+        private static bool IsSupportedSelectionElement(
+            Element element,
+            FabricationExportMode exportMode)
+        {
+            if (exportMode == FabricationExportMode.Module)
+            {
+                if (IsButterflyValveElement(element?.Document, element) ||
+                    IsStandaloneWoodBlockElement(
+                        element?.Document,
+                        element))
+                {
+                    return false;
+                }
+
+                return IsSupportedSourceElement(element) ||
+                       IsModuleSupportElement(element);
+            }
+
+            return IsSupportedSourceElement(element);
+        }
+
+        private static bool IsModuleSupportElement(Element element)
+        {
+            if (element?.Category == null)
+                return false;
+
+            int categoryValue = GetCategoryValue(element.Category.Id);
+
+            return categoryValue ==
+                       (int)BuiltInCategory.OST_SpecialityEquipment ||
+                   categoryValue ==
+                       (int)BuiltInCategory.OST_StructConnections;
+        }
+
+        private static bool IsButterflyValveElement(
+            Document doc,
+            Element element)
+        {
+            if (element == null)
+                return false;
+
+            string classification = NormalizeClassificationText(
+                BuildElementClassificationText(doc, element));
+
+            return classification.Contains("BUTTERFLY") &&
+                   classification.Contains("VALVE");
+        }
+
+        private static bool IsStandaloneWoodBlockElement(
+            Document doc,
+            Element element)
+        {
+            if (element == null)
+                return false;
+
+            string classification = NormalizeClassificationText(
+                BuildElementClassificationText(doc, element));
+
+            bool describesWood =
+                classification.Contains("WOOD") ||
+                classification.Contains("TIMBER");
+
+            bool describesBlock =
+                classification.Contains("BLOCK") ||
+                classification.Contains("PACKER") ||
+                classification.Contains("PAD");
+
+            return describesWood && describesBlock;
         }
 
         private static int GetCategoryValue(ElementId categoryId)
@@ -319,6 +627,29 @@ namespace ParallelSystemsPlugin.Fabrication
             {
                 return element is AssemblyInstance ||
                        IsSupportedSourceElement(element);
+            }
+
+            public bool AllowReference(
+                Reference reference,
+                XYZ position)
+            {
+                return false;
+            }
+        }
+
+        private sealed class ModuleSelectionFilter : ISelectionFilter
+        {
+            public bool AllowElement(Element element)
+            {
+                return element is AssemblyInstance ||
+                       IsSupportedSourceElement(element) ||
+                       IsModuleSupportElement(element) ||
+                       IsButterflyValveElement(
+                           element?.Document,
+                           element) ||
+                       IsStandaloneWoodBlockElement(
+                           element?.Document,
+                           element);
             }
 
             public bool AllowReference(

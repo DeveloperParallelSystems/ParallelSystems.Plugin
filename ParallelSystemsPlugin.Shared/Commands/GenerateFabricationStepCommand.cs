@@ -4,7 +4,10 @@ using Autodesk.Revit.UI;
 using Microsoft.Win32;
 using ParallelSystemsPlugin.Fabrication;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 using ParallelSystemPlugin.UI;
 
 namespace ParallelSystemsPlugin.Commands
@@ -17,6 +20,24 @@ namespace ParallelSystemsPlugin.Commands
             ref string message,
             ElementSet elements)
         {
+            return ExecuteInternal(
+                commandData,
+                ref message,
+                elements,
+                FabricationExportMode.Spool);
+        }
+
+        internal static Result ExecuteInternal(
+            ExternalCommandData commandData,
+            ref string message,
+            ElementSet elements,
+            FabricationExportMode exportMode)
+        {
+            string commandTitle =
+                exportMode == FabricationExportMode.Module
+                    ? "Module STEP"
+                    : "Fabrication STEP";
+
             if (!App.IsUserAuthorized)
             {
                 AppDialog.Warn(
@@ -28,7 +49,7 @@ namespace ParallelSystemsPlugin.Commands
 
 #if !REVIT2025_OR_GREATER
             AppDialog.Warn(
-                "Fabrication STEP",
+                commandTitle,
                 "Native STEP export is available only in Revit 2025 or newer.\n\n" +
                 "Use the Revit 2025 or Revit 2026 build of this add-in.");
 
@@ -46,7 +67,7 @@ namespace ParallelSystemsPlugin.Commands
                 {
                     AppDialog.Warn(
                         uiApp,
-                        "Fabrication STEP",
+                        commandTitle,
                         "No active Revit project is open.");
 
                     return Result.Cancelled;
@@ -56,17 +77,27 @@ namespace ParallelSystemsPlugin.Commands
                 {
                     AppDialog.Warn(
                         uiApp,
-                        "Fabrication STEP",
+                        commandTitle,
                         "This command must be run from a Revit project, not from the Family Editor.");
 
                     return Result.Cancelled;
                 }
 
                 FabricationSelection selection =
-                    FabricationStepService.CollectSelection(uiDoc);
+                    exportMode == FabricationExportMode.Module
+                        ? FabricationStepService
+                            .CollectModuleSelection(uiDoc)
+                        : FabricationStepService
+                            .CollectSelection(uiDoc);
 
                 if (selection == null || selection.SourceElementIds.Count == 0)
                     return Result.Cancelled;
+
+                if (exportMode == FabricationExportMode.Module &&
+                    !ConfirmModuleSelection(uiApp, selection))
+                {
+                    return Result.Cancelled;
+                }
 
                 FabricationPreflightResult preflight =
                     FabricationPreflightService.Check(
@@ -77,8 +108,8 @@ namespace ParallelSystemsPlugin.Commands
                 {
                     AppDialog.ShowDetailed(
                         uiApp,
-                        "Fabrication STEP Preflight",
-                        "Fabrication STEP cannot continue.",
+                        commandTitle + " Preflight",
+                        commandTitle + " cannot continue.",
                         preflight.BuildBlockingMessage(),
                         preflight.BuildDetails(),
                         MessageDialogIcon.Error);
@@ -91,7 +122,7 @@ namespace ParallelSystemsPlugin.Commands
                     bool continueExport =
                         AppDialog.ConfirmDetailed(
                             uiApp,
-                            "Fabrication STEP Preflight",
+                            commandTitle + " Preflight",
                             "Selected elements are owned by another user.",
                             preflight.BuildWarningMessage(),
                             preflight.BuildDetails(),
@@ -125,8 +156,8 @@ namespace ParallelSystemsPlugin.Commands
 
                     AppDialog.ShowDetailed(
                         uiApp,
-                        "Fabrication STEP",
-                        "The fabrication STEP was not generated.",
+                        commandTitle,
+                        "The " + commandTitle + " was not generated.",
                         result.BuildUserMessage(),
                         result.BuildDetailedMessage(),
                         MessageDialogIcon.Error);
@@ -151,8 +182,8 @@ namespace ParallelSystemsPlugin.Commands
 
                     AppDialog.ShowDetailed(
                         uiApp,
-                        "Fabrication STEP",
-                        "The fabrication STEP was not generated.",
+                        commandTitle,
+                        "The " + commandTitle + " was not generated.",
                         result.BuildUserMessage(),
                         result.BuildDetailedMessage(),
                         MessageDialogIcon.Error);
@@ -164,7 +195,7 @@ namespace ParallelSystemsPlugin.Commands
                 // ask the user where the verified STEP file should be saved.
                 SaveFileDialog dialog = new SaveFileDialog
                 {
-                    Title = "Save Fabrication STEP",
+                    Title = "Save " + commandTitle,
                     Filter = "STEP file (*.step)|*.step",
                     DefaultExt = ".step",
                     AddExtension = true,
@@ -184,7 +215,7 @@ namespace ParallelSystemsPlugin.Commands
                 {
                     AppDialog.Warn(
                         uiApp,
-                        "Fabrication STEP",
+                        commandTitle,
                         "The selected output folder does not exist. Nothing was saved.");
 
                     return Result.Cancelled;
@@ -213,8 +244,8 @@ namespace ParallelSystemsPlugin.Commands
 
                     AppDialog.ShowDetailed(
                         uiApp,
-                        "Fabrication STEP",
-                        "The fabrication STEP was not saved.",
+                        commandTitle,
+                        "The " + commandTitle + " was not saved.",
                         result.BuildUserMessage(),
                         result.BuildDetailedMessage(),
                         MessageDialogIcon.Error);
@@ -245,8 +276,8 @@ namespace ParallelSystemsPlugin.Commands
 
                 AppDialog.ShowDetailed(
                     uiApp,
-                    "Fabrication STEP",
-                    "Fabrication STEP generated successfully.",
+                    commandTitle,
+                    commandTitle + " generated successfully.",
                     result.BuildUserMessage(),
                     result.BuildDetailedMessage(),
                     MessageDialogIcon.Success);
@@ -263,7 +294,7 @@ namespace ParallelSystemsPlugin.Commands
 
                 AppDialog.Error(
                     commandData.Application,
-                    "Fabrication STEP Error",
+                    commandTitle + " Error",
                     "An unexpected error occurred.\n\n" + ex.Message);
 
                 return Result.Failed;
@@ -276,6 +307,73 @@ namespace ParallelSystemsPlugin.Commands
         }
 
 #if REVIT2025_OR_GREATER
+        private static bool ConfirmModuleSelection(
+            UIApplication uiApp,
+            FabricationSelection selection)
+        {
+            if (selection == null)
+                return false;
+
+            StringBuilder details = new StringBuilder();
+            details.AppendLine("Assemblies:");
+
+            foreach (string assemblyName in
+                     selection.SelectedAssemblyNames ??
+                     new List<string>())
+            {
+                details.AppendLine("- " + assemblyName);
+            }
+
+            details.AppendLine();
+            details.AppendLine(
+                "Included piping elements: " +
+                selection.PipingElementCount.ToString());
+            details.AppendLine(
+                "Included support elements: " +
+                selection.SupportElementCount.ToString());
+
+            IList<FabricationSelectionExclusion> exclusions =
+                selection.Exclusions ??
+                new List<FabricationSelectionExclusion>();
+
+            if (exclusions.Count > 0)
+            {
+                details.AppendLine();
+                details.AppendLine("Pre-export omissions:");
+
+                foreach (FabricationSelectionExclusion exclusion in
+                         exclusions.Take(100))
+                {
+                    details.Append("- ");
+                    details.Append(
+                        string.IsNullOrWhiteSpace(exclusion.ElementName)
+                            ? "Element"
+                            : exclusion.ElementName);
+
+                    if (exclusion.ElementId != null)
+                    {
+                        details.Append(" [");
+                        details.Append(exclusion.ElementId.ToString());
+                        details.Append(']');
+                    }
+
+                    details.Append(": ");
+                    details.AppendLine(exclusion.Reason ?? string.Empty);
+                }
+            }
+
+            return AppDialog.ConfirmDetailed(
+                uiApp,
+                "Module STEP Scope",
+                "Review the combined module before export.",
+                "The listed spool and support assemblies will be combined. " +
+                "Butterfly valves, standalone wood blocks, embedded Wood " +
+                "solids, KSH_FM_Clamp_DB upper halves, insulation, and " +
+                "connection helpers are omitted.",
+                details.ToString().Trim(),
+                defaultNo: true);
+        }
+
         private static string CreateTemporaryDirectory()
         {
             string directory = Path.Combine(
@@ -425,5 +523,21 @@ namespace ParallelSystemsPlugin.Commands
             }
         }
 #endif
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public sealed class GenerateModuleStepCommand : IExternalCommand
+    {
+        public Result Execute(
+            ExternalCommandData commandData,
+            ref string message,
+            ElementSet elements)
+        {
+            return GenerateFabricationStepCommand.ExecuteInternal(
+                commandData,
+                ref message,
+                elements,
+                FabricationExportMode.Module);
+        }
     }
 }

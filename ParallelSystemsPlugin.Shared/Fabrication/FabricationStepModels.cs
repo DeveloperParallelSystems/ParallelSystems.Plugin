@@ -7,8 +7,24 @@ using System.Text;
 
 namespace ParallelSystemsPlugin.Fabrication
 {
+    internal enum FabricationExportMode
+    {
+        Spool,
+        Module
+    }
+
+    internal sealed class FabricationSelectionExclusion
+    {
+        public ElementId ElementId { get; set; }
+        public string ElementName { get; set; }
+        public string Reason { get; set; }
+    }
+
     internal sealed class FabricationSelection
     {
+        public FabricationExportMode ExportMode { get; set; } =
+            FabricationExportMode.Spool;
+
         // Elements explicitly selected by the user and therefore included in
         // the generated STEP file.
         public IList<ElementId> SourceElementIds { get; set; } =
@@ -26,6 +42,15 @@ namespace ParallelSystemsPlugin.Fabrication
         public IDictionary<ElementId, ElementId>
             ExplicitHeaderPipeIdsByBranch { get; set; } =
                 new Dictionary<ElementId, ElementId>();
+
+        public IList<string> SelectedAssemblyNames { get; set; } =
+            new List<string>();
+
+        public IList<FabricationSelectionExclusion> Exclusions { get; set; } =
+            new List<FabricationSelectionExclusion>();
+
+        public int PipingElementCount { get; set; }
+        public int SupportElementCount { get; set; }
 
         public string SuggestedFileName { get; set; }
     }

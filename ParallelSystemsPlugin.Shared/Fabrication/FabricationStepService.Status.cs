@@ -257,7 +257,8 @@ namespace ParallelSystemsPlugin.Fabrication
         }
 
         private static BoundingBoxXYZ BuildSectionBox(
-            IEnumerable<Element> elements)
+            IEnumerable<Element> elements,
+            bool bypassRunCache = false)
         {
             XYZ minimum = null;
             XYZ maximum = null;
@@ -269,7 +270,13 @@ namespace ParallelSystemsPlugin.Fabrication
 
                 try
                 {
-                    box = GetElementBoundingBoxCached(element);
+                    // Generated DirectShapes are translated to the export
+                    // origin and later restored to their project position.
+                    // Their cached bounds would therefore be stale after a
+                    // move, so callers can explicitly request live bounds.
+                    box = bypassRunCache
+                        ? element.get_BoundingBox(null)
+                        : GetElementBoundingBoxCached(element);
                 }
                 catch
                 {

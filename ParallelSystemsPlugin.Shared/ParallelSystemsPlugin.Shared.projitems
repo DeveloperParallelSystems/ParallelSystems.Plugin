@@ -59,6 +59,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Selection.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Status.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Generation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.ModuleGeometry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.StepTopology.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Dimensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.Connections.cs" />

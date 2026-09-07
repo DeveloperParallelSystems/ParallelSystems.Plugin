@@ -38,10 +38,26 @@ namespace ParallelSystemsPlugin.Fabrication
 
             List<Element> sourceElements = requestedSourceIds
                 .Select(doc.GetElement)
-                .Where(IsSupportedSourceElement)
+                .Where(x =>
+                    IsSupportedSelectionElement(
+                        x,
+                        selection.ExportMode))
                 .ToList();
 
             result.SourceElementCount = sourceElements.Count;
+
+            foreach (FabricationSelectionExclusion exclusion in
+                     selection.Exclusions ??
+                     new List<FabricationSelectionExclusion>())
+            {
+                result.Issues.Add(new FabricationIssue
+                {
+                    Severity = FabricationIssueSeverity.Information,
+                    ElementId = exclusion.ElementId,
+                    ElementName = exclusion.ElementName,
+                    Message = exclusion.Reason
+                });
+            }
 
             if (sourceElements.Count != requestedSourceIds.Count)
             {
@@ -242,6 +258,22 @@ namespace ParallelSystemsPlugin.Fabrication
                     continue;
                 }
 
+                if (selection.ExportMode ==
+                        FabricationExportMode.Module &&
+                    IsModuleSupportElement(element))
+                {
+                    FabricationElementGeometry supportGeometry =
+                        BuildModuleSupportGeometry(
+                            doc,
+                            element,
+                            result.Issues);
+
+                    if (supportGeometry != null)
+                        generated.Add(supportGeometry);
+
+                    continue;
+                }
+
                 ShapedBranchConnection shapedBranchConnection = null;
 
                 shapedBranchConnections.TryGetValue(
@@ -312,6 +344,7 @@ namespace ParallelSystemsPlugin.Fabrication
 
             View3D fabricationView = null;
             List<ElementId> generatedIds = new List<ElementId>();
+            XYZ fabricationProjectCenter = null;
 
             // Build the fabrication model inside a transaction group.
             //
@@ -396,6 +429,29 @@ namespace ParallelSystemsPlugin.Fabrication
                             result.Succeeded = false;
 
 
+                            return result;
+                        }
+
+                        string centeringError;
+
+                        if (!TryCenterFabricationExportGeometry(
+                                doc,
+                                generatedIds,
+                                out fabricationProjectCenter,
+                                out centeringError))
+                        {
+                            result.Issues.Add(
+                                new FabricationIssue
+                                {
+                                    Severity =
+                                        FabricationIssueSeverity
+                                            .Blocking,
+                                    Message = centeringError
+                                });
+
+                            transaction.RollBack();
+                            result.GeneratedElementCount = 0;
+                            result.Succeeded = false;
                             return result;
                         }
 
@@ -577,6 +633,43 @@ namespace ParallelSystemsPlugin.Fabrication
                     result.StepFilePath = finalStepFilePath;
                     result.Succeeded = true;
 
+                    string restorationError;
+
+                    if (!TryRestoreFabricationInspectionModelPosition(
+                            doc,
+                            fabricationView,
+                            generatedIds,
+                            fabricationProjectCenter,
+                            out restorationError))
+                    {
+                        // The verified STEP is already safely stored and is
+                        // correctly centred. Do not retain DirectShapes at
+                        // export-origin coordinates if their project position
+                        // cannot be restored; the finally block rolls the
+                        // temporary transaction group back.
+                        result.Issues.Add(new FabricationIssue
+                        {
+                            Severity =
+                                FabricationIssueSeverity.Warning,
+                            Message =
+                                "The STEP file was generated successfully " +
+                                "with its origin at the object centre, but " +
+                                "the optional Revit inspection model was " +
+                                "discarded because its project position " +
+                                "could not be restored: " + restorationError
+                        });
+
+                        return result;
+                    }
+
+                    result.Issues.Add(new FabricationIssue
+                    {
+                        Severity = FabricationIssueSeverity.Information,
+                        Message =
+                            "STEP origin: centre of the combined fabrication " +
+                            "geometry bounding box."
+                    });
+
 
                     bool inspectionViewRetained = false;
 
@@ -654,6 +747,191 @@ namespace ParallelSystemsPlugin.Fabrication
         }
 #endif
 
+        private static bool TryCenterFabricationExportGeometry(
+            Document doc,
+            IList<ElementId> generatedIds,
+            out XYZ fabricationProjectCenter,
+            out string error)
+        {
+            fabricationProjectCenter = null;
+            error = null;
+
+            if (doc == null ||
+                generatedIds == null ||
+                generatedIds.Count == 0)
+            {
+                error =
+                    "The generated fabrication geometry is unavailable for " +
+                    "STEP origin centring.";
+                return false;
+            }
+
+            try
+            {
+                doc.Regenerate();
+
+                BoundingBoxXYZ projectBounds =
+                    BuildSectionBox(
+                        generatedIds
+                            .Select(doc.GetElement)
+                            .Where(x => x != null),
+                        bypassRunCache: true);
+
+                if (projectBounds == null)
+                {
+                    error =
+                        "The fabrication geometry bounds could not be " +
+                        "calculated, so the STEP origin could not be centred.";
+                    return false;
+                }
+
+                fabricationProjectCenter =
+                    GetBoundingBoxMidpoint(projectBounds);
+
+                if (!IsFinitePoint(fabricationProjectCenter))
+                {
+                    error =
+                        "The fabrication geometry has invalid bounds, so the " +
+                        "STEP origin could not be centred.";
+                    return false;
+                }
+
+                XYZ translation = new XYZ(
+                    -fabricationProjectCenter.X,
+                    -fabricationProjectCenter.Y,
+                    -fabricationProjectCenter.Z);
+
+                if (translation.GetLength() > GeometryTolerance)
+                {
+                    ElementTransformUtils.MoveElements(
+                        doc,
+                        generatedIds,
+                        translation);
+                }
+
+                doc.Regenerate();
+
+                BoundingBoxXYZ centredBounds =
+                    BuildSectionBox(
+                        generatedIds
+                            .Select(doc.GetElement)
+                            .Where(x => x != null),
+                        bypassRunCache: true);
+
+                XYZ centredMidpoint =
+                    GetBoundingBoxMidpoint(centredBounds);
+
+                // Ten micrometres is well below fabrication tolerances while
+                // allowing for Revit's internal-foot floating-point math.
+                double centringTolerance =
+                    0.01 / FeetToMillimetres;
+
+                if (!IsFinitePoint(centredMidpoint) ||
+                    Math.Abs(centredMidpoint.X) > centringTolerance ||
+                    Math.Abs(centredMidpoint.Y) > centringTolerance ||
+                    Math.Abs(centredMidpoint.Z) > centringTolerance)
+                {
+                    error =
+                        "The temporary fabrication geometry could not be " +
+                        "verified at the STEP origin. Nothing was exported.";
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error =
+                    "The fabrication geometry could not be moved to the " +
+                    "object-centred STEP origin: " + ex.Message;
+                return false;
+            }
+        }
+
+        private static bool TryRestoreFabricationInspectionModelPosition(
+            Document doc,
+            View3D fabricationView,
+            IList<ElementId> generatedIds,
+            XYZ fabricationProjectCenter,
+            out string error)
+        {
+            error = null;
+
+            if (doc == null ||
+                fabricationView == null ||
+                generatedIds == null ||
+                generatedIds.Count == 0 ||
+                !IsFinitePoint(fabricationProjectCenter))
+            {
+                error = "The inspection-model restoration data is invalid.";
+                return false;
+            }
+
+            try
+            {
+                using (Transaction transaction =
+                       new Transaction(
+                           doc,
+                           "Restore Fabrication Inspection Model Position"))
+                {
+                    transaction.Start();
+
+                    if (fabricationProjectCenter.GetLength() >
+                        GeometryTolerance)
+                    {
+                        ElementTransformUtils.MoveElements(
+                            doc,
+                            generatedIds,
+                            fabricationProjectCenter);
+                    }
+
+                    ConfigureFabricationView(
+                        doc,
+                        fabricationView,
+                        generatedIds);
+
+                    if (transaction.Commit() !=
+                        TransactionStatus.Committed)
+                    {
+                        error =
+                            "Revit did not commit the inspection-model " +
+                            "restoration transaction.";
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private static XYZ GetBoundingBoxMidpoint(
+            BoundingBoxXYZ bounds)
+        {
+            if (bounds == null || bounds.Min == null || bounds.Max == null)
+                return null;
+
+            return new XYZ(
+                (bounds.Min.X + bounds.Max.X) * 0.5,
+                (bounds.Min.Y + bounds.Max.Y) * 0.5,
+                (bounds.Min.Z + bounds.Max.Z) * 0.5);
+        }
+
+        private static bool IsFinitePoint(XYZ point)
+        {
+            return point != null &&
+                   !double.IsNaN(point.X) &&
+                   !double.IsInfinity(point.X) &&
+                   !double.IsNaN(point.Y) &&
+                   !double.IsInfinity(point.Y) &&
+                   !double.IsNaN(point.Z) &&
+                   !double.IsInfinity(point.Z);
+        }
+
         private static void ConfigureFabricationView(
             Document doc,
             View3D view,
@@ -684,7 +962,8 @@ namespace ParallelSystemsPlugin.Fabrication
                 BuildSectionBox(
                     generatedIds
                         .Select(doc.GetElement)
-                        .Where(x => x != null));
+                        .Where(x => x != null),
+                    bypassRunCache: true);
 
             if (sectionBox != null)
             {

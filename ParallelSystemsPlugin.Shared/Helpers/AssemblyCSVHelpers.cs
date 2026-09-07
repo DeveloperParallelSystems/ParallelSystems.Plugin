@@ -16,9 +16,13 @@ namespace ParallelSystemsPlugin.Helpers
     {
         public static int Export(Document doc, string path)
         {
-            var types = new FilteredElementCollector(doc)
-                .OfClass(typeof(AssemblyType))
-                .Cast<AssemblyType>()
+            var types = new FilteredElementCollector(doc, doc.ActiveView.Id)
+                .OfClass(typeof(AssemblyInstance))
+                .Cast<AssemblyInstance>()
+                .Select(assembly => doc.GetElement(assembly.GetTypeId()) as AssemblyType)
+                .Where(type => type != null)
+                .GroupBy(type => type.Id)
+                .Select(group => group.First())
                 .ToList();
 
 

@@ -9,6 +9,7 @@ The fabrication implementation is organised as partial `FabricationStepService` 
 | `FabricationStepService.Selection.cs` | Selection and supported-source filtering |
 | `FabricationStepService.Status.cs` | Show Ready and temporary isolation |
 | `FabricationStepService.Generation.cs` | Orchestration, retained inspection view on success, rollback on failure, STEP staging, validation report |
+| `FabricationStepService.ModuleGeometry.cs` | Module support-solid pass-through, face-material classification, Wood-solid omission, and family-scoped upper-clamp removal |
 | `FabricationStepService.StepTopology.cs` | STEP topology helpers and reusable topology construction |
 | `FabricationStepService.Diagnostics.cs` | Command-scoped geometry, topology, fallback, and validation diagnostics |
 | `FabricationStepService.Dimensions.cs` | Pipe/fitting ID, OD, wall, and geometry inference |
@@ -27,6 +28,11 @@ The fabrication implementation is organised as partial `FabricationStepService` 
 ## Rules
 
 - Generate geometry only for `FabricationSelection.SourceElementIds`; network traversal is for dimension and connection resolution, not automatic scope expansion.
+- Keep Spool STEP restricted to one assembly. Multiple assemblies are accepted only by the separate Module STEP command after scope confirmation.
+- Module STEP may pass through selected Specialty Equipment and Structural Connections support solids. Omit butterfly valves and standalone wood blocks during selection; omit embedded Wood solids by face material without removing their metal clamp family.
+- For `KSH_FM_Clamp_DB` only, require exactly two resolved non-Wood clamp-half solids, omit the half with the higher transformed project-Z centroid, and retain the lower half. Block unclear geometry instead of using solid order or volume.
+- Block mixed or unresolved Wood/non-Wood support solids instead of guessing from solid size, order, or volume.
+- Centre the combined generated bounding box at the STEP origin for export, verify the midpoint within 0.01 mm, and restore retained inspection DirectShapes to their project position before assimilating the transaction group.
 - Keep document fallbacks bounded to the selected fabrication scope. Do not scan every pipe or every Generic Model in a large project.
 - Keep the run cache command-scoped. Never persist Revit `Element`, `Solid`, connector, bounding-box, or dimension objects between exports.
 - Filter bounded fallback pipes by nominal sizes requested by selected fitting connectors before resolving full pipe dimensions.
