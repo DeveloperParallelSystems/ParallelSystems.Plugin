@@ -25,6 +25,8 @@ namespace ParallelSystemsPlugin.Timesheets
         public string RevitUserName { get; set; }
         public string RevitVersion { get; set; }
         public string PluginVersion { get; set; }
+        public string OsVersion { get; set; }
+        public string ProcessArchitecture { get; set; }
 
         public string ProjectKey { get; set; }
         public string ProjectName { get; set; }

@@ -340,6 +340,8 @@ namespace ParallelSystemsPlugin.Timesheets
                     RevitUserName = _project.RevitUserName,
                     RevitVersion = SafeRevitVersion(),
                     PluginVersion = _pluginVersion,
+                    OsVersion = Environment.OSVersion.VersionString,
+                    ProcessArchitecture = Environment.Is64BitProcess ? "x64" : "x86",
                     ProjectKey = _project.ProjectKey,
                     ProjectName = _project.ProjectName,
                     ProjectNumber = _project.ProjectNumber,
