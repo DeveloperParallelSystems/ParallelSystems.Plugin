@@ -10,6 +10,7 @@
 
 ## 1.17.9 - Package-Specific Excel Worksheets (Internal / Unreleased)
 
+- Normalized terminal flow/return package suffixes so package names ending in `F` or `R` share one Excel grouping and worksheet. Attached separators are also removed; for example, `S4-ROOF-PR-HEX-01-CHWF` / `...-CHWR` become `S4-ROOF-PR-HEX-01-CHW`, and `OSI-L3-CHW-F` / `OSI-L3-CHW-R` become `OSI-L3-CHW`.
 - Multi-package Excel reports now use a flat, ungrouped master list as the first worksheet and add one package-specific worksheet per resolved package. Single-package reports do not add a redundant package sheet. Package names are used for worksheet tabs, `NO PACKAGE ASSIGNED` is last, and Excel-invalid, duplicate, or overlength names are handled safely.
 - All generated Excel reports now auto-fit column widths from their visible headers, metadata, and table values while retaining practical sizing for image and description columns.
 - Added an optional modern branded plugin installer with a larger wizard, refreshed typography and colors, a clearer welcome experience, and the existing detected-Revit and configuration-preservation safeguards.

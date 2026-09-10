@@ -604,9 +604,10 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             int lastDash = spoolNumber.LastIndexOf('-');
 
             if (lastDash <= 0)
-                return spoolNumber;
+                return Helpers.Elements.NormalizeProcurementPackageName(spoolNumber);
 
-            return spoolNumber.Substring(0, lastDash);
+            return Helpers.Elements.NormalizeProcurementPackageName(
+                spoolNumber.Substring(0, lastDash));
         }
 
         private static string GetParamString(Element element, params string[] names)

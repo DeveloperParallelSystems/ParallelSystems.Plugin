@@ -629,9 +629,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 return "";
 
             int lastDash = assemblyName.LastIndexOf('-');
-            return lastDash > 0
+            string packageName = lastDash > 0
                 ? assemblyName.Substring(0, lastDash).Trim()
                 : assemblyName.Trim();
+
+            return Helpers.Elements.NormalizeProcurementPackageName(packageName);
         }
 
         private static string ResolvePackageFromConnectedPipe(

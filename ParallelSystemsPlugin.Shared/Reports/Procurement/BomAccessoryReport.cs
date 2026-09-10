@@ -423,12 +423,13 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 !string.IsNullOrWhiteSpace(zone) &&
                 !string.IsNullOrWhiteSpace(area))
             {
-                return string.Concat(
-                    building.Trim(),
-                    level.Trim(),
-                    zone.Trim(),
-                    "-",
-                    area.Trim());
+                return Helpers.Elements.NormalizeProcurementPackageName(
+                    string.Concat(
+                        building.Trim(),
+                        level.Trim(),
+                        zone.Trim(),
+                        "-",
+                        area.Trim()));
             }
 
             return NoPackageAssigned;

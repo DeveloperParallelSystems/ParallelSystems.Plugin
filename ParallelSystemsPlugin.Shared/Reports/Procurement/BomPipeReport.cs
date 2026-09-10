@@ -309,7 +309,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 if (lenMm <= 0.01)
                     continue;
 
-                string package = GetStringParam(e, PARAM_PACKAGE);
+                string package = Helpers.Elements.NormalizeProcurementPackageName(
+                    GetStringParam(e, PARAM_PACKAGE));
                 string material = GetStringParam(e, PARAM_MATERIAL);
                 string assemblyName = GetStringParam(e, PARAM_ASSEMBLY_NAME);
                 string pipeEndPrep = GetStringParam(e, AppConfig.CurrentConfig.PipeMapParameters.EndPrep);

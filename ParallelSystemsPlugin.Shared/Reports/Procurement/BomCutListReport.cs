@@ -483,7 +483,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 double lenMm = lenFt * FT_TO_MM;
                 if (lenMm <= 0.01) continue;
 
-                string package = GetStringParam(e, PARAM_PACKAGE);
+                string package = Helpers.Elements.NormalizeProcurementPackageName(
+                    GetStringParam(e, PARAM_PACKAGE));
                 string material = GetStringParam(e, PARAM_MATERIAL);
                 string assemblyName = GetStringParam(e, PARAM_ASSEMBLY_NAME);
                 if (string.IsNullOrWhiteSpace(assemblyName))

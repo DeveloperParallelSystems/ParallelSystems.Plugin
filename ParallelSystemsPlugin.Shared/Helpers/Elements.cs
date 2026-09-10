@@ -464,9 +464,53 @@ namespace ParallelSystemsPlugin.Helpers
             // Assembly Register convention:
             // S6P3-L1-P1A-TCSF-087 -> S6P3-L1-P1A-TCSF
             int lastDash = assemblyName.LastIndexOf('-');
-            return lastDash > 0
+            string packageName = lastDash > 0
                 ? assemblyName.Substring(0, lastDash).Trim()
                 : assemblyName;
+
+            return NormalizeProcurementPackageName(packageName);
+        }
+
+        public static string NormalizeProcurementPackageName(string packageName)
+        {
+            if (string.IsNullOrWhiteSpace(packageName))
+                return "";
+
+            // Flow and return are two sides of the same procurement package.
+            // Project package names distinguish them with a final F or R:
+            // S4-ROOF-PR-HEX-01-CHWF / ...-CHWR -> ...-CHW.
+            // Normalize each value independently because resolved Vic_Package
+            // parameters can contain a semicolon-separated list.
+            var normalizedNames = new List<string>();
+            foreach (string value in packageName.Split(
+                new[] { ';' },
+                StringSplitOptions.RemoveEmptyEntries))
+            {
+                string normalized = (value ?? "").Trim();
+                if (normalized.Length > 1)
+                {
+                    char suffix = char.ToUpperInvariant(normalized[normalized.Length - 1]);
+                    if (suffix == 'F' || suffix == 'R')
+                    {
+                        normalized = normalized
+                            .Substring(0, normalized.Length - 1)
+                            .TrimEnd()
+                            .TrimEnd('-')
+                            .TrimEnd();
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(normalized) &&
+                    !normalizedNames.Any(x => string.Equals(
+                        x,
+                        normalized,
+                        StringComparison.OrdinalIgnoreCase)))
+                {
+                    normalizedNames.Add(normalized);
+                }
+            }
+
+            return string.Join("; ", normalizedNames);
         }
 
         public static string GetProcurementPackageName(Document doc, Element element)
@@ -571,10 +615,14 @@ namespace ParallelSystemsPlugin.Helpers
                     displayName = token;
                 }
 
-                if (!string.IsNullOrWhiteSpace(displayName) &&
-                    !resolvedNames.Any(x => string.Equals(x, displayName, StringComparison.OrdinalIgnoreCase)))
+                string normalizedName = NormalizeProcurementPackageName(displayName);
+                if (!string.IsNullOrWhiteSpace(normalizedName) &&
+                    !resolvedNames.Any(x => string.Equals(
+                        x,
+                        normalizedName,
+                        StringComparison.OrdinalIgnoreCase)))
                 {
-                    resolvedNames.Add(displayName.Trim());
+                    resolvedNames.Add(normalizedName);
                 }
             }
 

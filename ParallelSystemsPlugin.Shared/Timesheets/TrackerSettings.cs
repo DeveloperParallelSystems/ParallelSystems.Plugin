@@ -7,7 +7,7 @@ namespace ParallelSystemsPlugin.Timesheets
     internal sealed class TrackerSettings
     {
         public bool Enabled { get; set; } = true;
-        public string ApiBaseUrl { get; set; } = "http://3.24.250.195";
+        public string ApiBaseUrl { get; set; } = "http://app.parallelsystems.com.au";
         public string TrackerApiKey { get; set; } = "TzuOp6FOUBaRuRtHX8/krK3ztrxY/OmSIowsJMdnso/rcXvWtdaQEP5Ee86FQcjx";
         public int SamplingIntervalSeconds { get; set; } = 5;
         public int CheckpointIntervalSeconds { get; set; } = 60;

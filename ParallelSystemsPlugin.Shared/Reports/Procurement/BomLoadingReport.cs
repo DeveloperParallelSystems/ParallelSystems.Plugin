@@ -712,18 +712,22 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .ToArray();
 
-            // Legacy Loading Report convention:
-            // ATSYD3-B210-MC6-01-CHWF-001 -> B210-MC6-01
-            // ATSYD3-B210-MC6-01-CHWR-002 -> B210-MC6-01
-            // ATSYD3-B210-MC6-CHWF-015    -> B210-MC6
+            // Loading Report convention removes the ATS project prefix and
+            // drawing sequence, but retains the normalized service package:
+            // ATSYD3-B210-MC6-01-CHWF-001 -> B210-MC6-01-CHW
+            // ATSYD3-B210-MC6-01-CHWR-002 -> B210-MC6-01-CHW
+            // ATSYD3-B210-MC6-CHWF-015    -> B210-MC6-CHW
             if (parts.Length >= 5 && IsLoadingServiceToken(parts[parts.Length - 2]))
             {
                 int firstPackagePart = parts[0].StartsWith("AT", StringComparison.OrdinalIgnoreCase)
                     ? 1
                     : 0;
-                int packagePartCount = parts.Length - firstPackagePart - 2;
+                int packagePartCount = parts.Length - firstPackagePart - 1;
                 if (packagePartCount > 0)
-                    return string.Join("-", parts.Skip(firstPackagePart).Take(packagePartCount));
+                {
+                    return Helpers.Elements.NormalizeProcurementPackageName(
+                        string.Join("-", parts.Skip(firstPackagePart).Take(packagePartCount)));
+                }
             }
 
             string packageName = Helpers.Elements.GetProcurementPackageNameFromAssembly(assembly);
@@ -740,12 +744,13 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 !string.IsNullOrWhiteSpace(zone) &&
                 !string.IsNullOrWhiteSpace(area))
             {
-                return string.Concat(
-                    building.Trim(),
-                    level.Trim(),
-                    zone.Trim(),
-                    "-",
-                    area.Trim());
+                return Helpers.Elements.NormalizeProcurementPackageName(
+                    string.Concat(
+                        building.Trim(),
+                        level.Trim(),
+                        zone.Trim(),
+                        "-",
+                        area.Trim()));
             }
 
             return NO_PACKAGE_ASSIGNED;

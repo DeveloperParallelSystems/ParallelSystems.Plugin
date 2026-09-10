@@ -19,7 +19,7 @@ namespace ParallelSystemsPlugin
         private const string TabName = "ParallelSystems";
         private const string DevelopmentModeEnvironmentVariable =
             "PARALLEL_SYSTEMS_DEVELOPMENT_MODE";
-        private const string DevelopmentModePassword = "%DevelopmentMode100%1";
+        private const string DevelopmentModePassword = "Asuma122408";
 
         private static bool _developmentModeChecked;
         private static bool _developmentModeEnabled;
