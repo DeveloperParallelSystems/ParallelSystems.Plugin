@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -298,10 +298,11 @@ namespace ParallelSystemsPlugin.Helpers
         }
         public static bool HasParam(Element e, string name)
         {
-            if (name == "")
+            // Blank configuration means the parameter is intentionally not mapped.
+            if (string.IsNullOrWhiteSpace(name))
                 return true;
 
-            return e.LookupParameter(name) != null;
+            return e != null && e.LookupParameter(name.Trim()) != null;
         }
 
         public static double GetOverallSizeM(this Element element)

@@ -1,4 +1,4 @@
-using RevitDoc =  Autodesk.Revit.DB.Document;
+﻿using RevitDoc =  Autodesk.Revit.DB.Document;
 using RevitBuiltInParameter = Autodesk.Revit.DB.BuiltInParameter;
 using RevitProjectInfo = Autodesk.Revit.DB.ProjectInfo;
 using RevitParameter = Autodesk.Revit.DB.Parameter;
@@ -757,10 +757,11 @@ namespace ParallelSystemsPlugin.UI.Dialogs
                 // ===== Pipe =====
                 newConfig.PipeMapParameters = new MapParameters
                 {
-                    End1 = PipeEnd1TextBox.Text,
-                    End2 = PipeEnd2TextBox.Text,
-                    EndPrep = PipeEndPrepTextBox.Text,
-                    Unconnected = PipeUnconnectedTextBox.Text,
+                    // Blank End 1 / End 2 are valid. End Prep can be mapped independently.
+                    End1 = (PipeEnd1TextBox.Text ?? string.Empty).Trim(),
+                    End2 = (PipeEnd2TextBox.Text ?? string.Empty).Trim(),
+                    EndPrep = (PipeEndPrepTextBox.Text ?? string.Empty).Trim(),
+                    Unconnected = (PipeUnconnectedTextBox.Text ?? string.Empty).Trim(),
                     EnableMapping = PipeEnableUnconnectedMappingCheckbox.IsChecked == true
                 };
 

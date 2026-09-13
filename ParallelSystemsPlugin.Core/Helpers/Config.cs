@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using ParallelSystemsPlugin.Models;
 using ParallelSystemsPlugin.Models.Configs;
 using System;
@@ -344,28 +344,28 @@ namespace ParallelSystemsPlugin.Helpers
 
             List<string> parameters = new List<string>();
 
-            if (!string.IsNullOrEmpty(end1))
-                parameters.Add(end1);
-            if (!string.IsNullOrEmpty(end2))
-                parameters.Add(end2);
-            if (!string.IsNullOrEmpty(endPrep))
-                parameters.Add(endPrep);
-            if (!string.IsNullOrEmpty(headerND))
-                parameters.Add(headerND);
-            if (!string.IsNullOrEmpty(dryParam))
-                parameters.Add(dryParam);
-            if (!string.IsNullOrEmpty(wetParam))
-                parameters.Add(wetParam);
-            if (!string.IsNullOrEmpty(claddingWeightParam))
-                parameters.Add(claddingWeightParam);
-            if (!string.IsNullOrEmpty(insulationWeightParam))
-                parameters.Add(insulationWeightParam);
-            if (!string.IsNullOrEmpty(fluidWeightParam))
-                parameters.Add(fluidWeightParam);
-            if (!string.IsNullOrEmpty(totalWeightParam))
-                parameters.Add(totalWeightParam);
-            if (!string.IsNullOrEmpty(computedOverallSizeParam))
-                parameters.Add(computedOverallSizeParam);
+            if (!string.IsNullOrWhiteSpace(end1))
+                parameters.Add(end1.Trim());
+            if (!string.IsNullOrWhiteSpace(end2))
+                parameters.Add(end2.Trim());
+            if (!string.IsNullOrWhiteSpace(endPrep))
+                parameters.Add(endPrep.Trim());
+            if (!string.IsNullOrWhiteSpace(headerND))
+                parameters.Add(headerND.Trim());
+            if (!string.IsNullOrWhiteSpace(dryParam))
+                parameters.Add(dryParam.Trim());
+            if (!string.IsNullOrWhiteSpace(wetParam))
+                parameters.Add(wetParam.Trim());
+            if (!string.IsNullOrWhiteSpace(claddingWeightParam))
+                parameters.Add(claddingWeightParam.Trim());
+            if (!string.IsNullOrWhiteSpace(insulationWeightParam))
+                parameters.Add(insulationWeightParam.Trim());
+            if (!string.IsNullOrWhiteSpace(fluidWeightParam))
+                parameters.Add(fluidWeightParam.Trim());
+            if (!string.IsNullOrWhiteSpace(totalWeightParam))
+                parameters.Add(totalWeightParam.Trim());
+            if (!string.IsNullOrWhiteSpace(computedOverallSizeParam))
+                parameters.Add(computedOverallSizeParam.Trim());
 
             string message = "";
             int count = 0;

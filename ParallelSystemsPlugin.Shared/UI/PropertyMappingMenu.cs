@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -46,13 +46,18 @@ namespace ParallelSystemPlugin.UI
             var fittingsConfigs = ParallelSystemsPlugin.Configs.AppConfig.CurrentConfig.FittingsMapParameters;
             // ===== PIPE =====
             {
-                string mapPipeToolTip = $"Set {pipeConfigs.End1}, {pipeConfigs.End2}, and {pipeConfigs.EndPrep} on all pipes in the active view.";
+                string pipeMapParameters = ParallelSystemsPlugin.Helpers.Config.BuildMapParametersConfig(pipeConfigs, false, false);
+                string mapPipeToolTip = string.IsNullOrWhiteSpace(pipeMapParameters)
+                    ? "No Pipe End Prep mapping parameters are configured."
+                    : $"Set {pipeMapParameters} on pipes in the active view. End 1, End 2, and End Prep are independent mappings.";
                 var map = MakeButton<Commands.MapPipesCommand>(
                     "PS_MapPipes", "Map Pipe End Prep",
                     mapPipeToolTip,
                     longDesc: null, iconBase: "MapPipes", asmPath, asmDir);
 
-                string clearPipeToolTip = $"Clear {pipeConfigs.End1}, {pipeConfigs.End2}, and {pipeConfigs.EndPrep} on all pipes in the active view.";
+                string clearPipeToolTip = string.IsNullOrWhiteSpace(pipeMapParameters)
+                    ? "No Pipe End Prep mapping parameters are configured."
+                    : $"Clear {pipeMapParameters} on pipes in the active view.";
                 var clr = MakeButton<Commands.ClearPipesCommand>(
                     "PS_ClearPipes", "Clear Pipe End Prep",
                     clearPipeToolTip,

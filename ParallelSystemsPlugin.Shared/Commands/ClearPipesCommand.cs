@@ -1,4 +1,4 @@
-using Autodesk.Revit.Attributes;
+﻿using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using ParallelSystemPlugin.UI; // ProgressWindow
@@ -45,10 +45,21 @@ namespace ParallelSystemPlugin.Commands
                 return Result.Succeeded;
             }
 
-            string end1 = AppConfig.CurrentConfig.PipeMapParameters.End1;
-            string end2 = AppConfig.CurrentConfig.PipeMapParameters.End2;
-            string endPrep = AppConfig.CurrentConfig.PipeMapParameters.EndPrep;
+            var pipeConfig = AppConfig.CurrentConfig.PipeMapParameters;
+            string end1 = (pipeConfig?.End1 ?? string.Empty).Trim();
+            string end2 = (pipeConfig?.End2 ?? string.Empty).Trim();
+            string endPrep = (pipeConfig?.EndPrep ?? string.Empty).Trim();
 
+            if (string.IsNullOrWhiteSpace(end1) &&
+                string.IsNullOrWhiteSpace(end2) &&
+                string.IsNullOrWhiteSpace(endPrep))
+            {
+                AppDialog.Info(
+                    uiapp,
+                    "Pipe End Prep",
+                    "No pipe mapping parameters are configured, so there is nothing to clear.");
+                return Result.Succeeded;
+            }
 
             var result = AppDialog.Show(
                "Confirm Clear",
@@ -114,7 +125,10 @@ namespace ParallelSystemPlugin.Commands
 
         private static int ClearParam(Element e, string paramName)
         {
-            Parameter p = e.LookupParameter(paramName);
+            if (e == null || string.IsNullOrWhiteSpace(paramName))
+                return 0;
+
+            Parameter p = e.LookupParameter(paramName.Trim());
             if (p == null) return 0;
 
             try

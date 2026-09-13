@@ -78,12 +78,15 @@ The ParallelSystems ribbon is created when Revit starts. Protected commands beco
 
 - Processes pipe elements visible in the active view.
 - Reads the connected elements at both pipe ends.
-- Writes the configured End 1, End 2, and Pipe End Prep parameters.
+- Writes whichever End 1, End 2, and Pipe End Prep parameters are configured. Each output is optional and works independently; blank fields are ignored.
 - Uses the configured mapping table, ignored-component rules, and unconnected value.
+- Before changing any pipe, checks that every configured output is a writable Text instance parameter on all visible pipes.
+- If a configured parameter is missing, you can confirm creation of a Text instance parameter bound to Pipes. If a compatible project parameter already exists without a Pipes binding, the command can add Pipes to that binding.
+- Cancels without changing pipe values when a configured parameter is only partially available, non-Text, read-only, or type-bound. Newly created or updated bindings are checked again before mapping continues.
 
 **Clear Pipe End Prep**
 
-- Clears the configured pipe End 1, End 2, and Pipe End Prep values from visible pipes in the active view.
+- Clears only the configured pipe End 1, End 2, and Pipe End Prep values from visible pipes in the active view. Blank mappings are ignored; if all three mappings are blank, the command reports that there is nothing to clear.
 
 **Map Fittings End Prep**
 
@@ -219,6 +222,7 @@ The Configurations window contains six active tabs.
 **Pipe End Prep**
 
 - Map Parameters: End 1, End 2, Pipe End Prep, unconnected value, and Enable Mapping.
+- End 1, End 2, and Pipe End Prep are independent optional mappings. Leading and trailing spaces are removed when the configuration is saved.
 - Ignore Components: name-contains rules.
 - Pipe End Prep: name-contains to end-prep value mapping.
 

@@ -6,6 +6,10 @@
 - Added Standard, Nominal Size, and Class/Table filters so the flange reference can be narrowed without changing its published values.
 - Added catalog-driven flange bolt-hole generation to Fabrication STEP. The exporter resolves an explicit flange standard and class/table from Revit type metadata, resolves nominal size from physical piping connectors, and requires one exact catalog row instead of guessing.
 - Bolt-hole cutters now use the configured hole count, diameter, and pitch-circle diameter, with evenly spaced holes straddling the flange centreline axes. Invalid, ambiguous, or incomplete catalog matches remain blocking rather than producing unverified geometry.
+- Updated Pipe End Prep mapping so End 1, End 2, and End Prep are independent optional outputs; blank configuration fields are ignored and saved mapping names are trimmed.
+- Added a preflight that blocks partial, non-Text, read-only, or type-bound pipe mappings before any values are changed.
+- Added a confirmation flow that creates missing Text instance parameters for Pipes or adds Pipes to a compatible existing project-parameter binding, then verifies the mappings again before continuing.
+- Updated Clear Pipe End Prep and ribbon tooltips to act on and describe only the configured pipe mappings.
 - Updated the Fabrication documentation and iterated product, assembly, file, informational, splash, tracker fallback, User Manual, developer notes, and changelog versions to 1.17.10.
 
 ## 1.17.9 - Package-Specific Excel Worksheets (Internal / Unreleased)
