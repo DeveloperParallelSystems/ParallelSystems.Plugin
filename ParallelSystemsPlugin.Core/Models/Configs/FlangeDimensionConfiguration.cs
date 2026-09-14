@@ -4,10 +4,9 @@ using System.Collections.Generic;
 namespace ParallelSystemsPlugin.Models.Configs
 {
     /// <summary>
-    /// One flange drilling and minimum-thickness configuration from the
-    /// Reece flange dimension guide. Values are strings so unavailable
-    /// combinations and dual imperial/metric dimensions remain faithful to
-    /// the published source.
+    /// One built-in flange drilling configuration used by fabrication
+    /// geometry. Values remain strings so unavailable combinations and dual
+    /// imperial/metric dimensions preserve the legacy catalog exactly.
     /// </summary>
     public sealed class FlangeDimensionConfiguration
     {

@@ -11,9 +11,9 @@
         Title="Configurations"
         WindowStartupLocation="CenterScreen"
         Height="980"
-        Width="1040"
+        Width="1220"
         MinHeight="820"
-        MinWidth="920">
+        MinWidth="1040">
 
     <Window.Resources>
         <converterNs:RevitColorToBrushConverter x:Key="RevitColorToBrushConverter"/>
@@ -717,31 +717,35 @@
 
                                 <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,12,0">
                                     <CheckBox x:Name="ChkBomAssemblyRegister" FontSize="15" Margin="5"
-                  Content="BOM-ASSEMBLY REGISTER" Click="ReportCheckBox_Click"/>
+                  Content="BOM-ASSEMBLY REGISTER"/>
                                     <CheckBox x:Name="ChkBomCutList" FontSize="15" Margin="5"
-                  Content="BOM-CUT LIST REPORT" Click="ReportCheckBox_Click"/>
+                  Content="BOM-CUT LIST REPORT"/>
                                     <CheckBox x:Name="ChkBomFittingReport" FontSize="15" Margin="5"
-                  Content="BOM-FITTING REPORT" Click="ReportCheckBox_Click"/>
+                  Content="BOM-FITTING REPORT"/>
                                     <CheckBox x:Name="ChkBomLoadingReport" FontSize="15" Margin="5"
-                  Content="BOM-LOADING REPORT" Click="ReportCheckBox_Click"/>
+                  Content="BOM-LOADING REPORT"/>
                                     <CheckBox x:Name="ChkBomPipeReport" FontSize="15" Margin="5"
-                  Content="BOM-PIPE REPORT" Click="ReportCheckBox_Click"/>
+                  Content="BOM-PIPE REPORT"/>
                                     <CheckBox x:Name="ChkLabelReport" FontSize="15" Margin="5"
-                  Content="LABEL REPORT" Click="ReportCheckBox_Click"/>
+                  Content="LABEL REPORT"/>
                                     <CheckBox x:Name="ChkBomFieldMaterialReport" FontSize="15" Margin="5"
-                  Content="BOM-FIELD MATERIAL REPORT" Click="ReportCheckBox_Click"/>
+                  Content="BOM-FIELD MATERIAL REPORT"/>
                                     <CheckBox x:Name="ChkBomAccessoryReport" FontSize="15" Margin="5"
-                  Content="BOM-ACCESSORY REPORT" Click="ReportCheckBox_Click"/>
+                  Content="BOM-ACCESSORY REPORT"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
                                     <Separator Margin="5,10,5,10"/>
-                                    <CheckBox x:Name="ChkIncludeSiteMeasure" FontSize="15" Margin="5"
-                  Content="INCLUDE SITE MEASURE"/>
+                                        <CheckBox x:Name="ChkIncludeSiteMeasure" FontSize="15" Margin="5"
+                                                  Content="INCLUDE SITE MEASURE"/>
+                                        <CheckBox x:Name="ChkGroupByPackage" FontSize="15" Margin="5"
+                                                  Content="GROUP BY PACKAGE"
+                                                  ToolTip="When enabled, the first Excel worksheet keeps separate summary rows for each package. Package worksheets are always kept separate."/>
+                                        <CheckBox x:Name="ChkIncludeWeld" FontSize="15" Margin="5"
+                                                  Content="INCLUDE WELD"
+                                                  ToolTip="Includes weld rows in every selected report where weld filtering applies."/>
 
-                                    
-
-                                    <TextBlock Text="OUTPUT FORMAT" FontSize="15" FontWeight="SemiBold" Margin="5,8,5,2"/>
+                                        <TextBlock Text="OUTPUT FORMAT" FontSize="15" FontWeight="SemiBold" Margin="5,8,5,2"/>
                                     <StackPanel Orientation="Horizontal" Margin="5">
                                         <RadioButton x:Name="RdoExportExcel" GroupName="ReportOutputFormat"
                                                      Content="EXCEL" FontSize="15" Margin="0,0,24,0" IsChecked="True"/>
@@ -750,26 +754,6 @@
                                     </StackPanel>
                                 </StackPanel>
 
-                                <Border x:Name="FittingReportOptionsPanel"
-                                        Grid.Row="0"
-                                        Grid.Column="1"
-                                        Margin="0,3,0,3"
-                                        Padding="12"
-                                        BorderBrush="#CBD5E1"
-                                        BorderThickness="1"
-                                        Background="#F8FAFC"
-                                        Visibility="Collapsed">
-                                    <StackPanel>
-                                        <TextBlock Text="Fitting Report Options"
-                                                   FontSize="15"
-                                                   FontWeight="SemiBold"
-                                                   Margin="0,0,0,12"/>
-                                        <CheckBox x:Name="ChkIncludeWeldInFittingReport"
-                                                  Content="Include Weld"
-                                                  FontSize="15"
-                                                  Margin="2"/>
-                                    </StackPanel>
-                                </Border>
                                 </Grid>
                                 </ScrollViewer>
                             </GroupBox>
@@ -783,6 +767,7 @@
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
@@ -795,56 +780,74 @@
                             BorderThickness="1"
                             CornerRadius="4">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-
                             <StackPanel>
-                                <TextBlock Text="Flange Configurations"
+                                <TextBlock Text="Fabrication configurations"
                                            FontSize="18"
                                            FontWeight="SemiBold"
                                            Foreground="#1E3A5F"/>
                                 <TextBlock Margin="0,4,0,0"
                                            Foreground="#475569"
                                            TextWrapping="Wrap"
-                                           Text="Published flange drilling and minimum-thickness values. These configurations are read-only for now; the data model is ready for a future editor."/>
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="1"
-                                        Orientation="Horizontal"
-                                        VerticalAlignment="Center"
-                                        Margin="20,0,0,0">
-                                <StackPanel Margin="0,0,12,0">
-                                    <TextBlock Text="Standard"
-                                               Margin="0,0,0,4"
-                                               FontWeight="SemiBold"/>
-                                    <ComboBox x:Name="FabricationStandardFilter"
-                                              Width="155"
-                                              SelectionChanged="FabricationFilter_SelectionChanged"/>
-                                </StackPanel>
-                                <StackPanel Margin="0,0,12,0">
-                                    <TextBlock Text="Nominal size"
-                                               Margin="0,0,0,4"
-                                               FontWeight="SemiBold"/>
-                                    <ComboBox x:Name="FabricationSizeFilter"
-                                              Width="125"
-                                              SelectionChanged="FabricationFilter_SelectionChanged"/>
-                                </StackPanel>
-                                <StackPanel>
-                                    <TextBlock Text="Class / Table"
-                                               Margin="0,0,0,4"
-                                               FontWeight="SemiBold"/>
-                                    <ComboBox x:Name="FabricationClassFilter"
-                                              Width="145"
-                                              SelectionChanged="FabricationFilter_SelectionChanged"/>
-                                </StackPanel>
+                                           Text="Choose a component type, review its published reference dimensions, and use the diagram to identify each table symbol. Reference data is read-only in this release."/>
                             </StackPanel>
                         </Grid>
                     </Border>
 
-                    <DataGrid x:Name="FabricationFlangeGrid"
-                              Grid.Row="1"
+                    <Border Grid.Row="1"
+                            Padding="12,10"
+                            Margin="0,0,0,10"
+                            Background="White"
+                            BorderBrush="#CBD5E1"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Margin="0,0,16,0">
+                                <TextBlock Text="Configuration type"
+                                           Margin="0,0,0,4"
+                                           FontWeight="SemiBold"/>
+                                <ComboBox x:Name="FabricationTypeSelector"
+                                          Width="170"
+                                          SelectionChanged="FabricationType_SelectionChanged"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="0,0,16,0">
+                                <TextBlock Text="Reference table"
+                                           Margin="0,0,0,4"
+                                           FontWeight="SemiBold"/>
+                                <ComboBox x:Name="FabricationSectionSelector"
+                                          Width="300"
+                                          SelectionChanged="FabricationSection_SelectionChanged"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Margin="0,0,12,0">
+                                <TextBlock Text="Nominal size (DN)"
+                                           Margin="0,0,0,4"
+                                           FontWeight="SemiBold"/>
+                                <ComboBox x:Name="FabricationSizeFilter"
+                                          Width="140"
+                                          SelectionChanged="FabricationFilter_SelectionChanged"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="3"
+                                       Margin="20,0,0,0"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Foreground="#64748B"
+                                       Text="Atlas Steels - July 2020"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="330"/>
+                        </Grid.ColumnDefinitions>
+
+                        <DataGrid x:Name="FabricationFlangeGrid"
                               AutoGenerateColumns="False"
                               IsReadOnly="True"
                               CanUserAddRows="False"
@@ -866,55 +869,80 @@
                               SelectionUnit="FullRow"
                               HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Auto">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Standard"
-                                                Binding="{Binding Standard}"
-                                                Width="125"/>
-                            <DataGridTextColumn Header="Nominal (mm)"
-                                                Binding="{Binding NominalSizeMm}"
-                                                Width="95"/>
-                            <DataGridTextColumn Header="Class / Table"
-                                                Binding="{Binding ClassOrTable}"
-                                                Width="105"/>
-                            <DataGridTextColumn Header="Outside Ø (mm)"
-                                                Binding="{Binding OutsideDiameterMm}"
-                                                Width="105"/>
-                            <DataGridTextColumn Header="PCD (mm)"
-                                                Binding="{Binding PitchCircleDiameterMm}"
-                                                Width="90"/>
-                            <DataGridTextColumn Header="Holes"
-                                                Binding="{Binding NumberOfHoles}"
-                                                Width="65"/>
-                            <DataGridTextColumn Header="Hole Ø"
-                                                Binding="{Binding HoleDiameter}"
-                                                Width="145"/>
-                            <DataGridTextColumn Header="Bolt Ø"
-                                                Binding="{Binding BoltDiameter}"
-                                                Width="145"/>
-                            <DataGridTextColumn Header="Cast iron min. (mm)"
-                                                Binding="{Binding CastIronThicknessMm}"
-                                                Width="130"/>
-                            <DataGridTextColumn Header="Ductile iron min. (mm)"
-                                                Binding="{Binding DuctileIronThicknessMm}"
-                                                Width="140"/>
-                            <DataGridTextColumn Header="Copper alloy min. (mm)"
-                                                Binding="{Binding CopperAlloyThicknessMm}"
-                                                Width="145"/>
-                            <DataGridTextColumn Header="Steel min. (mm)"
-                                                Binding="{Binding SteelThicknessMm}"
-                                                Width="115"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
+                        </DataGrid>
 
-                    <Grid Grid.Row="2" Margin="2,10,2,0">
+                        <Border Grid.Column="1"
+                                Margin="12,0,0,0"
+                                Padding="12"
+                                Background="White"
+                                BorderBrush="#CBD5E1"
+                                BorderThickness="1"
+                                CornerRadius="4">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <StackPanel>
+                                    <TextBlock x:Name="FabricationReferenceCaptionTextBlock"
+                                               Text="Dimension reference"
+                                               FontSize="15"
+                                               FontWeight="SemiBold"
+                                               Foreground="#1E3A5F"/>
+                                    <TextBlock Margin="0,3,0,8"
+                                               Foreground="#64748B"
+                                               TextWrapping="Wrap"
+                                               Text="Match the letter in a column header to the Atlas flange diagram."/>
+                                </StackPanel>
+
+                                <Border Grid.Row="1"
+                                        Background="#FAFAFA"
+                                        BorderBrush="#E2E8F0"
+                                        BorderThickness="1"
+                                        Padding="4">
+                                    <Image x:Name="FabricationReferenceImage"
+                                           Stretch="Uniform"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           ToolTip="Atlas Steels ASME/ANSI flange dimension diagrams"/>
+                                </Border>
+
+                                <TextBlock x:Name="FabricationReferenceLegendTextBlock"
+                                           Grid.Row="2"
+                                           Margin="0,8,0,8"
+                                           FontSize="11"
+                                           Foreground="#64748B"
+                                           TextWrapping="Wrap"
+                                           Text="Select a reference table to see its matching diagram and symbols."/>
+
+                                <StackPanel Grid.Row="3">
+                                    <TextBlock TextWrapping="Wrap" FontSize="12">
+                                        <Hyperlink NavigateUri="https://atlassteels.com.au/wp-content/uploads/2021/12/Atlas-Steels-Product-Reference-Manual-Section-5-Pages-11-to-17-1.pdf"
+                                                   RequestNavigate="FabricationReferenceLink_RequestNavigate">Open the Atlas Steels website reference</Hyperlink>
+                                    </TextBlock>
+                                    <Button Content="Open offline reference PDF"
+                                            Margin="0,8,0,0"
+                                            Padding="10,5"
+                                            HorizontalAlignment="Left"
+                                            Click="OpenOfflineFabricationReference_Click"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <Grid Grid.Row="3" Margin="2,10,2,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Foreground="#64748B"
+                        <TextBlock x:Name="FabricationReferenceNoteTextBlock"
+                                   Foreground="#64748B"
                                    FontSize="12"
                                    TextWrapping="Wrap"
-                                   Text="Guide notes: AS 4087 PN14/PN16 drilling aligns with AS 2129 Table D; PN21/PN35 aligns with Tables F/H. ISO drilling is compatible with AS/NZS 4331, BS 4504 and DIN 2533. ANSI B16.5 Class 150 drilling is compatible with ANSI B16.1 Class 125. For 50 mm ISO, cast/ductile iron uses 155 mm OD; for 65 mm ISO, steel flanges use 8 holes."/>
+                                   Text="Displayed columns follow the Atlas ASME B16.5 headings. This presentation update does not change Fabrication STEP calculations or generated geometry."/>
                         <TextBlock x:Name="FabricationResultCountTextBlock"
                                    Grid.Column="1"
                                    Margin="20,0,0,0"

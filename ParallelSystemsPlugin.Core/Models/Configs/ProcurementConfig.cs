@@ -16,13 +16,18 @@ namespace ParallelSystemsPlugin.Models.Configs
         public bool BomAssemblyRegister { get; set; } = true;
         public bool BomCutList { get; set; } = true;
         public bool BomFittingReport { get; set; } = true;
+        public bool IncludeWeld { get; set; } = false;
+        // Retained for compatibility with configurations saved before IncludeWeld
+        // became one shared procurement-report setting.
         public bool IncludeWeldInFittingReport { get; set; } = false;
         public bool BomLoadingReport { get; set; } = true;
         public bool BomPipeReport { get; set; } = true;
         public bool LabelReport { get; set; } = true;
         public bool BomFieldMaterialReport { get; set; } = true;
+        public bool IncludeWeldInFieldMaterialReport { get; set; } = false;
         public bool BomAccessoryReport { get; set; } = true;
         public bool IncludeSiteMeasure { get; set; } = false;
+        public bool GroupByPackage { get; set; } = false;
         public bool ExportReportsToExcel { get; set; } = true;
 
         // ===== BOM - CUT LIST (units: mm unless otherwise specified) =====

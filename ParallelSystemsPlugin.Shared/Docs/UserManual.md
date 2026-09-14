@@ -13,8 +13,8 @@ The public plugin version is 1.17.10. The V2 label used in monitoring and deploy
 
 ## What Is New in 1.17.10
 
-- Added a read-only flange reference under `Configurations > Fabrication`, including standard, nominal size, class/table, flange outside diameter, pitch-circle diameter, hole count, hole and bolt diameter, and material-specific minimum thicknesses.
-- Added Standard, Nominal Size, and Class/Table filters to make the flange reference easier to review.
+- Added a read-only Atlas Steels flange reference under `Configurations > Fabrication`, covering six ASME B16.5 classes and AS 2129 Tables D, E, F, and H.
+- Added configuration-type, reference-table, and nominal-size selectors. The table shows only the applicable nominal-size and dimension columns and swaps between the ASME/ANSI and AS 2129 diagrams. Website and packaged offline copies of the source manual are available in the same view.
 - Fabrication STEP now generates flange bolt holes from an exact catalog match using the flange standard and class/table in Revit metadata and the nominal size reported by its physical piping connectors.
 - Bolt holes use the catalog count, diameter, and pitch-circle diameter and are evenly spaced while straddling the flange centreline axes. Missing or ambiguous configuration data blocks unverified hole generation.
 
@@ -32,7 +32,7 @@ The current build also includes the following 1.17.8 changes:
 - Added Development Mode enable/disable commands and an internal Word guide.
 - A successful normal-mode Reconnect now starts timesheet tracking and flushes the local Outbox just like successful startup authorization.
 - Procurement configuration now auto-detects Project Number and Project Name when both saved values are empty and uses a larger resizable report-settings layout.
-- Report entries can be clicked to reveal report-specific settings. Fitting Report currently provides an `Include Weld` option.
+- Procurement settings include a shared `Include Weld` option for reports where weld filtering applies.
 - Fitting Report PDF and Excel output now use Package instead of Material Grade, place `NO PACKAGE ASSIGNED` after every named package, and use `Description BOM` for an equal-size tee when available.
 - Loading Report sorts assembly lengths from smallest to largest within each package.
 - Company and client logo selection starts in `%ProgramData%\Parallel Systems\Images` when that folder exists. The installer places the bundled logo images there.
@@ -248,17 +248,24 @@ The Configurations window contains six active tabs.
 - Company and client logo selection starts in `%ProgramData%\Parallel Systems\Images` when that directory exists; otherwise the standard Windows file-picker location is used.
 - Publish Details: Publish Site, file name, PDF option, and image option.
 - Output Details: target folder, report date, cut-list maximum length, blade thickness, negative allowance, and reusable-offcut threshold.
-- Reports: Assembly Register, Cut List, Fitting Report, Loading Report, Pipe Report, Label Report, Field Material Report, Accessory Report, and Include Site Measure. Select Excel or PDF under Output Format.
-- Clicking a report reveals its available report-specific settings. Fitting Report currently offers `Include Weld`; when disabled, weld rows are omitted.
+- Reports: Assembly Register, Cut List, Fitting Report, Loading Report, Pipe Report, Label Report, Field Material Report, Accessory Report, Include Site Measure, and Group by Package. Select Excel or PDF under Output Format.
+- `Group by Package` affects the first worksheet of package-based Excel reports and is disabled by default. When enabled, applicable summary rows remain separated by package. When disabled, matching component rows are combined across packages and the summary omits the Package column where the report layout supports aggregation. The individual package worksheets are unchanged in either mode.
+- Pipe Report Excel workbooks always include the consolidated worksheet first and add one worksheet per package when the active view contains pipes from multiple packages. With `Group by Package` enabled, the consolidated worksheet includes a Package column and calculates each pipe requirement within its package. With the option disabled, the consolidated worksheet combines matching pipes across packages while the package worksheets remain available.
+- `Include Weld` appears directly below `Group by Package`. It is one shared setting for every report where weld filtering applies, currently Fitting Report and Field Material Report. When disabled, weld rows are omitted from those reports.
+- Elements or element types marked `DNS - DO NOT SCHEDULE` in their name or parameter values are excluded from every procurement report.
 - Fitting Report groups PDF and Excel results by resolved package. Named packages are ordered first and `NO PACKAGE ASSIGNED` is always last. Equal-size tees use their `Description BOM` value when populated.
 - Loading Report orders rows within each package by length from smallest to largest.
-- Fitting Report, Accessory Report, Loading Report, and Cut List Excel workbooks retain their complete consolidated worksheet first, followed by one worksheet per package. Assembly Register does the same when package grouping is active; frame-grouped Assembly Registers remain unchanged. Each package worksheet retains the report layout and contains only that package's data and totals.
+- Fitting Report, Accessory Report, Loading Report, Cut List, Field Material Report, Label Report, Pipe Report, and Assembly Register Excel workbooks retain their complete consolidated worksheet first, followed by one worksheet per package when multiple packages are represented. Frame-grouped Assembly Registers also receive package worksheets. Each package worksheet retains the report layout and contains only that package's data and totals.
+- Excel client logos are right-aligned inside the report-title span with a small inset so the logo edge stays visually aligned with the title block.
+- Pipe Report uses the same consolidated-first, package-worksheets-after layout when more than one pipe package is present. Its offcut column is labeled `REQUIRED OFFCUT`.
 - Package names become worksheet names. Names are adjusted only when Excel requires invalid-character replacement, the 31-character limit, or a uniqueness suffix. `NO PACKAGE ASSIGNED` is the final package worksheet.
 
 **Fabrication**
 
-- Displays the published flange configuration reference used by Fabrication STEP, including drilling and minimum-thickness values.
-- Filters the reference by Standard, Nominal Size, and Class/Table.
+- Displays Class 150, 300, 600, 900, 1500, and 2500 flanges to ASME B16.5 and Table D, E, F, and H flanges to AS 2129.
+- Filters the reference by configuration type (currently Flange), reference table, and nominal size.
+- Shows only nominal-size and dimension fields: ASME/ANSI headings for ASME tables and the distinct AS 2129 table-flange headings for Table D/E/F/H. Weight columns are intentionally omitted.
+- Switches the adjacent diagram to match the selected table family and provides both a website link and a packaged offline PDF.
 - Is read-only in version 1.17.10. The displayed values cannot currently be edited or overridden from the Configurations window.
 
 **Tools**

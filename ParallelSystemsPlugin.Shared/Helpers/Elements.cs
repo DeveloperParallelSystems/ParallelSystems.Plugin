@@ -396,6 +396,92 @@ namespace ParallelSystemsPlugin.Helpers
             }
         }
 
+        /// <summary>
+        /// Returns true when an element or its type is explicitly marked
+        /// "DNS - DO NOT SCHEDULE". All procurement reports use this gate.
+        /// </summary>
+        public static bool IsDoNotSchedule(Document doc, Element element)
+        {
+            if (element == null)
+                return false;
+
+            if (ContainsDoNotScheduleMarker(element))
+                return true;
+
+            Element type = doc == null ? null : doc.GetElement(element.GetTypeId());
+            if (ContainsDoNotScheduleMarker(type))
+                return true;
+
+            if (doc != null &&
+                element.AssemblyInstanceId != ElementId.InvalidElementId)
+            {
+                Element assembly = doc.GetElement(element.AssemblyInstanceId);
+                if (ContainsDoNotScheduleMarker(assembly))
+                    return true;
+
+                Element assemblyType = assembly == null
+                    ? null
+                    : doc.GetElement(assembly.GetTypeId());
+                if (ContainsDoNotScheduleMarker(assemblyType))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool ContainsDoNotScheduleMarker(Element element)
+        {
+            if (element == null)
+                return false;
+
+            var candidates = new List<string>
+            {
+                element.Name ?? ""
+            };
+
+            FamilyInstance familyInstance = element as FamilyInstance;
+            if (familyInstance?.Symbol != null)
+            {
+                candidates.Add(familyInstance.Symbol.Name ?? "");
+                candidates.Add(familyInstance.Symbol.FamilyName ?? "");
+            }
+
+            foreach (Parameter parameter in element.Parameters)
+            {
+                if (parameter == null)
+                    continue;
+
+                try
+                {
+                    string value = parameter.StorageType == StorageType.String
+                        ? parameter.AsString()
+                        : parameter.AsValueString();
+                    candidates.Add(value ?? "");
+                }
+                catch
+                {
+                    // Continue checking the remaining readable parameters.
+                }
+            }
+
+            return candidates.Any(HasDoNotScheduleText);
+        }
+
+        private static bool HasDoNotScheduleText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            var compact = new StringBuilder();
+            foreach (char character in value)
+            {
+                if (char.IsLetterOrDigit(character))
+                    compact.Append(char.ToUpperInvariant(character));
+            }
+
+            return compact.ToString().Contains("DNSDONOTSCHEDULE");
+        }
+
         public static string GetMaterialGrade(Document doc, AssemblyInstance a)
         {
             string materialGrade = "Segment Description";
@@ -470,6 +556,86 @@ namespace ParallelSystemsPlugin.Helpers
                 : assemblyName;
 
             return NormalizeProcurementPackageName(packageName);
+        }
+
+        public static string GetProcurementPackageNameFromAssemblyName(
+            string assemblyName)
+        {
+            assemblyName = (assemblyName ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(assemblyName))
+                return "";
+
+            int lastDash = assemblyName.LastIndexOf('-');
+            string packageName = lastDash > 0
+                ? assemblyName.Substring(0, lastDash).Trim()
+                : assemblyName;
+
+            return NormalizeProcurementPackageName(packageName);
+        }
+
+        /// <summary>
+        /// Resolves one canonical procurement package name for every report.
+        /// The owning assembly name is authoritative, matching Accessory Report.
+        /// Project fields and readable package parameters are fallbacks for loose items.
+        /// </summary>
+        public static string GetStandardProcurementPackageName(
+            Document doc,
+            Element element)
+        {
+            if (doc == null || element == null)
+                return "";
+
+            AssemblyInstance assembly = element as AssemblyInstance;
+            if (assembly == null &&
+                element.AssemblyInstanceId != ElementId.InvalidElementId)
+            {
+                assembly = doc.GetElement(element.AssemblyInstanceId) as AssemblyInstance;
+            }
+
+            string package = GetProcurementPackageNameFromAssembly(assembly);
+            if (!string.IsNullOrWhiteSpace(package))
+                return package;
+
+            package = GetProcurementPackageNameFromAssemblyName(
+                GetStringParam(element, "Assembly Name"));
+            if (!string.IsNullOrWhiteSpace(package))
+                return package;
+
+            Element type = doc.GetElement(element.GetTypeId());
+            string building = FirstNonEmpty(
+                GetStringParam(element, "PS_Building"),
+                GetStringParam(type, "PS_Building"));
+            string level = FirstNonEmpty(
+                GetStringParam(element, "PS_Level"),
+                GetStringParam(type, "PS_Level"));
+            string zone = FirstNonEmpty(
+                GetStringParam(element, "PS_Zone"),
+                GetStringParam(type, "PS_Zone"));
+            string area = FirstNonEmpty(
+                GetStringParam(element, "PS_Area"),
+                GetStringParam(type, "PS_Area"));
+
+            if (!string.IsNullOrWhiteSpace(building) &&
+                !string.IsNullOrWhiteSpace(level) &&
+                !string.IsNullOrWhiteSpace(zone) &&
+                !string.IsNullOrWhiteSpace(area))
+            {
+                return NormalizeProcurementPackageName(
+                    string.Concat(
+                        building.Trim(),
+                        level.Trim(),
+                        zone.Trim(),
+                        "-",
+                        area.Trim()));
+            }
+
+            return GetProcurementPackageName(doc, element);
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            return (values ?? new string[0])
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
         }
 
         public static string NormalizeProcurementPackageName(string packageName)

@@ -660,6 +660,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .OfClass(typeof(AssemblyInstance))
                 .Cast<AssemblyInstance>()
                 .Where(a => !IsFrameAssembly(doc, a))
+                .Where(a => !Helpers.Elements.IsDoNotSchedule(doc, a))
                 .ToList();
 
             foreach (var a in assemblies.Take(1))
@@ -691,7 +692,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                 res.Add(new Row
                 {
-                    PackageName = GetLoadingPackageName(a),
+                    PackageName = GetLoadingPackageName(doc, a),
                     DrawingNumber = asmNo,
                     MaterialGrade = mat ?? "",
                     Qty = 1,
@@ -703,63 +704,15 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             return res;
         }
 
-        private static string GetLoadingPackageName(AssemblyInstance assembly)
+        private static string GetLoadingPackageName(
+            RvtDoc doc,
+            AssemblyInstance assembly)
         {
-            string assemblyName = (assembly?.Name ?? "").Trim();
-            string[] parts = assemblyName
-                .Split(new[] { '-' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => x.Trim())
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToArray();
-
-            // Loading Report convention removes the ATS project prefix and
-            // drawing sequence, but retains the normalized service package:
-            // ATSYD3-B210-MC6-01-CHWF-001 -> B210-MC6-01-CHW
-            // ATSYD3-B210-MC6-01-CHWR-002 -> B210-MC6-01-CHW
-            // ATSYD3-B210-MC6-CHWF-015    -> B210-MC6-CHW
-            if (parts.Length >= 5 && IsLoadingServiceToken(parts[parts.Length - 2]))
-            {
-                int firstPackagePart = parts[0].StartsWith("AT", StringComparison.OrdinalIgnoreCase)
-                    ? 1
-                    : 0;
-                int packagePartCount = parts.Length - firstPackagePart - 1;
-                if (packagePartCount > 0)
-                {
-                    return Helpers.Elements.NormalizeProcurementPackageName(
-                        string.Join("-", parts.Skip(firstPackagePart).Take(packagePartCount)));
-                }
-            }
-
-            string packageName = Helpers.Elements.GetProcurementPackageNameFromAssembly(assembly);
-            if (!string.IsNullOrWhiteSpace(packageName))
-                return packageName.Trim();
-
-            string building = GetStringParamInstanceOrType(assembly, "PS_Building");
-            string level = GetStringParamInstanceOrType(assembly, "PS_Level");
-            string zone = GetStringParamInstanceOrType(assembly, "PS_Zone");
-            string area = GetStringParamInstanceOrType(assembly, "PS_Area");
-
-            if (!string.IsNullOrWhiteSpace(building) &&
-                !string.IsNullOrWhiteSpace(level) &&
-                !string.IsNullOrWhiteSpace(zone) &&
-                !string.IsNullOrWhiteSpace(area))
-            {
-                return Helpers.Elements.NormalizeProcurementPackageName(
-                    string.Concat(
-                        building.Trim(),
-                        level.Trim(),
-                        zone.Trim(),
-                        "-",
-                        area.Trim()));
-            }
-
-            return NO_PACKAGE_ASSIGNED;
-        }
-
-        private static bool IsLoadingServiceToken(string value)
-        {
-            return string.Equals(value, "CHWF", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(value, "CHWR", StringComparison.OrdinalIgnoreCase);
+            string packageName = Helpers.Elements
+                .GetStandardProcurementPackageName(doc, assembly);
+            return string.IsNullOrWhiteSpace(packageName)
+                ? NO_PACKAGE_ASSIGNED
+                : packageName;
         }
 
         private static bool IsFrameAssembly(RvtDoc doc, AssemblyInstance assembly)

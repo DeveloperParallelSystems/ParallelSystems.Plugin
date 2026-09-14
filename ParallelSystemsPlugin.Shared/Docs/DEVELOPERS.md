@@ -31,7 +31,7 @@ InformationalVersion    1.17.10
 
 ## Release Focus in 1.17.10
 
-- Configuration: a read-only Fabrication tab exposes the PDF-derived flange catalog with Standard, Nominal Size, and Class/Table filters.
+- Configuration: a read-only Fabrication tab presents all six Atlas ASME B16.5 class tables and four AS 2129 table-flange tables. It builds the correct nominal-size and dimension columns for the selected table, swaps between the ASME/ANSI and AS 2129 diagrams, and resolves the packaged data, diagrams, and offline PDF beside the executing add-in before checking the shared ProgramData installer location.
 - Fabrication STEP: carbon-flange bolt-hole cutters require one exact standard/class-table/nominal-size catalog match and use its hole count, diameter, and pitch-circle diameter. Hole axes are distributed evenly with a half-pitch angular offset so they straddle the flange centreline axes.
 - Validation: missing metadata, disagreeing physical connector sizes, ambiguous catalog rows, unusable dimensions, or Boolean cutters that do not remove material remain blocking conditions rather than guessed geometry.
 - Pipe End Prep: End 1, End 2, and End Prep are optional independent outputs. Mapping preflight validates complete writable Text instance coverage, offers to create or extend compatible project-parameter bindings for Pipes, and revalidates before modifying elements.
@@ -149,7 +149,7 @@ Header ND and Detailing command classes remain in source but are not built onto 
 
 The Procurement tab provides an Excel/PDF radio choice plus stock length, blade thickness, negative allowance, and offcut-threshold inputs. New configuration defaults select Excel, exclude site-measured work, and use a 2500 mm reusable-offcut threshold.
 
-The Fabrication tab binds the immutable `FlangeDimensionConfigurationCatalog.All` reference to a read-only grid. Its Standard, Nominal Size, and Class/Table selectors filter the in-memory view only; version 1.17.10 does not persist user edits or overrides.
+The Fabrication tab maps the ASME B16.5 subset of immutable `FlangeDimensionConfigurationCatalog.All` into an Atlas-labelled, read-only reference view. Its component type, Standard, Nominal Size, and Pressure Class selectors filter the in-memory view only; version 1.17.10 does not persist user edits or overrides. This UI mapping intentionally does not alter STEP computation or geometry.
 
 The Pipe End Prep tab trims saved output names and treats blank End 1, End 2, or End Prep fields as intentionally unmapped. `MapPipesCommand` preflights each non-blank name across the active-view pipes. Partial presence, non-Text storage, read-only parameters, and type bindings block the command before its mapping transaction. Missing definitions are created through a temporary shared-parameter file with a deterministic name-derived GUID and bound as Text instance parameters to Pipes; compatible existing instance bindings are extended to include Pipes. The prior shared-parameter-file path is restored, the temporary file is removed when safe, and fresh pipe wrappers are collected for a second preflight before mapping.
 

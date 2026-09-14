@@ -63,6 +63,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     includeSiteMeasureAssemblies ||
                     !siteMeasureNames.Contains(x.AssemblyName ?? ""))
                 .Select(x => x.Instance)
+                .Where(fi => !Helpers.Elements.IsDoNotSchedule(doc, fi))
                 .Where(IsFieldMaterial)
                 .ToList();
 
@@ -80,6 +81,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                         Quantity = 1
                     };
                 })
+                .Where(x => cfg.IncludeWeld ||
+                    cfg.IncludeWeldInFieldMaterialReport ||
+                    !string.Equals(x.Category, "WELD", StringComparison.OrdinalIgnoreCase))
                 .GroupBy(x => new
                 {
                     x.PackageName,
@@ -229,7 +233,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     doc.GetElement(fieldMaterial.AssemblyInstanceId) as AssemblyInstance;
 
                 return Helpers.Elements
-                    .GetProcurementPackageNameFromAssembly(assembly);
+                    .GetStandardProcurementPackageName(doc, assembly);
             }
 
             // For loose field material, follow both connector sides to their
@@ -265,7 +269,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     return connectedPackage;
             }
 
-            return "";
+            // Last resort for a genuinely loose item: use the same standard
+            // instance/type package fallbacks as every other procurement report.
+            return Helpers.Elements.GetStandardProcurementPackageName(
+                doc,
+                fieldMaterial);
         }
 
         private static List<Pipe> GetConnectedPipesThroughVictaulicCouplings(
@@ -392,7 +400,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 doc.GetElement(element.AssemblyInstanceId) as AssemblyInstance;
 
             return Helpers.Elements
-                .GetProcurementPackageNameFromAssembly(assembly);
+                .GetStandardProcurementPackageName(doc, assembly);
         }
 
         private static List<Element> GetDirectlyConnectedElements(
@@ -955,16 +963,87 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private static void ExportExcel(ProcurementConfig cfg, List<Data> grouped, string note)
         {
+            var packageGroups = grouped
+                .GroupBy(r => r.PackageName ?? "", StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => string.IsNullOrWhiteSpace(g.Key) ? 1 : 0)
+                .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            bool hasMultiplePackages = packageGroups.Count > 1;
+            bool groupSummaryByPackage = cfg.GroupByPackage && hasMultiplePackages;
+
+            List<Data> summaryRows = groupSummaryByPackage
+                ? grouped
+                : grouped
+                    .GroupBy(r => new
+                    {
+                        Category = r.Category ?? "",
+                        Description = r.Description ?? "",
+                        Size = r.Size ?? ""
+                    })
+                    .Select(g => new Data
+                    {
+                        PackageName = "",
+                        Category = g.Key.Category,
+                        Description = g.Key.Description,
+                        Size = g.Key.Size,
+                        Quantity = g.Sum(x => x.Quantity)
+                    })
+                    .OrderBy(r => GetCategorySortOrder(r.Category))
+                    .ThenBy(r => TryParseSizeNumber(r.Size))
+                    .ThenBy(r => r.Description, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+            var worksheets = new List<ExcelReportExporter.ExcelWorksheet>
+            {
+                BuildFieldMaterialExcelSheet(
+                    cfg,
+                    summaryRows,
+                    note,
+                    null,
+                    groupSummaryByPackage)
+            };
+
+            if (hasMultiplePackages)
+            {
+                foreach (var packageGroup in packageGroups)
+                {
+                    worksheets.Add(BuildFieldMaterialExcelSheet(
+                        cfg,
+                        packageGroup.ToList(),
+                        note,
+                        ExcelReportExporter.GetPackageWorksheetName(packageGroup.Key),
+                        true));
+                }
+            }
+
+            ExcelReportExporter.SaveWorkbook(
+                ExcelReportExporter.BuildOutputPath(cfg, "BOM-FIELD MATERIAL"),
+                worksheets);
+        }
+
+        private static ExcelReportExporter.ExcelWorksheet BuildFieldMaterialExcelSheet(
+            ProcurementConfig cfg,
+            IList<Data> rows,
+            string note,
+            string worksheetName,
+            bool includePackageColumn)
+        {
             var sheet = ExcelReportExporter.CreateReportSheet(
                 cfg,
                 "FIELD MATERIAL REPORT",
-                new[] { "Package Name", "Size", "Description", "Qty" },
+                includePackageColumn
+                    ? new[] { "Package Name", "Size", "Description", "Qty" }
+                    : new[] { "Size", "Description", "Qty" },
                 note);
+
+            if (!string.IsNullOrWhiteSpace(worksheetName))
+                sheet.Name = worksheetName;
 
             bool alt = false;
             string currentGroup = "";
 
-            foreach (var r in grouped)
+            foreach (var r in rows)
             {
                 string groupName = r.Category ?? "";
                 if (string.IsNullOrWhiteSpace(currentGroup) ||
@@ -977,14 +1056,29 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     alt = false;
                 }
 
-                sheet.Add(
-                    alt
-                        ? ExcelReportExporter.RowKind.AlternateData
-                        : ExcelReportExporter.RowKind.Data,
-                    r.PackageName ?? "",
-                    r.Size ?? "",
-                    r.Description ?? "",
-                    r.Quantity);
+                if (includePackageColumn)
+                {
+                    sheet.Add(
+                        alt
+                            ? ExcelReportExporter.RowKind.AlternateData
+                            : ExcelReportExporter.RowKind.Data,
+                        string.IsNullOrWhiteSpace(r.PackageName)
+                            ? "NO PACKAGE ASSIGNED"
+                            : r.PackageName,
+                        r.Size ?? "",
+                        r.Description ?? "",
+                        r.Quantity);
+                }
+                else
+                {
+                    sheet.Add(
+                        alt
+                            ? ExcelReportExporter.RowKind.AlternateData
+                            : ExcelReportExporter.RowKind.Data,
+                        r.Size ?? "",
+                        r.Description ?? "",
+                        r.Quantity);
+                }
 
                 alt = !alt;
             }
@@ -995,9 +1089,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 sheet.Add(ExcelReportExporter.RowKind.Note, note);
             }
 
-            ExcelReportExporter.SaveWorkbook(
-                ExcelReportExporter.BuildOutputPath(cfg, "BOM-FIELD MATERIAL"),
-                new[] { sheet });
+            return sheet;
         }
 
         private static void ExportFieldMaterialDebugCsv(RvtDoc doc, ProcurementConfig cfg)

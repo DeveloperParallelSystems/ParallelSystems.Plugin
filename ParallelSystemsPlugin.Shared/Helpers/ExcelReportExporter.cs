@@ -124,6 +124,7 @@ namespace ParallelSystemsPlugin.Helpers
             public string Path { get; set; }
             public string Extension { get; set; }
             public bool IsLogo { get; set; }
+            public bool AlignRight { get; set; }
             public int RowNumber { get; set; }
             public int ColumnNumber { get; set; }
             public int WidthPixels { get; set; }
@@ -236,7 +237,7 @@ namespace ParallelSystemsPlugin.Helpers
                         continue;
 
                     WriteEntry(zip, "xl/worksheets/_rels/sheet" + sheetNumber.ToString(CultureInfo.InvariantCulture) + ".xml.rels", BuildWorksheetRelationshipsXml(sheetNumber));
-                    WriteEntry(zip, "xl/drawings/drawing" + sheetNumber.ToString(CultureInfo.InvariantCulture) + ".xml", BuildDrawingXml(images));
+                    WriteEntry(zip, "xl/drawings/drawing" + sheetNumber.ToString(CultureInfo.InvariantCulture) + ".xml", BuildDrawingXml(images, sheets[i]));
                     WriteEntry(zip, "xl/drawings/_rels/drawing" + sheetNumber.ToString(CultureInfo.InvariantCulture) + ".xml.rels", BuildDrawingRelationshipsXml(images, sheetNumber));
 
                     for (int imageIndex = 0; imageIndex < images.Count; imageIndex++)
@@ -333,8 +334,8 @@ namespace ParallelSystemsPlugin.Helpers
             var images = new List<WorksheetImage>();
             if (sheet == null) return images;
 
-            AddUsableLogo(images, sheet.CompanyLogoPath);
-            AddUsableLogo(images, sheet.ClientLogoPath);
+            AddUsableLogo(images, sheet.CompanyLogoPath, false);
+            AddUsableLogo(images, sheet.ClientLogoPath, true);
             foreach (WorksheetImage image in sheet.Images ?? new List<WorksheetImage>())
             {
                 WorksheetImage usable;
@@ -344,11 +345,17 @@ namespace ParallelSystemsPlugin.Helpers
             return images;
         }
 
-        private static void AddUsableLogo(ICollection<WorksheetImage> images, string path)
+        private static void AddUsableLogo(
+            ICollection<WorksheetImage> images,
+            string path,
+            bool alignRight)
         {
             WorksheetImage image;
             if (TryCreateWorksheetImage(path, true, 0, 0, 0, 0, out image))
+            {
+                image.AlignRight = alignRight;
                 images.Add(image);
+            }
         }
 
         private static bool TryCreateWorksheetImage(string path, bool isLogo, int rowNumber, int columnNumber, int widthPixels, int heightPixels, out WorksheetImage image)
@@ -392,12 +399,15 @@ namespace ParallelSystemsPlugin.Helpers
                    "</Relationships>";
         }
 
-        private static string BuildDrawingXml(IList<WorksheetImage> images)
+        private static string BuildDrawingXml(
+            IList<WorksheetImage> images,
+            ExcelWorksheet sheet)
         {
+            const long clientLogoRightInsetPixels = 24;
             var sb = new StringBuilder();
             sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>");
             sb.Append("<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\">");
-            int logoIndex = 0;
+            long worksheetWidthEmu = GetWorksheetWidthPixels(sheet) * 9525L;
             for (int i = 0; i < images.Count; i++)
             {
                 WorksheetImage image = images[i];
@@ -405,7 +415,12 @@ namespace ParallelSystemsPlugin.Helpers
                 long heightEmu = (image.IsLogo ? 158L * 8L / 10L : Math.Max(1, image.HeightPixels)) * 9525L;
                 if (image.IsLogo)
                 {
-                    long xOffsetEmu = logoIndex++ * (widthEmu + (10L * 9525L));
+                    long xOffsetEmu = image.AlignRight
+                        ? Math.Max(
+                            0,
+                            worksheetWidthEmu - widthEmu -
+                            (clientLogoRightInsetPixels * 9525L))
+                        : 0;
                     sb.Append("<xdr:absoluteAnchor><xdr:pos x=\"").Append(xOffsetEmu).Append("\" y=\"0\"/>");
                 }
                 else
@@ -420,6 +435,30 @@ namespace ParallelSystemsPlugin.Helpers
             }
             sb.Append("</xdr:wsDr>");
             return sb.ToString();
+        }
+
+        private static long GetWorksheetWidthPixels(ExcelWorksheet sheet)
+        {
+            var rows = sheet?.Rows ?? new List<ExcelRow>();
+            int columnCount = Math.Max(
+                1,
+                rows.Select(row => row.Values == null ? 0 : row.Values.Count)
+                    .DefaultIfEmpty(1)
+                    .Max());
+            long widthPixels = 0;
+
+            for (int columnNumber = 1; columnNumber <= columnCount; columnNumber++)
+            {
+                double autoWidth = GetAutoColumnWidth(sheet, columnNumber);
+                double configuredWidth;
+                double width = sheet.ColumnWidths.TryGetValue(columnNumber, out configuredWidth)
+                    ? Math.Max(configuredWidth, autoWidth)
+                    : autoWidth;
+
+                widthPixels += (long)Math.Ceiling((width * 7.0) + 5.0);
+            }
+
+            return widthPixels;
         }
 
         private static string BuildDrawingRelationshipsXml(IList<WorksheetImage> images, int sheetNumber)

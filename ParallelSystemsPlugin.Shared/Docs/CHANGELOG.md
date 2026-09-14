@@ -2,8 +2,8 @@
 
 ## 1.17.10 - Flange Configuration and STEP Bolt Holes (Internal / Unreleased)
 
-- Added a read-only `Configurations > Fabrication` flange reference containing the published standard, nominal size, class/table, outside diameter, pitch-circle diameter, hole count, hole/bolt diameter, and material-specific minimum thickness values.
-- Added Standard, Nominal Size, and Class/Table filters so the flange reference can be narrowed without changing its published values.
+- Added a read-only `Configurations > Fabrication` Atlas Steels flange reference covering Class 150, 300, 600, 900, 1500, and 2500 ASME B16.5 flanges plus Tables D, E, F, and H to AS 2129.
+- Added a component-type selector (currently Flange), reference-table and nominal-size filters, table-specific nominal-size/dimension columns, separate ASME/ANSI and AS 2129 diagrams, and online/offline source-manual links.
 - Added catalog-driven flange bolt-hole generation to Fabrication STEP. The exporter resolves an explicit flange standard and class/table from Revit type metadata, resolves nominal size from physical piping connectors, and requires one exact catalog row instead of guessing.
 - Bolt-hole cutters now use the configured hole count, diameter, and pitch-circle diameter, with evenly spaced holes straddling the flange centreline axes. Invalid, ambiguous, or incomplete catalog matches remain blocking rather than producing unverified geometry.
 - Updated Pipe End Prep mapping so End 1, End 2, and End Prep are independent optional outputs; blank configuration fields are ignored and saved mapping names are trimmed.

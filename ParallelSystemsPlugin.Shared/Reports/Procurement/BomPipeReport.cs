@@ -21,7 +21,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
     {
         private const double FT_TO_MM = 304.8;
 
-        private const string PARAM_PACKAGE = "Vic_Area_PT";
         private const string PARAM_MATERIAL = "Segment Description";
         private const string PARAM_ASSEMBLY_NAME = "Assembly Name";
         private const string PARAM_DESCRIPTION = "End Prep";
@@ -71,6 +70,20 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .Where(x => includeSiteMeasureAssemblies || !siteMeasureNames.Contains(x.AssemblyName))
                 .ToList();
 
+            List<string> unnamedPipeIds = pieces
+                .Where(x => string.IsNullOrWhiteSpace(x.Material))
+                .Select(x => x.ElementId == null ? "unknown" : x.ElementId.ToString())
+                .Distinct()
+                .ToList();
+
+            if (unnamedPipeIds.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "BOM-PIPE REPORT cannot export unnamed pipes. " +
+                    "Assign Segment Description, Description, or a pipe type name " +
+                    "to these element IDs: " + string.Join(", ", unnamedPipeIds));
+            }
+
             if (pieces.Count == 0)
                 throw new InvalidOperationException("No valid pipes found in the active view for BOM-PIPE REPORT.");
 
@@ -78,50 +91,15 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             // This is the critical fix.
             // Do NOT use g.Count().
             // Start from the packed stock-pipe count. When a stock pipe leaves
-            // a reusable remainder, report its consumed length in OFFCUT and
+            // a reusable remainder, report its consumed length in REQUIRED OFFCUT and
             // remove that partial pipe from the full-pipe quantity.
-            var pipeSummaries = pieces
-                .GroupBy(x => new
-                {
-                    x.Material,
-                    x.SizeText,
-                    x.SizeSort
-                })
-                .OrderBy(g => g.Key.Material)
-                .ThenByDescending(g => g.Key.SizeSort)
-                .Select(g =>
-                {
-                    var bins = PackPieces(
-                        g.ToList(),
-                        maxLen,
-                        blade,
-                        OptimizationMode.BestFitDecreasing);
+            var pipeSummaries = BuildPipeSummaries(
+                pieces,
+                maxLen,
+                blade,
+                cfg.OffcutThreshold,
+                false);
 
-                    var reusableOffcuts = bins
-                        .Select(bin => new
-                        {
-                            RemainingMm = Math.Max(0, maxLen - bin.UsedMm),
-                            UsedMm = Math.Min(maxLen, bin.UsedMm)
-                        })
-                        .Where(x =>
-                            x.RemainingMm > 0 &&
-                            x.RemainingMm >= Math.Max(0, cfg.OffcutThreshold))
-                        .ToList();
-
-                    return new PipeSummary
-                    {
-                        Size = g.Key.SizeText,
-                        Name = g.Key.Material,
-                        Length = Math.Round(maxLen).ToString(CultureInfo.InvariantCulture),
-                        Count = Math.Max(0, bins.Count - reusableOffcuts.Count),
-                        Offcuts = string.Join(", ", reusableOffcuts
-                            .Select(x => Math.Round(x.UsedMm).ToString(CultureInfo.InvariantCulture) + " mm")),
-                        Note = ""
-                    };
-                })
-                .ToList();
-
-            // Optional debug. Remove once confirmed.
             /*
             AppDialog.Info(
                 "Pipe Debug",
@@ -201,7 +179,62 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             // EXPORT EXCEL
             // ==============================
             if (cfg.ExportReportsToExcel)
-                ExportExcel(cfg, pipeSummaries, note, reportName, stockLengthLabel);
+                ExportExcel(cfg, pieces, maxLen, blade, note, reportName, stockLengthLabel);
+        }
+
+        private static List<PipeSummary> BuildPipeSummaries(
+            IEnumerable<PipePiece> pieces,
+            double maxLen,
+            double blade,
+            double offcutThreshold,
+            bool groupByPackage)
+        {
+            return (pieces ?? Enumerable.Empty<PipePiece>())
+                .GroupBy(x => new
+                {
+                    Package = groupByPackage ? x.Package ?? "" : "",
+                    x.Material,
+                    x.SizeText,
+                    x.SizeSort
+                })
+                .OrderBy(g => string.IsNullOrWhiteSpace(g.Key.Package) ? 1 : 0)
+                .ThenBy(g => g.Key.Package, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(g => g.Key.Material)
+                .ThenByDescending(g => g.Key.SizeSort)
+                .Select(g =>
+                {
+                    var bins = PackPieces(
+                        g.ToList(),
+                        maxLen,
+                        blade,
+                        OptimizationMode.BestFitDecreasing);
+
+                    var reusableOffcuts = bins
+                        .Select(bin => new
+                        {
+                            RemainingMm = Math.Max(0, maxLen - bin.UsedMm),
+                            UsedMm = Math.Min(maxLen, bin.UsedMm)
+                        })
+                        .Where(x =>
+                            x.RemainingMm > 0 &&
+                            x.RemainingMm >= Math.Max(0, offcutThreshold))
+                        .ToList();
+
+                    return new PipeSummary
+                    {
+                        Package = string.IsNullOrWhiteSpace(g.Key.Package)
+                            ? ExcelReportExporter.GetPackageWorksheetName(g.Key.Package)
+                            : g.Key.Package,
+                        Size = g.Key.SizeText,
+                        Name = g.Key.Material,
+                        Length = Math.Round(maxLen).ToString(CultureInfo.InvariantCulture),
+                        Count = Math.Max(0, bins.Count - reusableOffcuts.Count),
+                        Offcuts = string.Join(", ", reusableOffcuts
+                            .Select(x => Math.Round(x.UsedMm).ToString(CultureInfo.InvariantCulture) + " mm")),
+                        Note = ""
+                    };
+                })
+                .ToList();
         }
 
         // =========================
@@ -236,7 +269,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             hr.Cells[2].Format.Alignment = ParagraphAlignment.Center;
             hr.Cells[3].AddParagraph("Pipe Required (" + stockLengthLabel + ")");
             hr.Cells[3].Format.Alignment = ParagraphAlignment.Center;
-            hr.Cells[4].AddParagraph("OFFCUT");
+            hr.Cells[4].AddParagraph("REQUIRED OFFCUT");
             hr.Cells[5].AddParagraph("Note");
         }
 
@@ -245,31 +278,109 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         // =========================
         private static void ExportExcel(
             ProcurementConfig cfg,
-            List<PipeSummary> pipeSummaries,
+            List<PipePiece> pieces,
+            double maxLen,
+            double blade,
             string note,
             string reportName,
             string stockLengthLabel)
         {
-            var sheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
+            var packageGroups = pieces
+                .GroupBy(piece => piece.Package ?? "", StringComparer.OrdinalIgnoreCase)
+                .OrderBy(group => string.IsNullOrWhiteSpace(group.Key) ? 1 : 0)
+                .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            bool showPackageInSummary = cfg.GroupByPackage && packageGroups.Count > 1;
+            var worksheets = new List<ExcelReportExporter.ExcelWorksheet>
+            {
+                BuildPipeExcelSheet(
+                    cfg,
+                    BuildPipeSummaries(
+                        pieces,
+                        maxLen,
+                        blade,
+                        cfg.OffcutThreshold,
+                        showPackageInSummary),
+                    note,
+                    stockLengthLabel,
+                    null,
+                    showPackageInSummary)
+            };
+
+            if (packageGroups.Count > 1)
+            {
+                foreach (var packageGroup in packageGroups)
+                {
+                    worksheets.Add(BuildPipeExcelSheet(
+                        cfg,
+                        BuildPipeSummaries(
+                            packageGroup,
+                            maxLen,
+                            blade,
+                            cfg.OffcutThreshold,
+                            false),
+                        note,
+                        stockLengthLabel,
+                        ExcelReportExporter.GetPackageWorksheetName(packageGroup.Key),
+                        false));
+                }
+            }
+
+            ExcelReportExporter.SaveWorkbook(
+                ExcelReportExporter.BuildOutputPath(cfg, reportName),
+                worksheets);
+        }
+
+        private static ExcelReportExporter.ExcelWorksheet BuildPipeExcelSheet(
+            ProcurementConfig cfg,
+            IEnumerable<PipeSummary> pipeSummaries,
+            string note,
+            string stockLengthLabel,
+            string worksheetName,
+            bool includePackageColumn)
+        {
+            var sheet = ExcelReportExporter.CreateReportSheet(
                 cfg,
                 "BOM-PIPE REPORT",
-                new[] { "Size", "Description", "Length", "Pipe Required (" + stockLengthLabel + ")", "OFFCUT", "Note" },
+                includePackageColumn
+                    ? new[] { "Package", "Size", "Description", "Length", "Pipe Required (" + stockLengthLabel + ")", "REQUIRED OFFCUT", "Note" }
+                    : new[] { "Size", "Description", "Length", "Pipe Required (" + stockLengthLabel + ")", "REQUIRED OFFCUT", "Note" },
                 note);
+            if (!string.IsNullOrWhiteSpace(worksheetName))
+                sheet.Name = worksheetName;
 
             bool alt = false;
 
             foreach (var r in pipeSummaries)
             {
-                sheet.Add(
-                    alt
-                        ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData
-                        : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                    r.Size ?? "",
-                    r.Name ?? "",
-                    r.Length ?? "",
-                    r.Count,
-                    r.Offcuts ?? "",
-                    r.Note ?? "");
+                ExcelReportExporter.RowKind rowKind = alt
+                    ? ExcelReportExporter.RowKind.AlternateData
+                    : ExcelReportExporter.RowKind.Data;
+
+                if (includePackageColumn)
+                {
+                    sheet.Add(
+                        rowKind,
+                        r.Package ?? "",
+                        r.Size ?? "",
+                        r.Name ?? "",
+                        r.Length ?? "",
+                        r.Count,
+                        r.Offcuts ?? "",
+                        r.Note ?? "");
+                }
+                else
+                {
+                    sheet.Add(
+                        rowKind,
+                        r.Size ?? "",
+                        r.Name ?? "",
+                        r.Length ?? "",
+                        r.Count,
+                        r.Offcuts ?? "",
+                        r.Note ?? "");
+                }
 
                 alt = !alt;
             }
@@ -280,9 +391,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 sheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.RedNote, note);
             }
 
-            ParallelSystemsPlugin.Helpers.ExcelReportExporter.SaveWorkbook(
-                ParallelSystemsPlugin.Helpers.ExcelReportExporter.BuildOutputPath(cfg, reportName),
-                new[] { sheet });
+            return sheet;
         }
 
         // =========================
@@ -303,15 +412,18 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             foreach (var e in elements)
             {
+                if (Helpers.Elements.IsDoNotSchedule(doc, e))
+                    continue;
+
                 double lenFt = GetDoubleParam(e, BuiltInParameter.CURVE_ELEM_LENGTH);
                 double lenMm = lenFt * FT_TO_MM;
 
                 if (lenMm <= 0.01)
                     continue;
 
-                string package = Helpers.Elements.NormalizeProcurementPackageName(
-                    GetStringParam(e, PARAM_PACKAGE));
-                string material = GetStringParam(e, PARAM_MATERIAL);
+                string package = Helpers.Elements
+                    .GetStandardProcurementPackageName(doc, e);
+                string material = GetPipeDescription(doc, e);
                 string assemblyName = GetStringParam(e, PARAM_ASSEMBLY_NAME);
                 string pipeEndPrep = GetStringParam(e, AppConfig.CurrentConfig.PipeMapParameters.EndPrep);
 
@@ -340,6 +452,23 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             }
 
             return result;
+        }
+
+        private static string GetPipeDescription(RvtDoc doc, Element pipe)
+        {
+            Element pipeType = doc?.GetElement(pipe?.GetTypeId());
+            string[] candidates =
+            {
+                GetStringParam(pipe, PARAM_MATERIAL),
+                GetStringParam(pipeType, PARAM_MATERIAL),
+                GetStringParam(pipe, "Description"),
+                GetStringParam(pipeType, "Description"),
+                pipeType?.Name,
+                pipe?.Name
+            };
+
+            return candidates.FirstOrDefault(
+                value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
         }
 
         // =========================
@@ -527,6 +656,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private sealed class PipeSummary
         {
+            public string Package { get; set; } = "";
             public string Size { get; set; } = "";
             public string Name { get; set; } = "";
             public string Length { get; set; } = "";

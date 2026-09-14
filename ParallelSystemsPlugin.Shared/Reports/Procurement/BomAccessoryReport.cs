@@ -41,6 +41,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .OfCategory(BuiltInCategory.OST_PipeAccessory)
                 .WhereElementIsNotElementType()
                 .OfType<FamilyInstance>()
+                .Where(x => !Helpers.Elements.IsDoNotSchedule(doc, x))
                 .Select(x => new AccessoryRow
                 {
                     PackageName = GetPackageName(doc, x),
@@ -199,15 +200,16 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Skip(1)
                 .Any();
+            bool groupMasterByPackage = isMasterList && cfg.GroupByPackage;
 
             var sheet = ExcelReportExporter.CreateReportSheet(
                 cfg,
                 "ACCESSORY REPORT",
-                isMasterList
+                groupMasterByPackage
                     ? new[] { "Package", "Size", "Description", "Qty", "Image" }
                     : new[] { "Size", "Description", "Qty", "Image" },
                 "");
-            if (isMasterList)
+            if (groupMasterByPackage)
             {
                 sheet.SetColumnWidth(1, 28);
                 sheet.SetColumnWidth(2, 14);
@@ -230,25 +232,63 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (isMasterList)
             {
                 bool alternate = false;
-                foreach (AccessoryRow item in rows
-                    .OrderBy(x => ParseSize(x.Size))
-                    .ThenBy(x => x.Description, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase))
+                var masterRows = cfg.GroupByPackage
+                    ? rows.Select(item => new
+                    {
+                        Item = item,
+                        Package = item.PackageName ?? NoPackageAssigned,
+                        Quantity = item.Quantity
+                    })
+                    : rows
+                        .GroupBy(item => new
+                        {
+                            Size = item.Size ?? "",
+                            Description = item.Description ?? ""
+                        })
+                        .Select(group => new
+                        {
+                            Item = group.First(),
+                            Package = "",
+                            Quantity = group.Sum(item => item.Quantity)
+                        });
+
+                foreach (var masterRow in masterRows
+                    .OrderBy(x => ParseSize(x.Item.Size))
+                    .ThenBy(x => x.Item.Description, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(x => x.Package, StringComparer.OrdinalIgnoreCase))
                 {
-                    sheet.Add(
-                        alternate ? ExcelReportExporter.RowKind.AlternateData : ExcelReportExporter.RowKind.Data,
-                        item.PackageName ?? NoPackageAssigned,
-                        item.Size ?? "",
-                        item.Description ?? "",
-                        item.Quantity,
-                        "");
+                    AccessoryRow item = masterRow.Item;
+                    if (cfg.GroupByPackage)
+                    {
+                        sheet.Add(
+                            alternate ? ExcelReportExporter.RowKind.AlternateData : ExcelReportExporter.RowKind.Data,
+                            masterRow.Package,
+                            item.Size ?? "",
+                            item.Description ?? "",
+                            masterRow.Quantity,
+                            "");
+                    }
+                    else
+                    {
+                        sheet.Add(
+                            alternate ? ExcelReportExporter.RowKind.AlternateData : ExcelReportExporter.RowKind.Data,
+                            item.Size ?? "",
+                            item.Description ?? "",
+                            masterRow.Quantity,
+                            "");
+                    }
 
                     int rowNumber = sheet.RowCount;
                     string previewPath = CreateAccessoryPreviewImage(item, previewFolder, rowNumber);
                     if (!string.IsNullOrWhiteSpace(previewPath))
                     {
                         sheet.SetRowHeight(rowNumber, 150);
-                        sheet.AddImage(previewPath, rowNumber, 5, 210, 190);
+                        sheet.AddImage(
+                            previewPath,
+                            rowNumber,
+                            cfg.GroupByPackage ? 5 : 4,
+                            210,
+                            190);
                     }
 
                     alternate = !alternate;
@@ -401,38 +441,12 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private static string GetPackageName(RvtDoc doc, FamilyInstance item)
         {
-            if (item.AssemblyInstanceId != ElementId.InvalidElementId)
-            {
-                AssemblyInstance assembly = doc.GetElement(item.AssemblyInstanceId) as AssemblyInstance;
-                string assemblyPackage = Helpers.Elements.GetProcurementPackageNameFromAssembly(assembly);
-                if (!string.IsNullOrWhiteSpace(assemblyPackage))
-                    return assemblyPackage;
-            }
-
-            string building = GetParameter(item, "PS_Building")
-                ?? GetParameter(item.Symbol, "PS_Building");
-            string level = GetParameter(item, "PS_Level")
-                ?? GetParameter(item.Symbol, "PS_Level");
-            string zone = GetParameter(item, "PS_Zone")
-                ?? GetParameter(item.Symbol, "PS_Zone");
-            string area = GetParameter(item, "PS_Area")
-                ?? GetParameter(item.Symbol, "PS_Area");
-
-            if (!string.IsNullOrWhiteSpace(building) &&
-                !string.IsNullOrWhiteSpace(level) &&
-                !string.IsNullOrWhiteSpace(zone) &&
-                !string.IsNullOrWhiteSpace(area))
-            {
-                return Helpers.Elements.NormalizeProcurementPackageName(
-                    string.Concat(
-                        building.Trim(),
-                        level.Trim(),
-                        zone.Trim(),
-                        "-",
-                        area.Trim()));
-            }
-
-            return NoPackageAssigned;
+            string package = Helpers.Elements.GetStandardProcurementPackageName(
+                doc,
+                item);
+            return string.IsNullOrWhiteSpace(package)
+                ? NoPackageAssigned
+                : package;
         }
 
         private static string GetDescription(FamilyInstance item)

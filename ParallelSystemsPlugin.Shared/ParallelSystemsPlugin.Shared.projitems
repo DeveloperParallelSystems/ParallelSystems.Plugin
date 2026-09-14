@@ -82,6 +82,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\PulldownButton.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\PushButton.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\SplitButton.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\AtlasFlangeReference.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomAssemblyRegisterReport.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomAccessoryReport.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomCutListReport.cs" />

@@ -146,16 +146,54 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private static void ExportExcel(ProcurementConfig cfg, List<LabelData> data, string note, string projectPhases)
         {
-            var headers = new[]
+            var packageGroups = data
+                .GroupBy(r => r.Package ?? "", StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => string.IsNullOrWhiteSpace(g.Key) ? 1 : 0)
+                .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            bool showPackageInSummary = cfg.GroupByPackage && packageGroups.Count > 1;
+            var worksheets = new List<ExcelReportExporter.ExcelWorksheet>
             {
-        "Spool Number",
-        "Mark Item",
-        "Material Grade",
-        "Pipe Size",
-        "Pipe End Prep",
-        "Cut Length",
-        "QR Code"
-    };
+                BuildLabelExcelSheet(
+                    cfg,
+                    data,
+                    note,
+                    projectPhases,
+                    null,
+                    showPackageInSummary)
+            };
+
+            if (packageGroups.Count > 1)
+            {
+                foreach (var packageGroup in packageGroups)
+                {
+                    worksheets.Add(BuildLabelExcelSheet(
+                        cfg,
+                        packageGroup.ToList(),
+                        note,
+                        projectPhases,
+                        ExcelReportExporter.GetPackageWorksheetName(packageGroup.Key),
+                        false));
+                }
+            }
+
+            ExcelReportExporter.SaveWorkbook(
+                ExcelReportExporter.BuildOutputPath(cfg, "LABEL REPORT"),
+                worksheets);
+        }
+
+        private static ExcelReportExporter.ExcelWorksheet BuildLabelExcelSheet(
+            ProcurementConfig cfg,
+            IList<LabelData> data,
+            string note,
+            string projectPhases,
+            string worksheetName,
+            bool includePackageColumn)
+        {
+            var headers = includePackageColumn
+                ? new[] { "Package", "Spool Number", "Mark Item", "Material Grade", "Pipe Size", "Pipe End Prep", "Cut Length", "QR Code" }
+                : new[] { "Spool Number", "Mark Item", "Material Grade", "Pipe Size", "Pipe End Prep", "Cut Length", "QR Code" };
 
             var sheet = ExcelReportExporter.CreateReportSheet(
                 cfg,
@@ -164,21 +202,30 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 note,
                 projectPhases);
 
+            if (!string.IsNullOrWhiteSpace(worksheetName))
+                sheet.Name = worksheetName;
+
             bool alternate = false;
 
             foreach (var r in data)
             {
+                var values = new List<object>();
+                if (includePackageColumn)
+                    values.Add(string.IsNullOrWhiteSpace(r.Package) ? "NO PACKAGE ASSIGNED" : r.Package);
+
+                values.Add(r.SpoolNumber ?? "");
+                values.Add(r.MarkItem ?? "");
+                values.Add(r.MaterialGrade ?? "");
+                values.Add(r.PipeSize ?? "");
+                values.Add(r.PipeEndPrep ?? "");
+                values.Add(r.PipeLength ?? "");
+                values.Add(QrCodeUrl);
+
                 sheet.Add(
                     alternate
                         ? ExcelReportExporter.RowKind.AlternateData
                         : ExcelReportExporter.RowKind.Data,
-                    r.SpoolNumber ?? "",
-                    r.MarkItem ?? "",
-                    r.MaterialGrade ?? "",
-                    r.PipeSize ?? "",
-                    r.PipeEndPrep ?? "",
-                    r.PipeLength ?? "",
-                    QrCodeUrl);
+                    values.ToArray());
 
                 alternate = !alternate;
             }
@@ -189,9 +236,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 sheet.Add(ExcelReportExporter.RowKind.RedNote, note);
             }
 
-            ExcelReportExporter.SaveWorkbook(
-                ExcelReportExporter.BuildOutputPath(cfg, "LABEL REPORT"),
-                new[] { sheet });
+            return sheet;
         }
 
         private static void AddMainHeaderRow(Table table)
@@ -237,6 +282,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             var assemblies = new FilteredElementCollector(doc, doc.ActiveView.Id)
                 .OfClass(typeof(AssemblyInstance))
                 .Cast<AssemblyInstance>()
+                .Where(assembly => !Helpers.Elements.IsDoNotSchedule(doc, assembly))
                 .ToList();
 
             foreach (var assembly in assemblies)
@@ -249,7 +295,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 if (string.IsNullOrWhiteSpace(spoolNumber))
                     spoolNumber = CleanText(assembly.Name);
 
-                string package = GetPackageFromSpoolNumber(spoolNumber);
+                string package = Helpers.Elements
+                    .GetStandardProcurementPackageName(doc, assembly);
                 string assemblyProjectPhase = GetAssemblyProjectPhase(doc, assembly);
 
                 foreach (var id in assembly.GetMemberIds())
@@ -257,6 +304,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     Element element = doc.GetElement(id);
 
                     if (element == null)
+                        continue;
+
+                    if (Helpers.Elements.IsDoNotSchedule(doc, element))
                         continue;
 
                     if (IsShapedBranch(doc, element))
@@ -592,22 +642,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 "Item Number");
 
             return CleanText(value);
-        }
-
-        private static string GetPackageFromSpoolNumber(string spoolNumber)
-        {
-            spoolNumber = CleanText(spoolNumber);
-
-            if (string.IsNullOrWhiteSpace(spoolNumber))
-                return "";
-
-            int lastDash = spoolNumber.LastIndexOf('-');
-
-            if (lastDash <= 0)
-                return Helpers.Elements.NormalizeProcurementPackageName(spoolNumber);
-
-            return Helpers.Elements.NormalizeProcurementPackageName(
-                spoolNumber.Substring(0, lastDash));
         }
 
         private static string GetParamString(Element element, params string[] names)

@@ -58,6 +58,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             var assembliesInView = new FilteredElementCollector(revitDoc, viewId)
                 .OfClass(typeof(AssemblyInstance))
                 .Cast<AssemblyInstance>()
+                .Where(a => !Helpers.Elements.IsDoNotSchedule(revitDoc, a))
                 .ToList();
 
             var frameNumbers = assembliesInView
@@ -72,8 +73,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .Where(a => !IsFrameAssembly(revitDoc, a))
                 .Select(a =>
                 {
-                    string package =
-                        Helpers.Elements.GetProcurementPackageNameFromAssembly(a);
+                    string package = Helpers.Elements
+                        .GetStandardProcurementPackageName(revitDoc, a);
 
                     string assemblyNo = Helpers.Elements.GetStringParam(a, PARAM_ASSEMBLY_NUMBER);
                     if (string.IsNullOrWhiteSpace(assemblyNo))
@@ -407,25 +408,22 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 BuildAssemblyRegisterExcelSheet(cfg, rows, groupByFrame, note, null)
             };
 
-            if (!groupByFrame)
-            {
-                var packageGroups = rows
-                    .GroupBy(r => r.Package ?? "", StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(g => string.IsNullOrWhiteSpace(g.Key) ? 1 : 0)
-                    .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+            var packageGroups = rows
+                .GroupBy(r => r.Package ?? "", StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => string.IsNullOrWhiteSpace(g.Key) ? 1 : 0)
+                .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-                if (packageGroups.Count > 1)
+            if (packageGroups.Count > 1)
+            {
+                foreach (var packageGroup in packageGroups)
                 {
-                    foreach (var packageGroup in packageGroups)
-                    {
-                        worksheets.Add(BuildAssemblyRegisterExcelSheet(
-                            cfg,
-                            packageGroup.ToList(),
-                            false,
-                            note,
-                            ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(packageGroup.Key)));
-                    }
+                    worksheets.Add(BuildAssemblyRegisterExcelSheet(
+                        cfg,
+                        packageGroup.ToList(),
+                        false,
+                        note,
+                        ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(packageGroup.Key)));
                 }
             }
 

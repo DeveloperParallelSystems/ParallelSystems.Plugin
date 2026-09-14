@@ -6,20 +6,24 @@ using Autodesk.Revit.UI;
 using Microsoft.Win32;
 using ParallelSystemPlugin.UI;          // AppDialog
 using ParallelSystemsPlugin.Helpers;
+using ParallelSystemsPlugin.Models;
 using ParallelSystemsPlugin.Models.Configs;
 
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
 
 namespace ParallelSystemsPlugin.UI.Dialogs
 {
@@ -44,9 +48,9 @@ namespace ParallelSystemsPlugin.UI.Dialogs
         public List<double> AllowedAngles { get; private set; }
         public double Tolerance { get; private set; }
 
-        private IReadOnlyList<FlangeDimensionConfiguration>
-            _flangeConfigurations =
-                new List<FlangeDimensionConfiguration>();
+        private IReadOnlyList<AtlasFlangeReferenceRow>
+            _fabricationReferenceRows =
+                new List<AtlasFlangeReferenceRow>();
 
         private string _companyLogoPath = "";
         private string _clientLogoPath = "";
@@ -217,13 +221,16 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             ChkBomAssemblyRegister.IsChecked = config.Procurement.BomAssemblyRegister;
             ChkBomCutList.IsChecked = config.Procurement.BomCutList;
             ChkBomFittingReport.IsChecked = config.Procurement.BomFittingReport;
-            ChkIncludeWeldInFittingReport.IsChecked = config.Procurement.IncludeWeldInFittingReport;
+            ChkIncludeWeld.IsChecked = config.Procurement.IncludeWeld ||
+                config.Procurement.IncludeWeldInFittingReport ||
+                config.Procurement.IncludeWeldInFieldMaterialReport;
             ChkBomLoadingReport.IsChecked = config.Procurement.BomLoadingReport;
             ChkBomPipeReport.IsChecked = config.Procurement.BomPipeReport;
             ChkLabelReport.IsChecked = config.Procurement.LabelReport;
             ChkBomFieldMaterialReport.IsChecked = config.Procurement.BomFieldMaterialReport;
             ChkBomAccessoryReport.IsChecked = config.Procurement.BomAccessoryReport;
             ChkIncludeSiteMeasure.IsChecked = config.Procurement.IncludeSiteMeasure;
+            ChkGroupByPackage.IsChecked = config.Procurement.GroupByPackage;
             RdoExportExcel.IsChecked = config.Procurement.ExportReportsToExcel;
             RdoExportPdf.IsChecked = !config.Procurement.ExportReportsToExcel;
 
@@ -274,52 +281,39 @@ namespace ParallelSystemsPlugin.UI.Dialogs
 
         private void InitializeFabricationConfigurations()
         {
-            _flangeConfigurations =
-                FlangeDimensionConfigurationCatalog.All;
+            _fabricationReferenceRows =
+                AtlasFlangeReferenceCatalog.Load();
 
-            List<string> standards = new List<string>
+            FabricationTypeSelector.ItemsSource = new[]
             {
-                "All standards"
+                "Flange"
             };
+            FabricationTypeSelector.SelectedIndex = 0;
 
-            standards.AddRange(
-                _flangeConfigurations
-                    .Select(x => x.Standard)
+            FabricationSectionSelector.ItemsSource =
+                _fabricationReferenceRows
+                    .Select(x => x.Section)
                     .Distinct()
-                    .OrderBy(x => x));
+                    .ToList();
+            FabricationSectionSelector.SelectedIndex = 0;
 
-            List<string> sizes = new List<string>
-            {
-                "All sizes"
-            };
+            RefreshFabricationSizeFilter();
 
-            sizes.AddRange(
-                _flangeConfigurations
-                    .Select(x => x.NominalSizeMm)
-                    .Distinct()
-                    .OrderBy(x => x)
-                    .Select(x =>
-                        x.ToString(CultureInfo.InvariantCulture) +
-                        " mm"));
+            ApplyFabricationFilter();
+        }
 
-            List<string> classes = new List<string>
-            {
-                "All classes / tables"
-            };
+        private void FabricationType_SelectionChanged(
+            object sender,
+            SelectionChangedEventArgs e)
+        {
+            ApplyFabricationFilter();
+        }
 
-            classes.AddRange(
-                _flangeConfigurations
-                    .Select(x => x.ClassOrTable)
-                    .Distinct()
-                    .OrderBy(x => x));
-
-            FabricationStandardFilter.ItemsSource = standards;
-            FabricationSizeFilter.ItemsSource = sizes;
-            FabricationClassFilter.ItemsSource = classes;
-            FabricationStandardFilter.SelectedIndex = 0;
-            FabricationSizeFilter.SelectedIndex = 0;
-            FabricationClassFilter.SelectedIndex = 0;
-
+        private void FabricationSection_SelectionChanged(
+            object sender,
+            SelectionChangedEventArgs e)
+        {
+            RefreshFabricationSizeFilter();
             ApplyFabricationFilter();
         }
 
@@ -330,29 +324,53 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             ApplyFabricationFilter();
         }
 
+        private void RefreshFabricationSizeFilter()
+        {
+            if (FabricationSizeFilter == null)
+                return;
+
+            string selectedSection =
+                FabricationSectionSelector?.SelectedItem as string;
+
+            List<string> sizes = new List<string>
+            {
+                "All sizes"
+            };
+
+            sizes.AddRange(
+                _fabricationReferenceRows
+                    .Where(x => string.IsNullOrWhiteSpace(selectedSection) ||
+                        string.Equals(
+                            x.Section,
+                            selectedSection,
+                            StringComparison.Ordinal))
+                    .OrderBy(x => x.NominalSizeSort)
+                    .Select(x => x.DN)
+                    .Distinct()
+                    .Select(x => x + " mm"));
+
+            FabricationSizeFilter.ItemsSource = sizes;
+            FabricationSizeFilter.SelectedIndex = 0;
+        }
+
         private void ApplyFabricationFilter()
         {
             if (FabricationFlangeGrid == null)
                 return;
 
-            IEnumerable<FlangeDimensionConfiguration> filtered =
-                _flangeConfigurations ??
-                new List<FlangeDimensionConfiguration>();
+            IEnumerable<AtlasFlangeReferenceRow> filtered =
+                _fabricationReferenceRows ??
+                new List<AtlasFlangeReferenceRow>();
 
-            string selectedStandard =
-                FabricationStandardFilter?.SelectedItem as string;
+            string selectedSection =
+                FabricationSectionSelector?.SelectedItem as string;
 
-            if (!string.IsNullOrWhiteSpace(selectedStandard) &&
-                !string.Equals(
-                    selectedStandard,
-                    "All standards",
-                    StringComparison.Ordinal))
+            if (!string.IsNullOrWhiteSpace(selectedSection))
             {
-                filtered = filtered.Where(x =>
-                    string.Equals(
-                        x.Standard,
-                        selectedStandard,
-                        StringComparison.Ordinal));
+                filtered = filtered.Where(x => string.Equals(
+                    x.Section,
+                    selectedSection,
+                    StringComparison.Ordinal));
             }
 
             string selectedSize =
@@ -368,44 +386,182 @@ namespace ParallelSystemsPlugin.UI.Dialogs
                     " mm",
                     string.Empty);
 
-                int nominalSize;
-
-                if (int.TryParse(
-                        sizeValue,
-                        NumberStyles.Integer,
-                        CultureInfo.InvariantCulture,
-                        out nominalSize))
-                {
-                    filtered = filtered.Where(
-                        x => x.NominalSizeMm == nominalSize);
-                }
+                filtered = filtered.Where(x => string.Equals(
+                    x.DN,
+                    sizeValue,
+                    StringComparison.Ordinal));
             }
 
-            string selectedClass =
-                FabricationClassFilter?.SelectedItem as string;
+            List<AtlasFlangeReferenceRow> rows =
+                filtered
+                    .OrderBy(x => x.NominalSizeSort)
+                    .ToList();
 
-            if (!string.IsNullOrWhiteSpace(selectedClass) &&
-                !string.Equals(
-                    selectedClass,
-                    "All classes / tables",
-                    StringComparison.Ordinal))
-            {
-                filtered = filtered.Where(x =>
-                    string.Equals(
-                        x.ClassOrTable,
-                        selectedClass,
-                        StringComparison.Ordinal));
-            }
-
-            List<FlangeDimensionConfiguration> rows =
-                filtered.ToList();
-
+            ConfigureFabricationColumns(rows);
+            UpdateFabricationReferencePanel(rows.FirstOrDefault());
             FabricationFlangeGrid.ItemsSource = rows;
             FabricationResultCountTextBlock.Text =
                 rows.Count.ToString(CultureInfo.InvariantCulture) +
                 (rows.Count == 1
-                    ? " configuration"
-                    : " configurations");
+                    ? " row"
+                    : " rows");
+        }
+
+        private void ConfigureFabricationColumns(
+            IList<AtlasFlangeReferenceRow> rows)
+        {
+            FabricationFlangeGrid.Columns.Clear();
+
+            bool isAsme = rows.Count == 0 ||
+                string.Equals(rows[0].Kind, "ASME", StringComparison.Ordinal);
+
+            if (isAsme)
+            {
+                FabricationFlangeGrid.FrozenColumnCount = 2;
+                AddFabricationColumn("DN", "DN", 55);
+                AddFabricationColumn("NPS", "NPS", 65);
+                AddFabricationColumn("Flange OD (mm)\nO", "O", 105);
+                AddFabricationColumn("Thickness min (mm)\ntf", "Tf", 115);
+                AddFabricationColumn("Hub diam. (mm)\nX", "X", 105);
+                AddFabricationColumn("Hub diam. welding neck (mm)\nAh", "Ah", 155);
+                AddFabricationColumn("Length thru hub - slip-on/socket (mm)\nY", "YSlip", 185);
+                AddFabricationColumn("Length thru hub - welding neck (mm)\nY", "YWeldingNeck", 175);
+                AddFabricationColumn("Bore - slip-on/socket min (mm)\nB", "BSlip", 175);
+                AddFabricationColumn("Bore - welding neck/socket (mm)\nB", "BWeldingNeck", 190);
+                AddFabricationColumn("Bolt circle diam. (mm)\nK", "K", 130);
+                AddFabricationColumn("Bolt hole diam. (mm)\nH", "H", 125);
+                AddFabricationColumn("Bolts\n(No.)", "Bolts", 75);
+                AddFabricationColumn("RF stud bolt length (mm)", "RfStudLength", 145);
+
+                if (rows.Any(x => !string.IsNullOrWhiteSpace(
+                    x.RfMachineLength)))
+                {
+                    AddFabricationColumn(
+                        "RF machine bolt length (mm)",
+                        "RfMachineLength",
+                        165);
+                }
+            }
+            else
+            {
+                FabricationFlangeGrid.FrozenColumnCount = 1;
+                AddFabricationColumn("DN", "DN", 65);
+                AddFabricationColumn("OD (mm)\nA", "A", 100);
+                AddFabricationColumn("Thickness (mm)\nD", "D", 115);
+                AddFabricationColumn("Raised face diam. (mm)\nG", "G", 145);
+                AddFabricationColumn("Bolt circle diam. (mm)\nK", "K", 145);
+                AddFabricationColumn("Bolt hole diam. (mm)\nH", "H", 135);
+                AddFabricationColumn("Number of bolts", "Bolts", 110);
+                AddFabricationColumn("Bolt size & thread", "BoltThread", 130);
+            }
+        }
+
+        private void AddFabricationColumn(
+            string header,
+            string propertyName,
+            double width)
+        {
+            FabricationFlangeGrid.Columns.Add(
+                new DataGridTextColumn
+                {
+                    Header = header,
+                    Binding = new Binding(propertyName),
+                    Width = width
+                });
+        }
+
+        private void UpdateFabricationReferencePanel(
+            AtlasFlangeReferenceRow row)
+        {
+            bool isAsme = row == null ||
+                string.Equals(row.Kind, "ASME", StringComparison.Ordinal);
+
+            FabricationReferenceCaptionTextBlock.Text = isAsme
+                ? "Carbon Steel ASME/ANSI Flanges"
+                : "Types of Table Flanges specified in AS 2129";
+            FabricationReferenceLegendTextBlock.Text = isAsme
+                ? "ASME/ANSI symbols: O = flange OD; tf = minimum thickness; X = hub diameter; Ah = welding-neck hub diameter; Y = length through hub; B = bore; K = bolt circle; H = bolt hole."
+                : "AS 2129 symbols: A = outside diameter; D = thickness; G = raised-face diameter; K = bolt circle; H = bolt hole.";
+            FabricationReferenceNoteTextBlock.Text = isAsme
+                ? "Showing nominal size and Dimensions columns from the selected Atlas ASME B16.5 table. Flange weights are intentionally omitted."
+                : "Showing nominal size and Dimensions columns from the selected Atlas AS 2129 table. SOW and blind weights are intentionally omitted.";
+
+            string diagramFileName = isAsme
+                ? AtlasFlangeReferenceCatalog.AsmeDiagramFileName
+                : AtlasFlangeReferenceCatalog.As2129DiagramFileName;
+            FabricationReferenceImage.Source =
+                LoadFabricationReferenceImage(diagramFileName);
+        }
+
+        private static BitmapImage LoadFabricationReferenceImage(
+            string fileName)
+        {
+            string path = AtlasFlangeReferenceCatalog.ResolveReferenceFile(
+                fileName);
+
+            if (string.IsNullOrWhiteSpace(path))
+                return null;
+
+            using (FileStream stream = File.OpenRead(path))
+            {
+                BitmapImage image = new BitmapImage();
+                image.BeginInit();
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.StreamSource = stream;
+                image.EndInit();
+                image.Freeze();
+                return image;
+            }
+        }
+
+        private void FabricationReferenceLink_RequestNavigate(
+            object sender,
+            RequestNavigateEventArgs e)
+        {
+            OpenFabricationReference(e.Uri.AbsoluteUri);
+            e.Handled = true;
+        }
+
+        private void OpenOfflineFabricationReference_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            string referencePath =
+                AtlasFlangeReferenceCatalog.ResolveReferenceFile(
+                    AtlasFlangeReferenceCatalog.PdfFileName);
+
+            if (!File.Exists(referencePath))
+            {
+                AppDialog.Show(
+                    "Atlas flange reference",
+                    "The offline reference PDF could not be found. Reinstall the plugin to restore the packaged documentation.",
+                    MessageDialogIcon.Warning,
+                    MessageDialogButtons.OK,
+                    _ownerHwnd);
+                return;
+            }
+
+            OpenFabricationReference(referencePath);
+        }
+
+        private void OpenFabricationReference(string pathOrUrl)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(pathOrUrl)
+                {
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                AppDialog.Show(
+                    "Atlas flange reference",
+                    "The reference could not be opened.\n\n" + ex.Message,
+                    MessageDialogIcon.Warning,
+                    MessageDialogButtons.OK,
+                    _ownerHwnd);
+            }
         }
 
         private void RefreshProcurementLogoPlaceholders()
@@ -851,13 +1007,17 @@ namespace ParallelSystemsPlugin.UI.Dialogs
                 newConfig.Procurement.BomAssemblyRegister = ChkBomAssemblyRegister.IsChecked == true;
                 newConfig.Procurement.BomCutList = ChkBomCutList.IsChecked == true;
                 newConfig.Procurement.BomFittingReport = ChkBomFittingReport.IsChecked == true;
-                newConfig.Procurement.IncludeWeldInFittingReport = ChkIncludeWeldInFittingReport.IsChecked == true;
+                bool includeWeld = ChkIncludeWeld.IsChecked == true;
+                newConfig.Procurement.IncludeWeld = includeWeld;
+                newConfig.Procurement.IncludeWeldInFittingReport = includeWeld;
                 newConfig.Procurement.BomLoadingReport = ChkBomLoadingReport.IsChecked == true;
                 newConfig.Procurement.BomPipeReport = ChkBomPipeReport.IsChecked == true;
                 newConfig.Procurement.LabelReport = ChkLabelReport.IsChecked == true;
                 newConfig.Procurement.BomFieldMaterialReport = ChkBomFieldMaterialReport.IsChecked == true;
+                newConfig.Procurement.IncludeWeldInFieldMaterialReport = includeWeld;
                 newConfig.Procurement.BomAccessoryReport = ChkBomAccessoryReport.IsChecked == true;
                 newConfig.Procurement.IncludeSiteMeasure = ChkIncludeSiteMeasure.IsChecked == true;
+                newConfig.Procurement.GroupByPackage = ChkGroupByPackage.IsChecked == true;
                 newConfig.Procurement.ExportReportsToExcel = RdoExportExcel.IsChecked == true;
 
                 newConfig.Procurement.CutListMaximumLength = ParseDoubleOrDefault(ProcCutListMaximumLengthTextBox.Text, 6000);
@@ -1124,13 +1284,6 @@ namespace ParallelSystemsPlugin.UI.Dialogs
         private void BtnAutoDetect_Click(object sender, RoutedEventArgs e)
         {
             AutoDetectProjectDetails();
-        }
-
-        private void ReportCheckBox_Click(object sender, RoutedEventArgs e)
-        {
-            FittingReportOptionsPanel.Visibility = ReferenceEquals(sender, ChkBomFittingReport)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
         }
 
         private void AutoDetectProjectDetails()

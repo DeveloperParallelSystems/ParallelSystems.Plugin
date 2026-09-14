@@ -27,7 +27,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         private const double FT_TO_MM = 304.8;
 
         // Adjust these if your shared params differ
-        private const string PARAM_PACKAGE = "Vic_Area_PT";
         private const string PARAM_MATERIAL = "Segment Description"; // material/grade/segment desc
         private const string PARAM_ASSEMBLY_NAME = "Assembly Name";  // change if your assembly name param differs
 
@@ -479,12 +478,15 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             foreach (var e in elements)
             {
+                if (Helpers.Elements.IsDoNotSchedule(doc, e))
+                    continue;
+
                 double lenFt = GetDoubleParam(e, BuiltInParameter.CURVE_ELEM_LENGTH);
                 double lenMm = lenFt * FT_TO_MM;
                 if (lenMm <= 0.01) continue;
 
-                string package = Helpers.Elements.NormalizeProcurementPackageName(
-                    GetStringParam(e, PARAM_PACKAGE));
+                string package = Helpers.Elements
+                    .GetStandardProcurementPackageName(doc, e);
                 string material = GetStringParam(e, PARAM_MATERIAL);
                 string assemblyName = GetStringParam(e, PARAM_ASSEMBLY_NAME);
                 if (string.IsNullOrWhiteSpace(assemblyName))

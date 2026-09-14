@@ -62,7 +62,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             rows = rows.Where(x => includeSiteMeasureAssemblies || !siteMeasureNames.Contains(x.AssemblyName)).ToList();
 
             rows = rows
-                .Where(x => !IsExcludedCategory(x.TypeBucket, cfg.IncludeWeldInFittingReport))
+                .Where(x => !IsExcludedCategory(
+                    x.TypeBucket,
+                    cfg.IncludeWeld || cfg.IncludeWeldInFittingReport))
                 .ToList();
 
 
@@ -280,18 +282,32 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         {
             var packageGroupList = packageGroups.ToList();
             bool isMasterList = string.IsNullOrWhiteSpace(worksheetName) && packageGroupList.Count > 1;
+            bool groupMasterByPackage = isMasterList && cfg.GroupByPackage;
 
             var sheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
                 cfg,
                 "BOM Fitting Report",
-                new[] { "Package", "Category", "Qty", "Size", "Description" },
+                groupMasterByPackage || !isMasterList
+                    ? new[] { "Package", "Category", "Qty", "Size", "Description" }
+                    : new[] { "Category", "Qty", "Size", "Description" },
                 note);
-            sheet.SetColumnWidth(1, 28);
-            sheet.SetColumnWidth(2, 24);
-            sheet.SetColumnWidth(3, 10);
-            sheet.SetColumnWidth(4, 14);
-            sheet.SetColumnWidth(5, 45);
-            sheet.CenterColumns(3);
+            if (groupMasterByPackage || !isMasterList)
+            {
+                sheet.SetColumnWidth(1, 28);
+                sheet.SetColumnWidth(2, 24);
+                sheet.SetColumnWidth(3, 10);
+                sheet.SetColumnWidth(4, 14);
+                sheet.SetColumnWidth(5, 45);
+                sheet.CenterColumns(3);
+            }
+            else
+            {
+                sheet.SetColumnWidth(1, 24);
+                sheet.SetColumnWidth(2, 10);
+                sheet.SetColumnWidth(3, 14);
+                sheet.SetColumnWidth(4, 45);
+                sheet.CenterColumns(2);
+            }
             if (!string.IsNullOrWhiteSpace(worksheetName))
                 sheet.Name = worksheetName;
 
@@ -299,14 +315,10 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (isMasterList)
             {
                 var masterRows = packageGroupList
-                    .SelectMany(package => package.Select(item => new
-                    {
-                        Package = package.Key ?? NO_PACKAGE_ASSIGNED,
-                        Item = item
-                    }))
+                    .SelectMany(package => package.Select(item => new { Package = package.Key ?? NO_PACKAGE_ASSIGNED, Item = item }))
                     .GroupBy(x => new
                     {
-                        x.Package,
+                        Package = cfg.GroupByPackage ? x.Package : "",
                         x.Item.TypeBucket,
                         x.Item.SizeText,
                         x.Item.Description
@@ -329,13 +341,25 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                 foreach (var item in masterRows)
                 {
-                    sheet.Add(
-                        alt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                        item.Package,
-                        item.Category,
-                        item.Qty,
-                        item.SizeText,
-                        item.Description);
+                    if (cfg.GroupByPackage)
+                    {
+                        sheet.Add(
+                            alt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                            item.Package,
+                            item.Category,
+                            item.Qty,
+                            item.SizeText,
+                            item.Description);
+                    }
+                    else
+                    {
+                        sheet.Add(
+                            alt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                            item.Category,
+                            item.Qty,
+                            item.SizeText,
+                            item.Description);
+                    }
                     alt = !alt;
                 }
             }
@@ -489,6 +513,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             foreach (var e in fittings)
             {
+                if (Helpers.Elements.IsDoNotSchedule(doc, e))
+                    continue;
+
                 string assemblyName = "";
                 if (e.AssemblyInstanceId != ElementId.InvalidElementId)
                 {
@@ -543,9 +570,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     continue;
                 }
 
-                string packageName = GetPackageNameFromAssemblyName(assemblyName);
-                if (string.IsNullOrWhiteSpace(packageName))
-                    packageName = Helpers.Elements.GetProcurementPackageName(doc, e);
+                string packageName = Helpers.Elements
+                    .GetStandardProcurementPackageName(doc, e);
                 if (string.IsNullOrWhiteSpace(packageName))
                     packageName = ResolvePackageFromConnectedPipe(doc, e);
 
@@ -623,19 +649,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 : value;
         }
 
-        private static string GetPackageNameFromAssemblyName(string assemblyName)
-        {
-            if (string.IsNullOrWhiteSpace(assemblyName))
-                return "";
-
-            int lastDash = assemblyName.LastIndexOf('-');
-            string packageName = lastDash > 0
-                ? assemblyName.Substring(0, lastDash).Trim()
-                : assemblyName.Trim();
-
-            return Helpers.Elements.NormalizeProcurementPackageName(packageName);
-        }
-
         private static string ResolvePackageFromConnectedPipe(
             RvtDoc doc,
             Element fitting)
@@ -646,13 +659,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             foreach (Pipe pipe in GetConnectedPipesThroughVictaulicCouplings(fitting)
                 .OrderBy(x => RevitApiCompatibility.GetElementIdValue(x.Id)))
             {
-                if (pipe.AssemblyInstanceId == ElementId.InvalidElementId)
-                    continue;
-
-                AssemblyInstance assembly =
-                    doc.GetElement(pipe.AssemblyInstanceId) as AssemblyInstance;
                 string packageName = Helpers.Elements
-                    .GetProcurementPackageNameFromAssembly(assembly);
+                    .GetStandardProcurementPackageName(doc, pipe);
 
                 if (!string.IsNullOrWhiteSpace(packageName))
                     return packageName;
