@@ -265,7 +265,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                if (packageGroups.Count > 1)
+                if (p.CreatePackageWorksheets && packageGroups.Count > 1)
                 {
                     foreach (var packageGroup in packageGroups)
                     {

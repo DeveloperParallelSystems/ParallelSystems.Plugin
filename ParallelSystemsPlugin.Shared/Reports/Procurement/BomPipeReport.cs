@@ -308,7 +308,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     showPackageInSummary)
             };
 
-            if (packageGroups.Count > 1)
+            if (cfg.CreatePackageWorksheets && packageGroups.Count > 1)
             {
                 foreach (var packageGroup in packageGroups)
                 {

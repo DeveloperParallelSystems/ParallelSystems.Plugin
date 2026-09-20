@@ -296,6 +296,7 @@ namespace ParallelSystemsPlugin.Helpers
                     BomAccessoryReport = true,
                     IncludeSiteMeasure = false,
                     GroupByPackage = false,
+                    CreatePackageWorksheets = false,
                     ExportReportsToExcel = true,
 
                     CutListMaximumLength = 6000,

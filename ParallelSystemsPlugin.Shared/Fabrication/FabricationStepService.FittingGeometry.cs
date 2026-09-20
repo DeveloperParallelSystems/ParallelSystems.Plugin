@@ -26,6 +26,7 @@ namespace ParallelSystemsPlugin.Fabrication
             ISet<ElementId> selectedSourceIds,
             ShapedBranchConnection shapedBranchConnection,
             SideCouplingConnection sideCouplingConnection,
+            FabricationFlangeGeometryMode flangeGeometryMode,
             IList<FabricationIssue> issues)
         {
             // Weld-gap and non-connector helper families are connection
@@ -47,6 +48,65 @@ namespace ParallelSystemsPlugin.Fabrication
                 });
 
                 return null;
+            }
+
+            bool ownerIsFlange = IsFlangeLike(doc, element);
+
+            if (ownerIsFlange &&
+                flangeGeometryMode ==
+                    FabricationFlangeGeometryMode.OriginalModel)
+            {
+                return new FabricationElementGeometry
+                {
+                    SourceElementId = element.Id,
+                    SourceUniqueId = element.UniqueId,
+                    SourceName = GetElementDisplayName(element),
+                    CategoryName =
+                        element.Category?.Name ?? "Pipe Fitting",
+                    Geometry = sourceSolids
+                        .Cast<GeometryObject>()
+                        .ToList(),
+                    Status = "Original flange geometry retained",
+                    Notes =
+                        "Original model flange exported one-to-one; no " +
+                        "generated bore, chamfer, or Atlas bolt drilling " +
+                        "was applied. The complete export is still centred " +
+                        "by the normal STEP placement process."
+                };
+            }
+
+            if (ownerIsFlange &&
+                flangeGeometryMode ==
+                    FabricationFlangeGeometryMode.AtlasConfiguration)
+            {
+                List<ConnectorBore> drillingConnectors =
+                    CreateFlangeDrillingConnectorBores(
+                        doc,
+                        element,
+                        selectedSourceIds);
+
+                if (drillingConnectors.Count == 0)
+                {
+                    issues.Add(new FabricationIssue
+                    {
+                        Severity = FabricationIssueSeverity.Blocking,
+                        ElementId = element.Id,
+                        ElementName = GetElementDisplayName(element),
+                        Message =
+                            "Atlas flange drilling requires at least one " +
+                            "round physical piping connector to establish " +
+                            "the flange axis and nominal diameter."
+                    });
+
+                    return null;
+                }
+
+                return BuildAtlasConfiguredFlangeGeometry(
+                    doc,
+                    element,
+                    sourceSolids,
+                    drillingConnectors,
+                    issues);
             }
 
             List<ConnectorBore> bores = ResolveConnectorBores(

@@ -2,10 +2,13 @@
 
 ## 1.17.10 - Flange Configuration and STEP Bolt Holes (Internal / Unreleased)
 
-- Added a read-only `Configurations > Fabrication` Atlas Steels flange reference covering Class 150, 300, 600, 900, 1500, and 2500 ASME B16.5 flanges plus Tables D, E, F, and H to AS 2129.
-- Added a component-type selector (currently Flange), reference-table and nominal-size filters, table-specific nominal-size/dimension columns, separate ASME/ANSI and AS 2129 diagrams, and online/offline source-manual links.
-- Added catalog-driven flange bolt-hole generation to Fabrication STEP. The exporter resolves an explicit flange standard and class/table from Revit type metadata, resolves nominal size from physical piping connectors, and requires one exact catalog row instead of guessing.
-- Bolt-hole cutters now use the configured hole count, diameter, and pitch-circle diameter, with evenly spaced holes straddling the flange centreline axes. Invalid, ambiguous, or incomplete catalog matches remain blocking rather than producing unverified geometry.
+- Added a read-only `Configurations > Fabrication` Atlas Steels Section 3 flange reference covering Class 150, 300, 600, 900, 1500, and 2500 ASME B16.5 flanges; Tables D, E, F, and H to AS 2129; PN16 AS 4087; and PN16 EN 1092.
+- Added a component-type selector (currently Flange), reference-table and nominal-size filters, table-specific nominal-size/dimension columns, separate ASME/ANSI and table-flange diagrams, and updated online/offline Section 3 source-manual links.
+- Added exact PN16 AS 4087 and EN 1092 drilling rows to the core flange catalog and enabled explicit EN 1092 classification for STEP bolt-hole lookup.
+- Made the flange dimension diagram selectable so it opens in a large, resizable reference window with keyboard close support.
+- Added a flange choice to Fabrication STEP. `Original model geometry` exports each flange source solid one-to-one with no generated bore, chamfer, or drilling alteration. `Atlas Steels configuration` retains the source flange body and central opening and applies only table-driven bolt drilling; both paths keep the existing centred STEP placement.
+- Atlas STEP lookup identifies Class 150/300/600/900/1500/2500, Table D/E/F/H, AS 4087 PN16, or EN 1092 PN16 from the flange family/type name, then selects one exact row from the physical connector nominal diameter. The confirmation lists each detected match before generation.
+- Bolt-hole cutters use the matched Section 3 row's hole count, diameter, and pitch-circle diameter, with evenly spaced holes straddling the flange centreline axes. Invalid, ambiguous, incomplete, or non-intersecting configurations remain blocking rather than producing unverified geometry.
 - Updated Pipe End Prep mapping so End 1, End 2, and End Prep are independent optional outputs; blank configuration fields are ignored and saved mapping names are trimmed.
 - Added a preflight that blocks partial, non-Text, read-only, or type-bound pipe mappings before any values are changed.
 - Added a confirmation flow that creates missing Text instance parameters for Pipes or adds Pipes to a compatible existing project-parameter binding, then verifies the mappings again before continuing.

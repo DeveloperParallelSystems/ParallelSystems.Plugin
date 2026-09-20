@@ -737,13 +737,17 @@
                                 <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
                                     <Separator Margin="5,10,5,10"/>
                                         <CheckBox x:Name="ChkIncludeSiteMeasure" FontSize="15" Margin="5"
-                                                  Content="INCLUDE SITE MEASURE"/>
-                                        <CheckBox x:Name="ChkGroupByPackage" FontSize="15" Margin="5"
-                                                  Content="GROUP BY PACKAGE"
-                                                  ToolTip="When enabled, the first Excel worksheet keeps separate summary rows for each package. Package worksheets are always kept separate."/>
+                                                  Content="INCLUDE SITE-MEASURE ITEMS"
+                                                  ToolTip="Includes items from assemblies marked SITE MEASURE. When disabled, those items are omitted from the reports."/>
                                         <CheckBox x:Name="ChkIncludeWeld" FontSize="15" Margin="5"
-                                                  Content="INCLUDE WELD"
-                                                  ToolTip="Includes weld rows in every selected report where weld filtering applies."/>
+                                                  Content="INCLUDE WELD ITEMS"
+                                                  ToolTip="Includes weld items in reports that support weld filtering, currently Fitting Report and Field Material Report."/>
+                                        <CheckBox x:Name="ChkGroupByPackage" FontSize="15" Margin="5"
+                                                  Content="GROUP SUMMARY BY PACKAGE"
+                                                  ToolTip="Keeps matching rows separated by package on the main summary worksheet. When disabled, matching items are combined across packages where the report supports aggregation."/>
+                                        <CheckBox x:Name="ChkCreatePackageWorksheets" FontSize="15" Margin="5"
+                                                  Content="CREATE PACKAGE WORKSHEETS"
+                                                  ToolTip="Adds one worksheet for each represented package after the main report worksheet. When disabled, the Excel workbook contains only the main report worksheet."/>
 
                                         <TextBlock Text="OUTPUT FORMAT" FontSize="15" FontWeight="SemiBold" Margin="5,8,5,2"/>
                                     <StackPanel Orientation="Horizontal" Margin="5">
@@ -895,20 +899,25 @@
                                     <TextBlock Margin="0,3,0,8"
                                                Foreground="#64748B"
                                                TextWrapping="Wrap"
-                                               Text="Match the letter in a column header to the Atlas flange diagram."/>
+                                               Text="Match the letter in a column header to the Atlas flange diagram. Select the diagram to enlarge it."/>
                                 </StackPanel>
 
-                                <Border Grid.Row="1"
+                                <Button Grid.Row="1"
+                                        Padding="4"
                                         Background="#FAFAFA"
-                                        BorderBrush="#E2E8F0"
+                                        BorderBrush="#CBD5E1"
                                         BorderThickness="1"
-                                        Padding="4">
+                                        Cursor="Hand"
+                                        HorizontalContentAlignment="Stretch"
+                                        VerticalContentAlignment="Stretch"
+                                        Click="FabricationReferenceImage_Click"
+                                        ToolTip="Open a larger flange dimension diagram">
                                     <Image x:Name="FabricationReferenceImage"
                                            Stretch="Uniform"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
-                                           ToolTip="Atlas Steels ASME/ANSI flange dimension diagrams"/>
-                                </Border>
+                                           IsHitTestVisible="False"/>
+                                </Button>
 
                                 <TextBlock x:Name="FabricationReferenceLegendTextBlock"
                                            Grid.Row="2"
@@ -920,7 +929,7 @@
 
                                 <StackPanel Grid.Row="3">
                                     <TextBlock TextWrapping="Wrap" FontSize="12">
-                                        <Hyperlink NavigateUri="https://atlassteels.com.au/wp-content/uploads/2021/12/Atlas-Steels-Product-Reference-Manual-Section-5-Pages-11-to-17-1.pdf"
+                                        <Hyperlink NavigateUri="https://atlassteels.com.au/wp-content/uploads/2021/08/Atlas-Steels-Product-Manual-Section-3.pdf"
                                                    RequestNavigate="FabricationReferenceLink_RequestNavigate">Open the Atlas Steels website reference</Hyperlink>
                                     </TextBlock>
                                     <Button Content="Open offline reference PDF"

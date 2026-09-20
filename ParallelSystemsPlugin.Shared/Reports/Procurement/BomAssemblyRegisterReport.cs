@@ -414,7 +414,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (packageGroups.Count > 1)
+            if (cfg.CreatePackageWorksheets && packageGroups.Count > 1)
             {
                 foreach (var packageGroup in packageGroups)
                 {

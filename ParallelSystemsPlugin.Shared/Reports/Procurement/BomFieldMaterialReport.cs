@@ -1004,7 +1004,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     groupSummaryByPackage)
             };
 
-            if (hasMultiplePackages)
+            if (cfg.CreatePackageWorksheets && hasMultiplePackages)
             {
                 foreach (var packageGroup in packageGroups)
                 {

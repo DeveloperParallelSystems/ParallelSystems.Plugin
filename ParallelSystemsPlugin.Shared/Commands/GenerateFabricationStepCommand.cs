@@ -132,6 +132,64 @@ namespace ParallelSystemsPlugin.Commands
                         return Result.Cancelled;
                 }
 
+                IList<FabricationFlangeReferenceMatch> flangeMatches =
+                    FabricationStepService.InspectSelectedFlanges(
+                        doc,
+                        selection);
+
+                if (flangeMatches.Count > 0)
+                {
+                    int flangeChoice = AppDialog.Choose(
+                        uiApp,
+                        commandTitle + " - Flange Geometry",
+                        flangeMatches.Count == 1
+                            ? "A flange was detected. How would you like to generate it?"
+                            : flangeMatches.Count.ToString() +
+                              " flanges were detected. How would you like to generate them?",
+                        BuildFlangeChoiceMessage(flangeMatches),
+                        new[]
+                        {
+                            "Original model geometry - export each flange exactly as modelled, with no flange alterations",
+                            "Atlas Steels configuration - retain the source flange body and apply the matched Atlas bolt drilling"
+                        },
+                        defaultOptionIndex: 0);
+
+                    if (flangeChoice < 0)
+                        return Result.Cancelled;
+
+                    if (flangeChoice == 1)
+                    {
+                        List<FabricationFlangeReferenceMatch> unresolved =
+                            flangeMatches
+                                .Where(x => !x.IsMatched)
+                                .ToList();
+
+                        if (unresolved.Count > 0)
+                        {
+                            AppDialog.ShowDetailed(
+                                uiApp,
+                                commandTitle + " - Atlas Flange Configuration",
+                                "Atlas-configured STEP generation cannot continue.",
+                                "Every selected flange must resolve to exactly one Atlas table row from its name and physical connector nominal diameter.",
+                                string.Join(
+                                    Environment.NewLine,
+                                    unresolved.Select(x =>
+                                        x.ElementName + ": " + x.Error)),
+                                MessageDialogIcon.Error);
+
+                            return Result.Cancelled;
+                        }
+
+                        selection.FlangeGeometryMode =
+                            FabricationFlangeGeometryMode.AtlasConfiguration;
+                    }
+                    else
+                    {
+                        selection.FlangeGeometryMode =
+                            FabricationFlangeGeometryMode.OriginalModel;
+                    }
+                }
+
                 // Generate and validate privately first. The user is not asked
                 // for a destination, and no final STEP file is created, until
                 // the complete fabrication generation succeeds without a
@@ -304,6 +362,34 @@ namespace ParallelSystemsPlugin.Commands
                 TryDeleteDirectory(temporaryDirectory);
             }
 #endif
+        }
+
+        private static string BuildFlangeChoiceMessage(
+            IEnumerable<FabricationFlangeReferenceMatch> matches)
+        {
+            List<string> lines = (matches ??
+                    Enumerable.Empty<FabricationFlangeReferenceMatch>())
+                .GroupBy(x => new
+                {
+                    x.ElementName,
+                    x.NominalDiameterMm,
+                    x.ReferenceTable,
+                    x.IsMatched,
+                    x.Error
+                })
+                .Select(group =>
+                    group.Count().ToString() + " x " +
+                    group.Key.ElementName +
+                    (group.Key.NominalDiameterMm > 0
+                        ? " - DN " + group.Key.NominalDiameterMm.ToString()
+                        : " - DN unresolved") +
+                    (group.Key.IsMatched
+                        ? " - " + group.Key.ReferenceTable
+                        : " - Atlas match unavailable: " +
+                          group.Key.Error))
+                .ToList();
+
+            return string.Join(Environment.NewLine, lines);
         }
 
 #if REVIT2025_OR_GREATER

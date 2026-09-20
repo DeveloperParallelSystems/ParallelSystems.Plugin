@@ -13,6 +13,12 @@ namespace ParallelSystemsPlugin.Fabrication
         Module
     }
 
+    internal enum FabricationFlangeGeometryMode
+    {
+        OriginalModel,
+        AtlasConfiguration
+    }
+
     internal sealed class FabricationSelectionExclusion
     {
         public ElementId ElementId { get; set; }
@@ -24,6 +30,9 @@ namespace ParallelSystemsPlugin.Fabrication
     {
         public FabricationExportMode ExportMode { get; set; } =
             FabricationExportMode.Spool;
+
+        public FabricationFlangeGeometryMode FlangeGeometryMode { get; set; } =
+            FabricationFlangeGeometryMode.OriginalModel;
 
         // Elements explicitly selected by the user and therefore included in
         // the generated STEP file.
@@ -53,6 +62,16 @@ namespace ParallelSystemsPlugin.Fabrication
         public int SupportElementCount { get; set; }
 
         public string SuggestedFileName { get; set; }
+    }
+
+    internal sealed class FabricationFlangeReferenceMatch
+    {
+        public ElementId ElementId { get; set; }
+        public string ElementName { get; set; }
+        public int NominalDiameterMm { get; set; }
+        public string ReferenceTable { get; set; }
+        public bool IsMatched { get; set; }
+        public string Error { get; set; }
     }
 
     internal enum FabricationIssueSeverity

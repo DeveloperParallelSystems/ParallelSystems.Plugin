@@ -76,6 +76,22 @@ namespace ParallelSystemsPlugin.Fabrication
                 return result;
             }
 
+            if (sourceElements.Any(x => IsFlangeLike(doc, x)))
+            {
+                result.Issues.Add(new FabricationIssue
+                {
+                    Severity = FabricationIssueSeverity.Information,
+                    Message = selection.FlangeGeometryMode ==
+                        FabricationFlangeGeometryMode.AtlasConfiguration
+                            ? "Flange geometry mode: Atlas Steels configuration. " +
+                              "Each source flange body is retained and only the " +
+                              "matched Atlas table bolt drilling is applied."
+                            : "Flange geometry mode: Original model. Source flange " +
+                              "solids are exported without generated bores, chamfers, " +
+                              "or Atlas bolt drilling."
+                });
+            }
+
             HashSet<ElementId> selectedSourceIds =
                 new HashSet<ElementId>(
                     sourceElements.Select(x => x.Id));
@@ -308,6 +324,7 @@ namespace ParallelSystemsPlugin.Fabrication
                         selectedSourceIds,
                         shapedBranchConnection,
                         sideCouplingConnection,
+                        selection.FlangeGeometryMode,
                         result.Issues);
 
                 if (fittingGeometry != null)

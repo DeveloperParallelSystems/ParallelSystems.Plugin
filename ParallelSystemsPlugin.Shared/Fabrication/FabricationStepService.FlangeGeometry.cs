@@ -1,5 +1,5 @@
 using Autodesk.Revit.DB;
-using ParallelSystemsPlugin.Models.Configs;
+using ParallelSystemsPlugin.Models;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -22,7 +22,7 @@ namespace ParallelSystemsPlugin.Fabrication
             description = null;
             error = null;
 
-            FlangeDimensionConfiguration configuration;
+            AtlasFlangeReferenceRow configuration;
 
             if (!TryResolveFlangeConfiguration(
                     doc,
@@ -39,7 +39,7 @@ namespace ParallelSystemsPlugin.Fabrication
             double holeDiameterMillimetres;
 
             if (!int.TryParse(
-                    configuration.NumberOfHoles,
+                    configuration.Bolts,
                     NumberStyles.Integer,
                     CultureInfo.InvariantCulture,
                     out holeCount) ||
@@ -53,7 +53,7 @@ namespace ParallelSystemsPlugin.Fabrication
             }
 
             if (!TryParseCatalogMillimetres(
-                    configuration.PitchCircleDiameterMm,
+                    configuration.K,
                     out pitchCircleDiameterMillimetres) ||
                 pitchCircleDiameterMillimetres <= 0)
             {
@@ -65,7 +65,7 @@ namespace ParallelSystemsPlugin.Fabrication
             }
 
             if (!TryParseCatalogMillimetres(
-                    configuration.HoleDiameter,
+                    configuration.H,
                     out holeDiameterMillimetres) ||
                 holeDiameterMillimetres <= 0)
             {
@@ -79,7 +79,12 @@ namespace ParallelSystemsPlugin.Fabrication
             double outsideDiameterMillimetres;
 
             if (TryParseCatalogMillimetres(
-                    configuration.OutsideDiameterMm,
+                    string.Equals(
+                        configuration.Kind,
+                        "ASME",
+                        StringComparison.Ordinal)
+                        ? configuration.O
+                        : configuration.A,
                     out outsideDiameterMillimetres) &&
                 outsideDiameterMillimetres > 0 &&
                 pitchCircleDiameterMillimetres +
@@ -260,63 +265,229 @@ namespace ParallelSystemsPlugin.Fabrication
             return cutters.Count == holeCount;
         }
 
+        private static List<ConnectorBore>
+            CreateFlangeDrillingConnectorBores(
+                Document doc,
+                Element flange,
+                ISet<ElementId> selectedSourceIds)
+        {
+            List<ConnectorBore> result = new List<ConnectorBore>();
+            ConnectorManager manager = GetConnectorManager(flange);
+
+            if (manager == null)
+                return result;
+
+            foreach (Connector connector in manager.Connectors)
+            {
+                if (connector == null ||
+                    connector.Domain != Domain.DomainPiping ||
+                    connector.ConnectorType != ConnectorType.End ||
+                    connector.Shape != ConnectorProfileType.Round ||
+                    connector.Radius <= GeometryTolerance)
+                {
+                    continue;
+                }
+
+                Element connectedElement = GetConnectedElement(
+                    flange,
+                    connector,
+                    selectedSourceIds);
+                XYZ radialBasisX = null;
+                XYZ radialBasisY = null;
+
+                try
+                {
+                    Transform coordinateSystem =
+                        connector.CoordinateSystem;
+
+                    if (coordinateSystem != null)
+                    {
+                        radialBasisX = coordinateSystem.BasisX;
+                        radialBasisY = coordinateSystem.BasisY;
+                    }
+                }
+                catch
+                {
+                    // The bolt-pattern builder has a deterministic fallback
+                    // when a family connector has no usable radial basis.
+                }
+
+                result.Add(new ConnectorBore
+                {
+                    Origin = connector.Origin,
+                    OriginalConnectorOrigin = connector.Origin,
+                    OutwardDirection = GetConnectorOutwardDirection(
+                        flange,
+                        connector,
+                        connectedElement),
+                    RadialBasisX = radialBasisX,
+                    RadialBasisY = radialBasisY,
+                    NominalDiameter = connector.Radius * 2.0,
+                    ConnectedElementId = connectedElement?.Id,
+                    ConnectedElementName = connectedElement == null
+                        ? string.Empty
+                        : GetElementDisplayName(connectedElement),
+                    IsSynthetic = false,
+                    SourceDescription =
+                        "Physical flange connector used for Atlas table lookup"
+                });
+            }
+
+            return result;
+        }
+
+        private static FabricationElementGeometry
+            BuildAtlasConfiguredFlangeGeometry(
+                Document doc,
+                Element flange,
+                IList<Solid> sourceSolids,
+                IList<ConnectorBore> drillingConnectors,
+                IList<FabricationIssue> issues)
+        {
+            List<Solid> boltHoleCutters;
+            string boltHoleDescription;
+            string boltHoleError;
+
+            if (!TryCreateFlangeBoltHoleCutters(
+                    doc,
+                    flange,
+                    drillingConnectors,
+                    out boltHoleCutters,
+                    out boltHoleDescription,
+                    out boltHoleError))
+            {
+                issues.Add(new FabricationIssue
+                {
+                    Severity = FabricationIssueSeverity.Blocking,
+                    ElementId = flange.Id,
+                    ElementName = GetElementDisplayName(flange),
+                    Message = boltHoleError
+                });
+
+                return null;
+            }
+
+            List<Solid> currentSolids = sourceSolids.ToList();
+            int holesCut = 0;
+
+            foreach (Solid cutter in boltHoleCutters)
+            {
+                bool removed;
+                currentSolids = SubtractCutterFromSolids(
+                    currentSolids,
+                    cutter,
+                    out removed);
+
+                if (!removed)
+                {
+                    issues.Add(new FabricationIssue
+                    {
+                        Severity = FabricationIssueSeverity.Blocking,
+                        ElementId = flange.Id,
+                        ElementName = GetElementDisplayName(flange),
+                        Message =
+                            "A configured Atlas flange bolt-hole cutter did " +
+                            "not intersect the retained source flange body. " +
+                            "The STEP export was stopped rather than emitting " +
+                            "an incomplete bolt pattern."
+                    });
+
+                    return null;
+                }
+
+                holesCut++;
+            }
+
+            List<GeometryObject> geometry = currentSolids
+                .Where(x =>
+                    x != null &&
+                    x.Volume > GeometryTolerance)
+                .Cast<GeometryObject>()
+                .ToList();
+
+            if (geometry.Count == 0)
+            {
+                issues.Add(new FabricationIssue
+                {
+                    Severity = FabricationIssueSeverity.Blocking,
+                    ElementId = flange.Id,
+                    ElementName = GetElementDisplayName(flange),
+                    Message =
+                        "The flange geometry became invalid after applying " +
+                        "the configured Atlas bolt drilling."
+                });
+
+                return null;
+            }
+
+            return new FabricationElementGeometry
+            {
+                SourceElementId = flange.Id,
+                SourceUniqueId = flange.UniqueId,
+                SourceName = GetElementDisplayName(flange),
+                CategoryName =
+                    flange.Category?.Name ?? "Pipe Fitting",
+                Geometry = geometry,
+                Status =
+                    "Atlas-configured flange; verified bolt holes " +
+                    holesCut.ToString(CultureInfo.InvariantCulture),
+                Notes =
+                    "Source flange body and its existing central opening " +
+                    "were retained without generated bore or chamfer " +
+                    "changes; " + boltHoleDescription
+            };
+        }
+
+        internal static IList<FabricationFlangeReferenceMatch>
+            InspectSelectedFlanges(
+                Document doc,
+                FabricationSelection selection)
+        {
+            List<FabricationFlangeReferenceMatch> results =
+                new List<FabricationFlangeReferenceMatch>();
+
+            if (doc == null || selection == null)
+                return results;
+
+            foreach (Element flange in selection.SourceElementIds
+                         .Where(x => x != null)
+                         .Select(doc.GetElement)
+                         .Where(x => IsFlangeLike(doc, x)))
+            {
+                List<double> nominalSizes =
+                    GetPhysicalConnectorNominalSizesMillimetres(flange);
+                AtlasFlangeReferenceRow row;
+                int nominalDiameter;
+                string error;
+                bool matched = TryResolveFlangeConfiguration(
+                    doc,
+                    flange,
+                    nominalSizes,
+                    out row,
+                    out nominalDiameter,
+                    out error);
+
+                results.Add(new FabricationFlangeReferenceMatch
+                {
+                    ElementId = flange.Id,
+                    ElementName = GetElementDisplayName(flange),
+                    NominalDiameterMm = nominalDiameter,
+                    ReferenceTable = row?.Section,
+                    IsMatched = matched,
+                    Error = error
+                });
+            }
+
+            return results;
+        }
+
         private static bool TryResolveFlangeConfiguration(
             Document doc,
             Element flange,
             IList<ConnectorBore> bores,
-            out FlangeDimensionConfiguration configuration,
+            out AtlasFlangeReferenceRow configuration,
             out string error)
         {
-            configuration = null;
-            error = null;
-
-            string classification =
-                BuildFlangeConfigurationText(doc, flange);
-            string normalized =
-                NormalizeClassificationText(classification);
-            string compact = normalized.Replace(
-                " ",
-                string.Empty);
-            string padded = " " + normalized + " ";
-
-            string standard;
-
-            if (compact.Contains("AS2129"))
-                standard = "AS 2129";
-            else if (compact.Contains("AS4087"))
-                standard = "AS 4087";
-            else if (compact.Contains("ANSI") &&
-                     compact.Contains("B165"))
-                standard = "ANSI B16.5";
-            else if (compact.Contains("ISO7005") ||
-                     padded.Contains(" DIN "))
-                standard = "ISO 7005 (DIN)";
-            else
-            {
-                error =
-                    "The flange standard could not be resolved. Include an " +
-                    "explicit standard such as AS 2129, AS 4087, ISO 7005 " +
-                    "or ANSI B16.5 in the flange type, description, lookup " +
-                    "table name, or Standard parameter.";
-                return false;
-            }
-
-            string classOrTable =
-                ResolveFlangeClassOrTable(
-                    standard,
-                    padded,
-                    compact);
-
-            if (string.IsNullOrWhiteSpace(classOrTable))
-            {
-                error =
-                    "The flange class/table could not be resolved for " +
-                    standard +
-                    ". Include the class or table in the flange type, " +
-                    "description, lookup table name, or Class/Table parameter.";
-                return false;
-            }
-
             List<double> nominalSizes = (bores ??
                     new List<ConnectorBore>())
                 .Where(x =>
@@ -326,47 +497,86 @@ namespace ParallelSystemsPlugin.Fabrication
                 .Select(x =>
                     x.NominalDiameter * FeetToMillimetres)
                 .ToList();
+            int ignoredNominalDiameter;
 
-            if (nominalSizes.Count == 0)
+            return TryResolveFlangeConfiguration(
+                doc,
+                flange,
+                nominalSizes,
+                out configuration,
+                out ignoredNominalDiameter,
+                out error);
+        }
+
+        private static bool TryResolveFlangeConfiguration(
+            Document doc,
+            Element flange,
+            IList<double> nominalSizes,
+            out AtlasFlangeReferenceRow configuration,
+            out int nominalDiameter,
+            out string error)
+        {
+            configuration = null;
+            nominalDiameter = 0;
+            error = null;
+
+            string referenceSection =
+                ResolveAtlasReferenceSectionFromName(doc, flange);
+
+            if (string.IsNullOrWhiteSpace(referenceSection))
             {
                 error =
-                    "The flange nominal size could not be resolved from its " +
-                    "piping connectors.";
+                    "The flange name does not identify one supported Atlas " +
+                    "table. Include Class 150/300/600/900/1500/2500, " +
+                    "Table D/E/F/H, AS 4087 PN16, or EN 1092 PN16 in the " +
+                    "family or type name.";
                 return false;
             }
 
-            if (nominalSizes.Max() - nominalSizes.Min() > 1.0)
+            List<double> usableNominalSizes = (nominalSizes ??
+                    new List<double>())
+                .Where(x => x > 0)
+                .ToList();
+
+            if (usableNominalSizes.Count == 0)
             {
                 error =
-                    "The flange connectors report different nominal sizes, " +
-                    "so one bolt configuration cannot be selected safely.";
+                    "The nominal diameter could not be resolved from a " +
+                    "round physical piping connector.";
                 return false;
             }
 
-            double nominalMillimetres =
-                nominalSizes.Average();
+            if (usableNominalSizes.Max() -
+                usableNominalSizes.Min() > 1.0)
+            {
+                error =
+                    "The flange connectors report different nominal " +
+                    "diameters, so one Atlas row cannot be selected safely.";
+                return false;
+            }
 
-            List<FlangeDimensionConfiguration> matches =
-                FlangeDimensionConfigurationCatalog.All
+            double nominalMillimetres = usableNominalSizes.Average();
+            nominalDiameter = (int)Math.Round(
+                nominalMillimetres,
+                MidpointRounding.AwayFromZero);
+
+            List<AtlasFlangeReferenceRow> matches =
+                AtlasFlangeReferenceCatalog.Load()
                     .Where(x =>
                         string.Equals(
-                            x.Standard,
-                            standard,
+                            x.Section,
+                            referenceSection,
                             StringComparison.Ordinal) &&
-                        string.Equals(
-                            x.ClassOrTable,
-                            classOrTable,
-                            StringComparison.OrdinalIgnoreCase) &&
                         Math.Abs(
-                            x.NominalSizeMm -
-                            nominalMillimetres) <= 0.5)
+                            x.NominalSizeSort -
+                            nominalMillimetres) <= 1.0)
                     .ToList();
 
             if (matches.Count != 1)
             {
                 error =
-                    "No unique flange catalog row was found for " +
-                    standard + " " + classOrTable + ", nominal " +
+                    "No unique row exists in " + referenceSection +
+                    " for connector nominal diameter " +
                     nominalMillimetres.ToString(
                         "0.###",
                         CultureInfo.InvariantCulture) +
@@ -375,129 +585,115 @@ namespace ParallelSystemsPlugin.Fabrication
             }
 
             configuration = matches[0];
+            nominalDiameter = configuration.NominalSizeSort;
             return true;
         }
 
-        private static string BuildFlangeConfigurationText(
+        private static List<double>
+            GetPhysicalConnectorNominalSizesMillimetres(Element flange)
+        {
+            List<double> result = new List<double>();
+            ConnectorManager manager = GetConnectorManager(flange);
+
+            if (manager == null)
+                return result;
+
+            foreach (Connector connector in manager.Connectors)
+            {
+                if (connector == null ||
+                    connector.Domain != Domain.DomainPiping ||
+                    connector.ConnectorType != ConnectorType.End ||
+                    connector.Shape != ConnectorProfileType.Round ||
+                    connector.Radius <= GeometryTolerance)
+                {
+                    continue;
+                }
+
+                result.Add(
+                    connector.Radius * 2.0 * FeetToMillimetres);
+            }
+
+            return result;
+        }
+
+        private static string ResolveAtlasReferenceSectionFromName(
             Document doc,
             Element flange)
         {
-            StringBuilder text = new StringBuilder();
-            text.Append(
-                BuildElementClassificationText(doc, flange));
+            string normalized = NormalizeClassificationText(
+                BuildFlangeReferenceNameText(doc, flange));
+            string compact = normalized.Replace(" ", string.Empty);
 
-            Element type = GetElementTypeCached(doc, flange);
-            string[] parameterNames =
+            if (compact.Contains("AS4087") &&
+                compact.Contains("PN16"))
             {
-                "Standard",
-                "Flange Standard",
-                "Class",
-                "Pressure Class",
-                "Table",
-                "Class / Table",
-                "Lookup Table Name",
-                "Type Name",
-                "Description",
-                "Description BOM"
+                return "PN16 Flanges to AS 4087";
+            }
+
+            if (compact.Contains("EN1092") &&
+                compact.Contains("PN16"))
+            {
+                return "PN16 Flanges to EN 1092";
+            }
+
+            string[] tableLetters = { "D", "E", "F", "H" };
+            string padded = " " + normalized + " ";
+
+            foreach (string tableLetter in tableLetters)
+            {
+                if (padded.Contains(
+                        " TABLE " + tableLetter + " ") ||
+                    compact.Contains("TABLE" + tableLetter))
+                {
+                    return "Table " + tableLetter +
+                           " Flanges to AS 2129";
+                }
+            }
+
+            string[] classes =
+            {
+                "2500", "1500", "900", "600", "300", "150"
             };
 
-            foreach (string parameterName in parameterNames)
+            foreach (string flangeClass in classes)
             {
-                string instanceValue =
-                    GetParameterText(flange, parameterName);
-                string typeValue =
-                    GetParameterText(type, parameterName);
-
-                if (!string.IsNullOrWhiteSpace(instanceValue))
+                if (padded.Contains(
+                        " CLASS " + flangeClass + " ") ||
+                    compact.Contains("CLASS" + flangeClass))
                 {
-                    text.Append(' ');
-                    text.Append(instanceValue);
-                }
-
-                if (!string.IsNullOrWhiteSpace(typeValue))
-                {
-                    text.Append(' ');
-                    text.Append(typeValue);
-                }
-            }
-
-            return text.ToString();
-        }
-
-        private static string ResolveFlangeClassOrTable(
-            string standard,
-            string paddedClassification,
-            string compactClassification)
-        {
-            if (standard == "AS 2129")
-            {
-                string[] tables =
-                {
-                    "A", "D", "E", "F", "G", "H"
-                };
-
-                foreach (string table in tables)
-                {
-                    if (paddedClassification.Contains(
-                            " TABLE " + table + " "))
-                    {
-                        return "Table " + table;
-                    }
-                }
-
-                return null;
-            }
-
-            if (standard == "AS 4087" ||
-                standard == "ISO 7005 (DIN)")
-            {
-                string[] pressureClasses =
-                    standard == "AS 4087"
-                        ? new[] { "PN14", "PN16", "PN21", "PN35" }
-                        : new[]
-                        {
-                            "PN6", "PN10", "PN16",
-                            "PN20", "PN25", "PN40"
-                        };
-
-                foreach (string pressureClass in
-                         pressureClasses)
-                {
-                    if (paddedClassification.Contains(
-                            " " + pressureClass + " ") ||
-                        compactClassification.Contains(
-                            pressureClass))
-                    {
-                        return pressureClass;
-                    }
-                }
-
-                return null;
-            }
-
-            if (standard == "ANSI B16.5")
-            {
-                if (compactClassification.Contains("125150"))
-                    return "125/150";
-
-                string[] classes =
-                {
-                    "600", "300", "150"
-                };
-
-                foreach (string flangeClass in classes)
-                {
-                    if (paddedClassification.Contains(
-                            " CLASS " + flangeClass + " ") ||
-                        paddedClassification.Contains(
-                            " " + flangeClass + " "))
-                    {
-                        return flangeClass;
-                    }
+                    return "Class " + flangeClass +
+                           " Flanges to ASME B16.5";
                 }
             }
 
             return null;
+        }
+
+        private static string BuildFlangeReferenceNameText(
+            Document doc,
+            Element flange)
+        {
+            StringBuilder text = new StringBuilder();
+            text.Append(GetElementDisplayName(flange));
+            text.Append(' ');
+            text.Append(flange?.Name);
+
+            Element type = GetElementTypeCached(doc, flange);
+            if (type != null)
+            {
+                text.Append(' ');
+                text.Append(type.Name);
+            }
+
+            FamilyInstance familyInstance = flange as FamilyInstance;
+            FamilySymbol symbol = familyInstance?.Symbol;
+            if (symbol != null)
+            {
+                text.Append(' ');
+                text.Append(symbol.FamilyName);
+            }
+
+            return text.ToString();
         }
 
         private static bool TryParseCatalogMillimetres(
@@ -559,13 +755,10 @@ namespace ParallelSystemsPlugin.Fabrication
         }
 
         private static string BuildFlangeConfigurationLabel(
-            FlangeDimensionConfiguration configuration)
+            AtlasFlangeReferenceRow configuration)
         {
-            return configuration.Standard + " " +
-                   configuration.ClassOrTable + ", nominal " +
-                   configuration.NominalSizeMm.ToString(
-                       CultureInfo.InvariantCulture) +
-                   " mm";
+            return configuration.Section + ", DN " +
+                   configuration.DN;
         }
     }
 }

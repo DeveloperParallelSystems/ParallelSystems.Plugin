@@ -30,6 +30,9 @@ namespace ParallelSystemsPlugin.Models
         public string D { get; set; }
         public string G { get; set; }
         public string BoltThread { get; set; }
+        public string RaisedFaceHeight { get; set; }
+        public string SlipOnWeldingThickness { get; set; }
+        public string BlindThickness { get; set; }
 
         public int NominalSizeSort
         {
@@ -50,9 +53,11 @@ namespace ParallelSystemsPlugin.Models
     internal static class AtlasFlangeReferenceCatalog
     {
         internal const string DataFileName = "Atlas-Flange-Dimensions.psv";
-        internal const string PdfFileName = "Atlas-Steels-Flange-Reference.pdf";
+        internal const string PdfFileName =
+            "Atlas-Steels-Product-Manual-Section-3.pdf";
         internal const string AsmeDiagramFileName = "Atlas-ASME-Flange-Diagram.png";
-        internal const string As2129DiagramFileName = "Atlas-AS2129-Flange-Diagram.png";
+        internal const string TableDiagramFileName =
+            "Atlas-Table-Flange-Diagram.png";
 
         internal static IReadOnlyList<AtlasFlangeReferenceRow> Load()
         {
@@ -67,7 +72,7 @@ namespace ParallelSystemsPlugin.Models
                     continue;
 
                 string[] values = line.Split('|');
-                if (values.Length != 21)
+                if (values.Length != 21 && values.Length != 24)
                     throw new InvalidDataException(
                         "Invalid Atlas flange reference row in " + path + ".");
 
@@ -93,7 +98,16 @@ namespace ParallelSystemsPlugin.Models
                     A = values[17],
                     D = values[18],
                     G = values[19],
-                    BoltThread = values[20]
+                    BoltThread = values[20],
+                    RaisedFaceHeight = values.Length > 21
+                        ? values[21]
+                        : string.Empty,
+                    SlipOnWeldingThickness = values.Length > 22
+                        ? values[22]
+                        : string.Empty,
+                    BlindThickness = values.Length > 23
+                        ? values[23]
+                        : string.Empty
                 });
             }
 

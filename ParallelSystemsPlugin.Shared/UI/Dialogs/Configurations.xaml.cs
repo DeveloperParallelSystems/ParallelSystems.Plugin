@@ -231,6 +231,7 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             ChkBomAccessoryReport.IsChecked = config.Procurement.BomAccessoryReport;
             ChkIncludeSiteMeasure.IsChecked = config.Procurement.IncludeSiteMeasure;
             ChkGroupByPackage.IsChecked = config.Procurement.GroupByPackage;
+            ChkCreatePackageWorksheets.IsChecked = config.Procurement.CreatePackageWorksheets;
             RdoExportExcel.IsChecked = config.Procurement.ExportReportsToExcel;
             RdoExportPdf.IsChecked = !config.Procurement.ExportReportsToExcel;
 
@@ -444,14 +445,56 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             }
             else
             {
+                string kind = rows.Count == 0
+                    ? "AS2129"
+                    : rows[0].Kind;
+
                 FabricationFlangeGrid.FrozenColumnCount = 1;
                 AddFabricationColumn("DN", "DN", 65);
                 AddFabricationColumn("OD (mm)\nA", "A", 100);
-                AddFabricationColumn("Thickness (mm)\nD", "D", 115);
+
+                if (string.Equals(
+                    kind,
+                    "AS4087",
+                    StringComparison.Ordinal) ||
+                    string.Equals(
+                        kind,
+                        "EN1092",
+                        StringComparison.Ordinal))
+                {
+                    AddFabricationColumn(
+                        "Raised face height (mm)",
+                        "RaisedFaceHeight",
+                        140);
+                }
+
                 AddFabricationColumn("Raised face diam. (mm)\nG", "G", 145);
+
+                if (string.Equals(
+                    kind,
+                    "EN1092",
+                    StringComparison.Ordinal))
+                {
+                    AddFabricationColumn(
+                        "Thickness - blind (mm)",
+                        "BlindThickness",
+                        145);
+                    AddFabricationColumn(
+                        "Thickness - SOW (mm)",
+                        "SlipOnWeldingThickness",
+                        145);
+                }
+                else
+                {
+                    AddFabricationColumn(
+                        "Thickness (mm)\nD",
+                        "D",
+                        115);
+                }
+
                 AddFabricationColumn("Bolt circle diam. (mm)\nK", "K", 145);
                 AddFabricationColumn("Bolt hole diam. (mm)\nH", "H", 135);
-                AddFabricationColumn("Number of bolts", "Bolts", 110);
+                AddFabricationColumn("Number of holes", "Bolts", 110);
                 AddFabricationColumn("Bolt size & thread", "BoltThread", 130);
             }
         }
@@ -473,22 +516,58 @@ namespace ParallelSystemsPlugin.UI.Dialogs
         private void UpdateFabricationReferencePanel(
             AtlasFlangeReferenceRow row)
         {
-            bool isAsme = row == null ||
-                string.Equals(row.Kind, "ASME", StringComparison.Ordinal);
+            string kind = row == null ? "ASME" : row.Kind;
+            bool isAsme = string.Equals(
+                kind,
+                "ASME",
+                StringComparison.Ordinal);
 
-            FabricationReferenceCaptionTextBlock.Text = isAsme
-                ? "Carbon Steel ASME/ANSI Flanges"
-                : "Types of Table Flanges specified in AS 2129";
-            FabricationReferenceLegendTextBlock.Text = isAsme
-                ? "ASME/ANSI symbols: O = flange OD; tf = minimum thickness; X = hub diameter; Ah = welding-neck hub diameter; Y = length through hub; B = bore; K = bolt circle; H = bolt hole."
-                : "AS 2129 symbols: A = outside diameter; D = thickness; G = raised-face diameter; K = bolt circle; H = bolt hole.";
-            FabricationReferenceNoteTextBlock.Text = isAsme
-                ? "Showing nominal size and Dimensions columns from the selected Atlas ASME B16.5 table. Flange weights are intentionally omitted."
-                : "Showing nominal size and Dimensions columns from the selected Atlas AS 2129 table. SOW and blind weights are intentionally omitted.";
+            if (isAsme)
+            {
+                FabricationReferenceCaptionTextBlock.Text =
+                    "Stainless Steel ASME/ANSI Flanges";
+                FabricationReferenceLegendTextBlock.Text =
+                    "ASME/ANSI symbols: O = flange OD; tf = minimum thickness; X = hub diameter; Ah = welding-neck hub diameter; Y = length through hub; B = bore; K = bolt circle; H = bolt hole.";
+                FabricationReferenceNoteTextBlock.Text =
+                    "Showing nominal size and Dimensions columns from the selected Atlas ASME B16.5 table. Flange weights are intentionally omitted.";
+            }
+            else if (string.Equals(
+                kind,
+                "AS4087",
+                StringComparison.Ordinal))
+            {
+                FabricationReferenceCaptionTextBlock.Text =
+                    "PN16 Flanges to AS 4087";
+                FabricationReferenceLegendTextBlock.Text =
+                    "AS 4087 symbols: A = outside diameter; D = thickness; G = raised-face diameter; K = bolt circle; H = hole diameter.";
+                FabricationReferenceNoteTextBlock.Text =
+                    "Showing all nominal-size and Dimensions columns from the Atlas PN16 AS 4087 table.";
+            }
+            else if (string.Equals(
+                kind,
+                "EN1092",
+                StringComparison.Ordinal))
+            {
+                FabricationReferenceCaptionTextBlock.Text =
+                    "PN16 Flanges to EN 1092";
+                FabricationReferenceLegendTextBlock.Text =
+                    "EN 1092 symbols: A = outside diameter; G = raised-face diameter; K = bolt circle; H = hole diameter. Blind and SOW thicknesses are listed separately.";
+                FabricationReferenceNoteTextBlock.Text =
+                    "Showing all nominal-size and Dimensions columns from the Atlas PN16 EN 1092 table.";
+            }
+            else
+            {
+                FabricationReferenceCaptionTextBlock.Text =
+                    "Types of Table Flanges specified in AS 2129";
+                FabricationReferenceLegendTextBlock.Text =
+                    "AS 2129 symbols: A = outside diameter; D = thickness; G = raised-face diameter; K = bolt circle; H = bolt hole.";
+                FabricationReferenceNoteTextBlock.Text =
+                    "Showing nominal size and Dimensions columns from the selected Atlas AS 2129 table. SOW and blind weights are intentionally omitted.";
+            }
 
             string diagramFileName = isAsme
                 ? AtlasFlangeReferenceCatalog.AsmeDiagramFileName
-                : AtlasFlangeReferenceCatalog.As2129DiagramFileName;
+                : AtlasFlangeReferenceCatalog.TableDiagramFileName;
             FabricationReferenceImage.Source =
                 LoadFabricationReferenceImage(diagramFileName);
         }
@@ -512,6 +591,106 @@ namespace ParallelSystemsPlugin.UI.Dialogs
                 image.Freeze();
                 return image;
             }
+        }
+
+        private void FabricationReferenceImage_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            ImageSource source = FabricationReferenceImage.Source;
+            if (source == null)
+            {
+                AppDialog.Show(
+                    "Flange dimension diagram",
+                    "The selected flange dimension diagram is unavailable.",
+                    MessageDialogIcon.Warning,
+                    MessageDialogButtons.OK,
+                    _ownerHwnd);
+                return;
+            }
+
+            Window viewer = new Window
+            {
+                Title = FabricationReferenceCaptionTextBlock.Text +
+                    " - enlarged dimension diagram",
+                Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Width = Math.Min(1400, SystemParameters.WorkArea.Width * 0.9),
+                Height = Math.Min(950, SystemParameters.WorkArea.Height * 0.9),
+                MinWidth = 640,
+                MinHeight = 480,
+                ResizeMode = ResizeMode.CanResize,
+                ShowInTaskbar = false,
+                Background = Brushes.White,
+                Icon = Icon
+            };
+
+            Grid layout = new Grid();
+            layout.RowDefinitions.Add(
+                new RowDefinition
+                {
+                    Height = new GridLength(1, GridUnitType.Star)
+                });
+            layout.RowDefinitions.Add(
+                new RowDefinition { Height = GridLength.Auto });
+
+            Border imageFrame = new Border
+            {
+                Margin = new Thickness(16),
+                Padding = new Thickness(8),
+                Background = new SolidColorBrush(
+                    Color.FromRgb(250, 250, 250)),
+                BorderBrush = new SolidColorBrush(
+                    Color.FromRgb(203, 213, 225)),
+                BorderThickness = new Thickness(1),
+                Child = new Image
+                {
+                    Source = source,
+                    Stretch = Stretch.Uniform,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    VerticalAlignment = VerticalAlignment.Stretch
+                }
+            };
+            Grid.SetRow(imageFrame, 0);
+            layout.Children.Add(imageFrame);
+
+            DockPanel footer = new DockPanel
+            {
+                Margin = new Thickness(16, 0, 16, 14),
+                LastChildFill = true
+            };
+            Button closeButton = new Button
+            {
+                Content = "Close",
+                MinWidth = 90,
+                Padding = new Thickness(12, 5, 12, 5),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            closeButton.Click += delegate { viewer.Close(); };
+            DockPanel.SetDock(closeButton, Dock.Right);
+            footer.Children.Add(closeButton);
+            footer.Children.Add(new TextBlock
+            {
+                Text = "Resize or maximise this window for a closer view. Press Esc to close.",
+                Foreground = new SolidColorBrush(
+                    Color.FromRgb(100, 116, 139)),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextWrapping = TextWrapping.Wrap
+            });
+            Grid.SetRow(footer, 1);
+            layout.Children.Add(footer);
+
+            viewer.Content = layout;
+            viewer.PreviewKeyDown +=
+                delegate(object keySender, KeyEventArgs keyEvent)
+                {
+                    if (keyEvent.Key == Key.Escape)
+                    {
+                        viewer.Close();
+                        keyEvent.Handled = true;
+                    }
+                };
+            viewer.ShowDialog();
         }
 
         private void FabricationReferenceLink_RequestNavigate(
@@ -1018,6 +1197,7 @@ namespace ParallelSystemsPlugin.UI.Dialogs
                 newConfig.Procurement.BomAccessoryReport = ChkBomAccessoryReport.IsChecked == true;
                 newConfig.Procurement.IncludeSiteMeasure = ChkIncludeSiteMeasure.IsChecked == true;
                 newConfig.Procurement.GroupByPackage = ChkGroupByPackage.IsChecked == true;
+                newConfig.Procurement.CreatePackageWorksheets = ChkCreatePackageWorksheets.IsChecked == true;
                 newConfig.Procurement.ExportReportsToExcel = RdoExportExcel.IsChecked == true;
 
                 newConfig.Procurement.CutListMaximumLength = ParseDoubleOrDefault(ProcCutListMaximumLengthTextBox.Text, 6000);

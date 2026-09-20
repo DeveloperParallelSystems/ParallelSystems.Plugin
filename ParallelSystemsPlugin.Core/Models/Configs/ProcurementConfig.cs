@@ -28,6 +28,7 @@ namespace ParallelSystemsPlugin.Models.Configs
         public bool BomAccessoryReport { get; set; } = true;
         public bool IncludeSiteMeasure { get; set; } = false;
         public bool GroupByPackage { get; set; } = false;
+        public bool CreatePackageWorksheets { get; set; } = false;
         public bool ExportReportsToExcel { get; set; } = true;
 
         // ===== BOM - CUT LIST (units: mm unless otherwise specified) =====

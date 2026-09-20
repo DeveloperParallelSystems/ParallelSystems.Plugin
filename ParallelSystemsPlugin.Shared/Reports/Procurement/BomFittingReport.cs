@@ -257,7 +257,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 BuildExcelSheet(cfg, byPackage, note, null)
             };
 
-            if (byPackage.Count > 1)
+            if (cfg.CreatePackageWorksheets && byPackage.Count > 1)
             {
                 foreach (var packageGroup in byPackage)
                 {
