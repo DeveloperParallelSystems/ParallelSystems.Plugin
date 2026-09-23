@@ -34,6 +34,27 @@ namespace ParallelSystemsPlugin.Fabrication
                 return false;
             }
 
+            return TryCreateFlangeBoltHoleCutters(
+                flange,
+                bores,
+                configuration,
+                out cutters,
+                out description,
+                out error);
+        }
+
+        private static bool TryCreateFlangeBoltHoleCutters(
+            Element flange,
+            IList<ConnectorBore> bores,
+            AtlasFlangeReferenceRow configuration,
+            out List<Solid> cutters,
+            out string description,
+            out string error)
+        {
+            cutters = new List<Solid>();
+            description = null;
+            error = null;
+
             int holeCount;
             double pitchCircleDiameterMillimetres;
             double holeDiameterMillimetres;
@@ -205,9 +226,17 @@ namespace ParallelSystemsPlugin.Fabrication
             double holeRadius =
                 holeDiameterMillimetres /
                 (2.0 * FeetToMillimetres);
-            double cutterLength = Math.Max(
-                GetElementExtent(flange),
-                20.0 / FeetToMillimetres);
+            // Use twice the larger of the source extent and configured OD.
+            // The procedural Atlas body is anchored at its connected-pipe
+            // face and can be longer than the original family thickness, so
+            // a cutter centred on the original connector span must extend in
+            // both axial directions far enough to pass through the new body.
+            double cutterLength =
+                (2.0 * Math.Max(
+                    GetElementExtent(flange),
+                    outsideDiameterMillimetres /
+                        FeetToMillimetres)) +
+                (20.0 / FeetToMillimetres);
             XYZ cutterStart =
                 centre - (axis * (cutterLength / 2.0));
 
@@ -265,93 +294,66 @@ namespace ParallelSystemsPlugin.Fabrication
             return cutters.Count == holeCount;
         }
 
-        private static List<ConnectorBore>
-            CreateFlangeDrillingConnectorBores(
-                Document doc,
-                Element flange,
-                ISet<ElementId> selectedSourceIds)
-        {
-            List<ConnectorBore> result = new List<ConnectorBore>();
-            ConnectorManager manager = GetConnectorManager(flange);
-
-            if (manager == null)
-                return result;
-
-            foreach (Connector connector in manager.Connectors)
-            {
-                if (connector == null ||
-                    connector.Domain != Domain.DomainPiping ||
-                    connector.ConnectorType != ConnectorType.End ||
-                    connector.Shape != ConnectorProfileType.Round ||
-                    connector.Radius <= GeometryTolerance)
-                {
-                    continue;
-                }
-
-                Element connectedElement = GetConnectedElement(
-                    flange,
-                    connector,
-                    selectedSourceIds);
-                XYZ radialBasisX = null;
-                XYZ radialBasisY = null;
-
-                try
-                {
-                    Transform coordinateSystem =
-                        connector.CoordinateSystem;
-
-                    if (coordinateSystem != null)
-                    {
-                        radialBasisX = coordinateSystem.BasisX;
-                        radialBasisY = coordinateSystem.BasisY;
-                    }
-                }
-                catch
-                {
-                    // The bolt-pattern builder has a deterministic fallback
-                    // when a family connector has no usable radial basis.
-                }
-
-                result.Add(new ConnectorBore
-                {
-                    Origin = connector.Origin,
-                    OriginalConnectorOrigin = connector.Origin,
-                    OutwardDirection = GetConnectorOutwardDirection(
-                        flange,
-                        connector,
-                        connectedElement),
-                    RadialBasisX = radialBasisX,
-                    RadialBasisY = radialBasisY,
-                    NominalDiameter = connector.Radius * 2.0,
-                    ConnectedElementId = connectedElement?.Id,
-                    ConnectedElementName = connectedElement == null
-                        ? string.Empty
-                        : GetElementDisplayName(connectedElement),
-                    IsSynthetic = false,
-                    SourceDescription =
-                        "Physical flange connector used for Atlas table lookup"
-                });
-            }
-
-            return result;
-        }
-
         private static FabricationElementGeometry
             BuildAtlasConfiguredFlangeGeometry(
                 Document doc,
                 Element flange,
-                IList<Solid> sourceSolids,
                 IList<ConnectorBore> drillingConnectors,
                 IList<FabricationIssue> issues)
         {
+            AtlasFlangeReferenceRow configuration;
+            string configurationError;
+
+            if (!TryResolveFlangeConfiguration(
+                    doc,
+                    flange,
+                    drillingConnectors,
+                    out configuration,
+                    out configurationError))
+            {
+                issues.Add(new FabricationIssue
+                {
+                    Severity = FabricationIssueSeverity.Blocking,
+                    ElementId = flange.Id,
+                    ElementName = GetElementDisplayName(flange),
+                    Message = configurationError
+                });
+
+                return null;
+            }
+
+            Solid configuredBody;
+            string bodyDescription;
+            string bodyError;
+
+            if (!TryCreateAtlasFlangeBody(
+                    doc,
+                    flange,
+                    drillingConnectors,
+                    configuration,
+                    out configuredBody,
+                    out bodyDescription,
+                    out bodyError))
+            {
+                issues.Add(new FabricationIssue
+                {
+                    Severity = FabricationIssueSeverity.Blocking,
+                    ElementId = flange.Id,
+                    ElementName = GetElementDisplayName(flange),
+                    Message = bodyError
+                });
+
+                return null;
+            }
+
             List<Solid> boltHoleCutters;
             string boltHoleDescription;
             string boltHoleError;
 
             if (!TryCreateFlangeBoltHoleCutters(
-                    doc,
                     flange,
                     drillingConnectors,
+                    configuration,
                     out boltHoleCutters,
                     out boltHoleDescription,
                     out boltHoleError))
@@ -367,7 +369,10 @@ namespace ParallelSystemsPlugin.Fabrication
                 return null;
             }
 
-            List<Solid> currentSolids = sourceSolids.ToList();
+            List<Solid> currentSolids = new List<Solid>
+            {
+                configuredBody
+            };
             int holesCut = 0;
 
             foreach (Solid cutter in boltHoleCutters)
@@ -387,7 +392,7 @@ namespace ParallelSystemsPlugin.Fabrication
                         ElementName = GetElementDisplayName(flange),
                         Message =
                             "A configured Atlas flange bolt-hole cutter did " +
-                            "not intersect the retained source flange body. " +
+                            "not pass through the configured flange body. " +
                             "The STEP export was stopped rather than emitting " +
                             "an incomplete bolt pattern."
                     });
@@ -432,10 +437,781 @@ namespace ParallelSystemsPlugin.Fabrication
                     "Atlas-configured flange; verified bolt holes " +
                     holesCut.ToString(CultureInfo.InvariantCulture),
                 Notes =
-                    "Source flange body and its existing central opening " +
-                    "were retained without generated bore or chamfer " +
-                    "changes; " + boltHoleDescription
+                    bodyDescription + "; " + boltHoleDescription +
+                    "; central opening and every bolt hole pass completely " +
+                    "through the generated flange body"
             };
+        }
+
+        private static bool TryCreateAtlasFlangeBody(
+            Document doc,
+            Element flange,
+            IList<ConnectorBore> bores,
+            AtlasFlangeReferenceRow configuration,
+            out Solid body,
+            out string description,
+            out string error)
+        {
+            body = null;
+            description = null;
+            error = null;
+
+            XYZ start;
+            XYZ axis;
+
+            if (!TryResolveAtlasFlangePlacement(
+                    doc,
+                    flange,
+                    bores,
+                    out start,
+                    out axis,
+                    out error))
+            {
+                return false;
+            }
+
+            string name = NormalizeClassificationText(
+                BuildFlangeReferenceNameText(doc, flange));
+            bool isBlind =
+                name.Contains("BLIND") ||
+                name.Contains("BLANK");
+            bool isWeldingNeck =
+                name.Contains("WELDING NECK") ||
+                name.Contains("WELD NECK") ||
+                (" " + name + " ").Contains(" WN ");
+            bool isBoss =
+                (" " + name + " ").Contains(" BOSS ");
+            bool isAsme = string.Equals(
+                configuration.Kind,
+                "ASME",
+                StringComparison.Ordinal);
+
+            double outsideDiameterMillimetres;
+            double totalLengthMillimetres;
+            double boreDiameterMillimetres = 0.0;
+            double hubStartDiameterMillimetres = 0.0;
+            double hubEndDiameterMillimetres = 0.0;
+            double plateThicknessMillimetres = 0.0;
+            double raisedFaceDiameterMillimetres = 0.0;
+            double raisedFaceHeightMillimetres = 0.0;
+            string subtype;
+
+            if (isAsme)
+            {
+                if (!TryParseRequiredAtlasDimension(
+                        configuration,
+                        configuration.O,
+                        "flange outside diameter O",
+                        out outsideDiameterMillimetres,
+                        out error) ||
+                    !TryParseRequiredAtlasDimension(
+                        configuration,
+                        configuration.Tf,
+                        "minimum flange thickness tf",
+                        out plateThicknessMillimetres,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (isBlind)
+                {
+                    subtype = "blind";
+                    totalLengthMillimetres =
+                        plateThicknessMillimetres;
+                }
+                else if (isWeldingNeck)
+                {
+                    subtype = "welding-neck";
+
+                    if (!TryParseRequiredAtlasDimension(
+                            configuration,
+                            configuration.YWeldingNeck,
+                            "welding-neck length through hub Y",
+                            out totalLengthMillimetres,
+                            out error) ||
+                        !TryParseRequiredAtlasDimension(
+                            configuration,
+                            configuration.BWeldingNeck,
+                            "welding-neck bore B",
+                            out boreDiameterMillimetres,
+                            out error) ||
+                        !TryParseRequiredAtlasDimension(
+                            configuration,
+                            configuration.Ah,
+                            "welding-neck hub diameter Ah",
+                            out hubStartDiameterMillimetres,
+                            out error) ||
+                        !TryParseRequiredAtlasDimension(
+                            configuration,
+                            configuration.X,
+                            "hub diameter X",
+                            out hubEndDiameterMillimetres,
+                            out error))
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    if (name.Contains("THREADED") ||
+                        name.Contains("SOCKET") ||
+                        name.Contains("LAPPED") ||
+                        name.Contains("LAP JOINT"))
+                    {
+                        error =
+                            "The Atlas table identifies this ASME subtype, " +
+                            "but the manual does not provide every thread, " +
+                            "socket, or lap detail required to generate it " +
+                            "without guessing. Use Original model geometry " +
+                            "for this flange subtype.";
+                        return false;
+                    }
+
+                    subtype = "slip-on welding";
+
+                    if (!TryParseRequiredAtlasDimension(
+                            configuration,
+                            configuration.YSlip,
+                            "slip-on length through hub Y",
+                            out totalLengthMillimetres,
+                            out error) ||
+                        !TryParseRequiredAtlasDimension(
+                            configuration,
+                            configuration.BSlip,
+                            "slip-on bore B",
+                            out boreDiameterMillimetres,
+                            out error) ||
+                        !TryParseRequiredAtlasDimension(
+                            configuration,
+                            configuration.X,
+                            "hub diameter X",
+                            out hubStartDiameterMillimetres,
+                            out error))
+                    {
+                        return false;
+                    }
+
+                    hubEndDiameterMillimetres =
+                        hubStartDiameterMillimetres;
+                }
+            }
+            else
+            {
+                if (isWeldingNeck || isBoss)
+                {
+                    error =
+                        "The Atlas table-flange row provides plate drilling " +
+                        "dimensions but does not provide the neck/boss height " +
+                        "or scheduled bore needed to generate this subtype " +
+                        "without guessing. Use Original model geometry for " +
+                        "this flange subtype.";
+                    return false;
+                }
+
+                subtype = isBlind ? "blind" : "plate slip-on welding";
+
+                if (!TryParseRequiredAtlasDimension(
+                        configuration,
+                        configuration.A,
+                        "outside diameter A",
+                        out outsideDiameterMillimetres,
+                        out error))
+                {
+                    return false;
+                }
+
+                string thicknessValue = configuration.D;
+
+                if (string.Equals(
+                        configuration.Kind,
+                        "EN1092",
+                        StringComparison.Ordinal))
+                {
+                    thicknessValue = isBlind
+                        ? configuration.BlindThickness
+                        : configuration.SlipOnWeldingThickness;
+                }
+
+                if (!TryParseRequiredAtlasDimension(
+                        configuration,
+                        thicknessValue,
+                        isBlind
+                            ? "blind thickness"
+                            : "slip-on welding thickness D",
+                        out totalLengthMillimetres,
+                        out error))
+                {
+                    return false;
+                }
+
+                plateThicknessMillimetres =
+                    totalLengthMillimetres;
+
+                if (!isBlind &&
+                    !TryResolveTableFlangeBoreDiameter(
+                        configuration,
+                        bores,
+                        outsideDiameterMillimetres,
+                        out boreDiameterMillimetres,
+                        out error))
+                {
+                    return false;
+                }
+
+                if (!string.Equals(
+                        configuration.Kind,
+                        "AS2129",
+                        StringComparison.Ordinal))
+                {
+                    if (!TryParseRequiredAtlasDimension(
+                            configuration,
+                            configuration.RaisedFaceHeight,
+                            "raised-face height",
+                            out raisedFaceHeightMillimetres,
+                            out error) ||
+                        !TryParseRequiredAtlasDimension(
+                            configuration,
+                            configuration.G,
+                            "raised-face diameter G",
+                            out raisedFaceDiameterMillimetres,
+                            out error))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            if (totalLengthMillimetres <= 0 ||
+                outsideDiameterMillimetres <= 0 ||
+                (!isBlind &&
+                 (boreDiameterMillimetres <= 0 ||
+                  boreDiameterMillimetres >=
+                      outsideDiameterMillimetres)))
+            {
+                error =
+                    "The resolved Atlas body dimensions are not physically " +
+                    "valid for " +
+                    BuildFlangeConfigurationLabel(configuration) + ".";
+                return false;
+            }
+
+            try
+            {
+                body = CreateAtlasAxisymmetricFlangeSolid(
+                    start,
+                    axis,
+                    outsideDiameterMillimetres /
+                        (2.0 * FeetToMillimetres),
+                    totalLengthMillimetres /
+                        FeetToMillimetres,
+                    isBlind
+                        ? 0.0
+                        : boreDiameterMillimetres /
+                          (2.0 * FeetToMillimetres),
+                    plateThicknessMillimetres /
+                        FeetToMillimetres,
+                    hubStartDiameterMillimetres /
+                        (2.0 * FeetToMillimetres),
+                    hubEndDiameterMillimetres /
+                        (2.0 * FeetToMillimetres),
+                    raisedFaceDiameterMillimetres /
+                        (2.0 * FeetToMillimetres),
+                    raisedFaceHeightMillimetres /
+                        FeetToMillimetres,
+                    doc.Application.ShortCurveTolerance);
+            }
+            catch (Exception ex)
+            {
+                error =
+                    "The Atlas flange body could not be generated from " +
+                    BuildFlangeConfigurationLabel(configuration) + ": " +
+                    ex.Message;
+                return false;
+            }
+
+            description =
+                BuildFlangeConfigurationLabel(configuration) +
+                "; generated " + subtype +
+                " body: outside diameter " +
+                FormatCatalogMillimetres(outsideDiameterMillimetres) +
+                ", overall axial length " +
+                FormatCatalogMillimetres(totalLengthMillimetres) +
+                (isBlind
+                    ? ", no central opening (blind flange)"
+                    : ", continuous central opening " +
+                      FormatCatalogMillimetres(
+                          boreDiameterMillimetres)) +
+                (raisedFaceHeightMillimetres > 0
+                    ? ", raised face diameter " +
+                      FormatCatalogMillimetres(
+                          raisedFaceDiameterMillimetres) +
+                      " x " +
+                      FormatCatalogMillimetres(
+                          raisedFaceHeightMillimetres)
+                    : string.Empty);
+
+            return body != null &&
+                   body.Volume > GeometryTolerance;
+        }
+
+        private static bool TryResolveAtlasFlangePlacement(
+            Document doc,
+            Element flange,
+            IList<ConnectorBore> bores,
+            out XYZ start,
+            out XYZ axis,
+            out string error)
+        {
+            start = null;
+            axis = null;
+            error = null;
+
+            List<ConnectorBore> physical = (bores ??
+                    new List<ConnectorBore>())
+                .Where(x =>
+                    x != null &&
+                    !x.IsSynthetic &&
+                    x.OriginalConnectorOrigin != null)
+                .ToList();
+
+            if (physical.Count == 0)
+            {
+                error =
+                    "The configured flange placement could not be resolved " +
+                    "because no round physical connector was found.";
+                return false;
+            }
+
+            ConnectorBore attached = physical
+                .Where(x =>
+                    x.ConnectedElementId != null &&
+                    !x.ConnectedElementId.Equals(
+                        ElementId.InvalidElementId))
+                .OrderByDescending(x =>
+                    doc.GetElement(x.ConnectedElementId) is
+                        Autodesk.Revit.DB.Plumbing.Pipe)
+                .FirstOrDefault();
+
+            if (attached != null)
+            {
+                ConnectorBore opposite = physical
+                    .Where(x => !ReferenceEquals(x, attached))
+                    .OrderByDescending(x =>
+                        x.OriginalConnectorOrigin.DistanceTo(
+                            attached.OriginalConnectorOrigin))
+                    .FirstOrDefault();
+
+                if (opposite != null)
+                {
+                    XYZ span =
+                        opposite.OriginalConnectorOrigin -
+                        attached.OriginalConnectorOrigin;
+
+                    if (span.GetLength() > GeometryTolerance)
+                    {
+                        start = attached.OriginalConnectorOrigin;
+                        axis = span.Normalize();
+                        return true;
+                    }
+                }
+
+                if (attached.OutwardDirection != null &&
+                    attached.OutwardDirection.GetLength() >
+                        GeometryTolerance)
+                {
+                    start = attached.OriginalConnectorOrigin;
+                    axis = attached.OutwardDirection
+                        .Normalize()
+                        .Negate();
+                    return true;
+                }
+            }
+
+            if (physical.Count >= 2)
+            {
+                ConnectorBore first = physical[0];
+                ConnectorBore last = physical
+                    .OrderByDescending(x =>
+                        x.OriginalConnectorOrigin.DistanceTo(
+                            first.OriginalConnectorOrigin))
+                    .First();
+                XYZ span =
+                    last.OriginalConnectorOrigin -
+                    first.OriginalConnectorOrigin;
+
+                if (span.GetLength() > GeometryTolerance)
+                {
+                    start = first.OriginalConnectorOrigin;
+                    axis = span.Normalize();
+                    return true;
+                }
+            }
+
+            ConnectorBore directional = physical
+                .FirstOrDefault(x =>
+                    x.OutwardDirection != null &&
+                    x.OutwardDirection.GetLength() >
+                        GeometryTolerance);
+
+            if (directional != null)
+            {
+                start = directional.OriginalConnectorOrigin;
+                axis = directional.OutwardDirection.Normalize();
+                return true;
+            }
+
+            error =
+                "The configured flange axis could not be resolved from " +
+                "its physical connectors.";
+            return false;
+        }
+
+        private static Solid CreateAtlasAxisymmetricFlangeSolid(
+            XYZ start,
+            XYZ axis,
+            double outsideRadius,
+            double totalLength,
+            double boreRadius,
+            double plateThickness,
+            double hubStartRadius,
+            double hubEndRadius,
+            double raisedFaceRadius,
+            double raisedFaceHeight,
+            double shortCurveTolerance)
+        {
+            XYZ normalizedAxis = axis.Normalize();
+
+            if (boreRadius <= GeometryTolerance)
+            {
+                return CreateCylinder(
+                    start,
+                    normalizedAxis,
+                    totalLength,
+                    outsideRadius);
+            }
+
+            // A flat table flange is an annular extrusion, not a revolved
+            // profile. Revit divides the planar ends of a full 360-degree
+            // revolved annulus at the revolution seam. That coplanar split is
+            // preserved by the STEP exporter and appears as a line across the
+            // flange face. Building the plate directly from nested circular
+            // loops keeps each end as one continuous planar face (with the
+            // bore and drilled holes represented as inner loops).
+            bool hasHub =
+                hubStartRadius > GeometryTolerance &&
+                hubEndRadius > GeometryTolerance;
+            bool hasRaisedFace =
+                raisedFaceHeight > GeometryTolerance &&
+                raisedFaceRadius > boreRadius + GeometryTolerance &&
+                raisedFaceRadius < outsideRadius - GeometryTolerance;
+
+            if (!hasHub && !hasRaisedFace)
+            {
+                CurveLoop outerLoop = CreateCircleLoop(
+                    start,
+                    normalizedAxis,
+                    outsideRadius);
+                CurveLoop boreLoop = CreateCircleLoop(
+                    start,
+                    normalizedAxis,
+                    boreRadius);
+
+                return GeometryCreationUtilities.CreateExtrusionGeometry(
+                    new List<CurveLoop>
+                    {
+                        outerLoop,
+                        boreLoop
+                    },
+                    normalizedAxis,
+                    totalLength,
+                    new SolidOptions(
+                        ElementId.InvalidElementId,
+                        ElementId.InvalidElementId));
+            }
+
+            XYZ helper =
+                Math.Abs(normalizedAxis.DotProduct(XYZ.BasisZ)) < 0.90
+                    ? XYZ.BasisZ
+                    : XYZ.BasisX;
+            XYZ radial =
+                normalizedAxis.CrossProduct(helper).Normalize();
+            XYZ tangential =
+                normalizedAxis.CrossProduct(radial).Normalize();
+            List<XYZ> points = new List<XYZ>();
+
+            points.Add(
+                AtlasFlangeProfilePoint(
+                    start,
+                    normalizedAxis,
+                    radial,
+                    0.0,
+                    boreRadius));
+
+            if (hubStartRadius > GeometryTolerance &&
+                hubEndRadius > GeometryTolerance)
+            {
+                double plateStart = Math.Max(
+                    shortCurveTolerance * 1.01,
+                    totalLength - plateThickness);
+
+                points.Add(
+                    AtlasFlangeProfilePoint(
+                        start,
+                        normalizedAxis,
+                        radial,
+                        0.0,
+                        hubStartRadius));
+                points.Add(
+                    AtlasFlangeProfilePoint(
+                        start,
+                        normalizedAxis,
+                        radial,
+                        plateStart,
+                        hubEndRadius));
+                points.Add(
+                    AtlasFlangeProfilePoint(
+                        start,
+                        normalizedAxis,
+                        radial,
+                        plateStart,
+                        outsideRadius));
+                points.Add(
+                    AtlasFlangeProfilePoint(
+                        start,
+                        normalizedAxis,
+                        radial,
+                        totalLength,
+                        outsideRadius));
+            }
+            else if (raisedFaceHeight > GeometryTolerance &&
+                     raisedFaceRadius > boreRadius +
+                         GeometryTolerance &&
+                     raisedFaceRadius < outsideRadius -
+                         GeometryTolerance)
+            {
+                // Atlas states that table-flange D includes any optional
+                // raised-face height. Keep total axial length equal to D.
+                double baseEnd =
+                    totalLength - raisedFaceHeight;
+
+                points.Add(
+                    AtlasFlangeProfilePoint(
+                        start,
+                        normalizedAxis,
+                        radial,
+                        0.0,
+                        outsideRadius));
+                points.Add(
+                    AtlasFlangeProfilePoint(
+                        start,
+                        normalizedAxis,
+                        radial,
+                        baseEnd,
+                        outsideRadius));
+                points.Add(
+                    AtlasFlangeProfilePoint(
+                        start,
+                        normalizedAxis,
+                        radial,
+                        baseEnd,
+                        raisedFaceRadius));
+                points.Add(
+                    AtlasFlangeProfilePoint(
+                        start,
+                        normalizedAxis,
+                        radial,
+                        totalLength,
+                        raisedFaceRadius));
+            }
+            else
+            {
+                points.Add(
+                    AtlasFlangeProfilePoint(
+                        start,
+                        normalizedAxis,
+                        radial,
+                        0.0,
+                        outsideRadius));
+                points.Add(
+                    AtlasFlangeProfilePoint(
+                        start,
+                        normalizedAxis,
+                        radial,
+                        totalLength,
+                        outsideRadius));
+            }
+
+            points.Add(
+                AtlasFlangeProfilePoint(
+                    start,
+                    normalizedAxis,
+                    radial,
+                    totalLength,
+                    boreRadius));
+
+            CurveLoop profile = CreateClosedLinearProfileLoop(
+                points,
+                shortCurveTolerance);
+            Frame frame = new Frame(
+                start,
+                radial,
+                tangential,
+                normalizedAxis);
+
+            return GeometryCreationUtilities.CreateRevolvedGeometry(
+                frame,
+                new List<CurveLoop> { profile },
+                0.0,
+                2.0 * Math.PI,
+                new SolidOptions(
+                    ElementId.InvalidElementId,
+                    ElementId.InvalidElementId));
+        }
+
+        private static XYZ AtlasFlangeProfilePoint(
+            XYZ origin,
+            XYZ axis,
+            XYZ radial,
+            double axialStation,
+            double radius)
+        {
+            return origin +
+                   (axis * axialStation) +
+                   (radial * radius);
+        }
+
+        private static bool TryResolveTableFlangeBoreDiameter(
+            AtlasFlangeReferenceRow configuration,
+            IList<ConnectorBore> bores,
+            double outsideDiameterMillimetres,
+            out double boreDiameterMillimetres,
+            out string error)
+        {
+            boreDiameterMillimetres = 0.0;
+            error = null;
+            double nominal = configuration.NominalSizeSort;
+
+            List<double> outsideDiameters = (bores ??
+                    new List<ConnectorBore>())
+                .Where(x =>
+                    x != null &&
+                    !x.IsSynthetic &&
+                    x.OutsideDiameter > GeometryTolerance)
+                .Select(x =>
+                    x.OutsideDiameter * FeetToMillimetres)
+                .Where(x =>
+                    x > nominal &&
+                    x < outsideDiameterMillimetres &&
+                    x <= nominal * 1.60)
+                .OrderBy(x => x)
+                .ToList();
+
+            return TryResolveTableFlangeBoreDiameter(
+                configuration,
+                outsideDiameters,
+                outsideDiameterMillimetres,
+                out boreDiameterMillimetres,
+                out error);
+        }
+
+        // Created by Jhay: shared table-flange bore resolver so body creation
+        // and slip-on fit-up validation use the identical Atlas clearance rule.
+        private static bool TryResolveTableFlangeBoreDiameter(
+            AtlasFlangeReferenceRow configuration,
+            IEnumerable<double> pipeOutsideDiametersMillimetres,
+            double outsideDiameterMillimetres,
+            out double boreDiameterMillimetres,
+            out string error)
+        {
+            boreDiameterMillimetres = 0.0;
+            error = null;
+            double nominal = configuration.NominalSizeSort;
+
+            List<double> outsideDiameters =
+                (pipeOutsideDiametersMillimetres ??
+                 Enumerable.Empty<double>())
+                    .Where(x =>
+                        x > nominal &&
+                        x < outsideDiameterMillimetres &&
+                        x <= nominal * 1.60)
+                    .OrderBy(x => x)
+                    .ToList();
+
+            if (outsideDiameters.Count == 0)
+            {
+                error =
+                    "The pipe/tube outside diameter required for the Atlas " +
+                    "plate-flange opening could not be resolved from a " +
+                    "connected pipe or verified fabrication component. The " +
+                    "manual permits no more than 4 mm diametral clearance, " +
+                    "so the opening will not be guessed from nominal size.";
+                return false;
+            }
+
+            double pipeOutsideDiameter = outsideDiameters[0];
+
+            // Section 3, table-flange notes: a diametral clearance of 4 mm
+            // maximum applies to pipe or tube OD for plate flanges. Use the
+            // stated maximum so the generated slip-on opening is guaranteed
+            // to pass the verified connected pipe OD without exceeding Atlas.
+            boreDiameterMillimetres =
+                pipeOutsideDiameter + 4.0;
+
+            double pitchCircle;
+            double boltHoleDiameter;
+
+            if (TryParseCatalogMillimetres(
+                    configuration.K,
+                    out pitchCircle) &&
+                TryParseCatalogMillimetres(
+                    configuration.H,
+                    out boltHoleDiameter) &&
+                boreDiameterMillimetres + boltHoleDiameter >=
+                    pitchCircle)
+            {
+                error =
+                    "The resolved slip-on opening would overlap the Atlas " +
+                    "bolt circle for " +
+                    BuildFlangeConfigurationLabel(configuration) + ".";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryParseRequiredAtlasDimension(
+            AtlasFlangeReferenceRow configuration,
+            string value,
+            string dimensionName,
+            out double millimetres,
+            out string error)
+        {
+            if (TryParseCatalogMillimetres(
+                    value,
+                    out millimetres) &&
+                millimetres > 0)
+            {
+                error = null;
+                return true;
+            }
+
+            error =
+                "The Atlas row for " +
+                BuildFlangeConfigurationLabel(configuration) +
+                " does not define a numeric " + dimensionName +
+                ". The configured flange cannot be generated without " +
+                "guessing.";
+            return false;
+        }
+
+        private static string FormatCatalogMillimetres(
+            double millimetres)
+        {
+            return millimetres.ToString(
+                       "0.###",
+                       CultureInfo.InvariantCulture) +
+                   " mm";
         }
 
         internal static IList<FabricationFlangeReferenceMatch>
@@ -722,6 +1498,7 @@ namespace ParallelSystemsPlugin.Fabrication
 
             candidate = candidate
                 .Replace("mm", string.Empty)
+                .TrimStart('*')
                 .Trim();
 
             return double.TryParse(

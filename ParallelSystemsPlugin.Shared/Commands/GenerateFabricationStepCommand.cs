@@ -3,6 +3,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Microsoft.Win32;
 using ParallelSystemsPlugin.Fabrication;
+using ParallelSystemsPlugin.UI.Dialogs;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -150,7 +151,7 @@ namespace ParallelSystemsPlugin.Commands
                         new[]
                         {
                             "Original model geometry - export each flange exactly as modelled, with no flange alterations",
-                            "Atlas Steels configuration - retain the source flange body and apply the matched Atlas bolt drilling"
+                            "Atlas Steels configuration - rebuild each supported flange from its matched Atlas dimensions"
                         },
                         defaultOptionIndex: 0);
 
@@ -182,6 +183,50 @@ namespace ParallelSystemsPlugin.Commands
 
                         selection.FlangeGeometryMode =
                             FabricationFlangeGeometryMode.AtlasConfiguration;
+
+                        // Changed by Jhay: when Atlas table/plate slip-on
+                        // geometry needs a WPS setback, open the exact field
+                        // before generation instead of producing the same
+                        // avoidable blocking report on every attempt.
+                        if (FabricationStepService
+                                .RequiresSlipOnPipeFaceSetback(
+                                    doc,
+                                    selection) &&
+                            Configs.AppConfig.CurrentConfig
+                                ?.Fabrication
+                                ?.SlipOnPipeFaceSetbackMillimetres
+                                == null)
+                        {
+                            AppDialog.Info(
+                                uiApp,
+                                commandTitle + " - Slip-On Flange Fit-Up",
+                                "An approved pipe-face setback is required " +
+                                "for the selected Atlas table/plate slip-on " +
+                                "flange. Enter the project/WPS value in the " +
+                                "Fabrication tab and select Save. No value " +
+                                "will be guessed.");
+
+                            Configurations configurations =
+                                new Configurations(doc);
+                            configurations.FocusSlipOnFlangeFitUp();
+                            configurations.ShowModal(
+                                uiApp.MainWindowHandle);
+
+                            if (Configs.AppConfig.CurrentConfig
+                                    ?.Fabrication
+                                    ?.SlipOnPipeFaceSetbackMillimetres
+                                    == null)
+                            {
+                                AppDialog.Warn(
+                                    uiApp,
+                                    commandTitle,
+                                    "Atlas STEP generation was cancelled " +
+                                    "because the required project/WPS " +
+                                    "pipe-face setback is still blank.");
+
+                                return Result.Cancelled;
+                            }
+                        }
                     }
                     else
                     {

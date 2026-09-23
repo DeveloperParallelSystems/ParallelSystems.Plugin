@@ -66,6 +66,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.PipeGeometry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.FittingGeometry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.FlangeGeometry.cs" />
+    <!-- Created by Jhay: explicit Atlas slip-on flange/pipe fabrication fit-up. -->
+    <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.FlangeFitUp.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.ReducerGeometry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.ChamferGeometry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Fabrication\FabricationStepService.BranchGeometry.cs" />

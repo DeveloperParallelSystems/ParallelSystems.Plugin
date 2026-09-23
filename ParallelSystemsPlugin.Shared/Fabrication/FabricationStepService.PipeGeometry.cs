@@ -28,6 +28,8 @@ namespace ParallelSystemsPlugin.Fabrication
                 sideCouplingsByHeaderPipe,
             IDictionary<ElementId, SideCouplingConnection>
                 sideCouplingConnections,
+            IDictionary<ElementId, List<SlipOnFlangeFitUp>>
+                slipOnFlangeFitUpsByPipe,
             IList<FabricationIssue> issues)
         {
             PipeDimensions dimensions;
@@ -61,6 +63,45 @@ namespace ParallelSystemsPlugin.Fabrication
                 });
 
                 return null;
+            }
+
+            List<SlipOnFlangeFitUp> pipeFlangeFitUps = null;
+
+            // Changed by Jhay: preserve the connector-derived design axis,
+            // but replace a confirmed table/plate slip-on pipe endpoint with
+            // its separately resolved physical fabrication endpoint.
+            if (slipOnFlangeFitUpsByPipe != null &&
+                slipOnFlangeFitUpsByPipe.TryGetValue(
+                    pipe.Id,
+                    out pipeFlangeFitUps))
+            {
+                foreach (SlipOnFlangeFitUp fitUp in pipeFlangeFitUps)
+                {
+                    if (fitUp.IsPipeStart)
+                        start = fitUp.FabricationPipeEnd;
+                    else
+                        end = fitUp.FabricationPipeEnd;
+                }
+
+                XYZ fabricationSpan = end - start;
+                length = fabricationSpan.GetLength();
+
+                if (length <= GeometryTolerance)
+                {
+                    issues.Add(new FabricationIssue
+                    {
+                        Severity = FabricationIssueSeverity.Blocking,
+                        ElementId = pipe.Id,
+                        ElementName = GetElementDisplayName(pipe),
+                        Message =
+                            "The slip-on flange fit-up produced a zero or " +
+                            "invalid physical pipe length."
+                    });
+
+                    return null;
+                }
+
+                normalizedDirection = fabricationSpan.Normalize();
             }
 
             Solid outer = CreateCylinder(
@@ -376,6 +417,19 @@ namespace ParallelSystemsPlugin.Fabrication
                 notes += "; " + string.Join(
                     "; ",
                     endPreparationNotes.Distinct());
+            }
+
+            if (pipeFlangeFitUps != null && pipeFlangeFitUps.Count > 0)
+            {
+                notes += "; " + string.Join(
+                    "; ",
+                    pipeFlangeFitUps.Select(x =>
+                        "Atlas slip-on physical pipe insertion " +
+                        FormatCatalogMillimetres(
+                            x.PipeInsertionDepthMillimetres) +
+                        " with mating-face setback " +
+                        FormatCatalogMillimetres(
+                            x.PipeFaceSetbackMillimetres)));
             }
 
             return new FabricationElementGeometry

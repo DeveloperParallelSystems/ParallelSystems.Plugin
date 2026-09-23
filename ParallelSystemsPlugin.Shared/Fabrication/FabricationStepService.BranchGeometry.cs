@@ -48,6 +48,8 @@ namespace ParallelSystemsPlugin.Fabrication
                     BranchDimensions = coupling.OutletDimensions,
                     HeaderConnectorOrigin =
                         coupling.HeaderConnectorOrigin,
+                    OutletConnectorOrigin =
+                        coupling.OutletConnectorOrigin,
                     HeaderInwardDirection =
                         coupling.HeaderInwardDirection,
                     HeaderAxisStart =
@@ -9020,6 +9022,8 @@ namespace ParallelSystemsPlugin.Fabrication
                     BranchDimensions = coupling.OutletDimensions,
                     HeaderConnectorOrigin =
                         coupling.HeaderConnectorOrigin,
+                    OutletConnectorOrigin =
+                        coupling.OutletConnectorOrigin,
                     HeaderInwardDirection =
                         coupling.HeaderInwardDirection,
                     HeaderAxisStart = coupling.HeaderAxisStart,

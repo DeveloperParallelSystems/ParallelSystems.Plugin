@@ -80,10 +80,18 @@ namespace ParallelSystemsPlugin.Fabrication
                     FabricationFlangeGeometryMode.AtlasConfiguration)
             {
                 List<ConnectorBore> drillingConnectors =
-                    CreateFlangeDrillingConnectorBores(
+                    ResolveConnectorBores(
                         doc,
                         element,
-                        selectedSourceIds);
+                        sourceSolids,
+                        pipeDimensions,
+                        dimensionsByNominal,
+                        documentDimensionsByNominal,
+                        componentDimensionOverrides,
+                        selectedSourceIds,
+                        shapedBranchConnection,
+                        sideCouplingConnection,
+                        issues);
 
                 if (drillingConnectors.Count == 0)
                 {
@@ -104,7 +112,6 @@ namespace ParallelSystemsPlugin.Fabrication
                 return BuildAtlasConfiguredFlangeGeometry(
                     doc,
                     element,
-                    sourceSolids,
                     drillingConnectors,
                     issues);
             }
@@ -890,15 +897,21 @@ namespace ParallelSystemsPlugin.Fabrication
 
                 bool sideCouplingHeaderSide =
                     sideCouplingConnection != null &&
-                    connectedElement != null &&
-                    connectedElement.Id.Equals(
-                        sideCouplingConnection.HeaderPipeId);
+                    (ConnectorOriginsMatch(
+                         connector.Origin,
+                         sideCouplingConnection.HeaderConnectorOrigin) ||
+                     (connectedElement != null &&
+                      connectedElement.Id.Equals(
+                          sideCouplingConnection.HeaderPipeId)));
 
                 bool sideCouplingOutletSide =
                     sideCouplingConnection != null &&
-                    connectedElement != null &&
-                    connectedElement.Id.Equals(
-                        sideCouplingConnection.OutletPipeId);
+                    (ConnectorOriginsMatch(
+                         connector.Origin,
+                         sideCouplingConnection.OutletConnectorOrigin) ||
+                     (connectedElement != null &&
+                      connectedElement.Id.Equals(
+                          sideCouplingConnection.OutletPipeId)));
 
                 Pipe connectedPipe = connectedElement as Pipe;
 
@@ -938,10 +951,8 @@ namespace ParallelSystemsPlugin.Fabrication
                         nominal = matched.NominalDiameter;
 
                     source =
-                        "Tap-half coupling dimensions matched from outlet pipe " +
-                        RevitApiCompatibility.GetElementIdValue(
-                            sideCouplingConnection.OutletPipeId)
-                            .ToString(CultureInfo.InvariantCulture);
+                        "Tap-half coupling dimensions matched from " +
+                        sideCouplingConnection.OutletDimensionSource;
                 }
                 else if (connectedElement != null &&
                          componentDimensionOverrides != null &&

@@ -22,6 +22,8 @@ namespace ParallelSystemsPlugin.Models.Configs
         public List<SystemAbbreviation> SystemAbbreviations { get; set; }
         public ProcurementConfig Procurement { get; set; }
         public ToolsConfig ToolsConfig { get; set; }
+        // Changed by Jhay: central project/WPS fabrication fit-up settings.
+        public FabricationConfig Fabrication { get; set; }
 
         public bool HasNullProperty()
         {

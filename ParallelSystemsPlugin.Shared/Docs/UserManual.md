@@ -15,8 +15,10 @@ The public plugin version is 1.17.10. The V2 label used in monitoring and deploy
 
 - Added a read-only Atlas Steels Section 3 flange reference under `Configurations > Fabrication`, covering six ASME B16.5 classes, AS 2129 Tables D, E, F, and H, PN16 AS 4087, and PN16 EN 1092.
 - Added configuration-type, reference-table, and nominal-size selectors. The table shows only the applicable nominal-size and dimension columns and swaps between the ASME/ANSI and common table-flange diagrams. Website and packaged offline copies of the Section 3 source manual are available in the same view.
-- Fabrication STEP now detects selected flanges and asks whether to export their original model geometry or apply the Atlas Steels configuration. The original option makes no bore, chamfer, or bolt-hole alteration to a flange. The Atlas option identifies the reference table from the flange family/type name and the nominal diameter from its physical piping connectors.
-- Atlas bolt holes use the matched row's count, diameter, and pitch-circle diameter and are evenly spaced while straddling the flange centreline axes. The source flange body and existing central opening are retained; missing or ambiguous table matches block unverified hole generation.
+- Fabrication STEP now detects selected flanges and asks whether to export their original model geometry or apply the Atlas Steels configuration. The original option makes no bore, chamfer, or bolt-hole alteration to a flange. The Atlas option identifies the reference table from the flange family/type name and the nominal diameter from its physical piping connectors, then rebuilds supported flange bodies from the matched dimensions.
+- Atlas bolt holes use the matched row's count, diameter, and pitch-circle diameter and are evenly spaced while straddling the flange centreline axes. Supported non-blind flanges receive a continuous central opening through the complete generated body. Missing or ambiguous table matches block unverified generation.
+- Atlas table/plate slip-on STEP geometry requires a project/WPS `Pipe-face setback (mm)` under `Configurations > Fabrication`. This is the distance from the finished mating face back to the physical pipe cut face. Leave it blank until an approved value is available; Atlas export will block instead of inventing a fit-up allowance.
+- If this value is blank when Atlas STEP is requested, the command opens the Fabrication tab with the field selected. Enter the approved project/WPS value and select Save to continue; closing the window without a value cancels the export.
 
 The current build also includes the following 1.17.9 changes:
 
@@ -64,7 +66,7 @@ The current build also includes the following 1.17.5 fabrication reliability cha
 - Header openings are limited to the near-side wall and retain the circular or elliptical shape required by the branch axis.
 - The shaped branch is trimmed flush to the header outside surface, so no vertical sleeve remains inside the main pipe.
 - A final post-trim bore cleanup removes thin saddle lips and keeps the branch-side opening circular.
-- Explicit `STD WT-CS` adjustable branches can use the controlled standard-weight carbon-steel dimension table when no branch pipe is included. This is recorded as Information rather than a Warning after valid OD, ID, and wall thickness are confirmed.
+- Explicit `STD WT-CS` and Schedule 10 stainless-steel adjustable branches can use their controlled pipe-dimension tables when no branch pipe is included. This is recorded as Information rather than a Warning after valid OD, ID, and wall thickness are confirmed.
 - Carbon flanges connected to a resolved shaped branch can inherit the verified branch bore dimensions.
 - Existing worksharing freshness, custom-dialog, selected-scope, inspection-view, validation, and verified STEP-save controls remain active.
 
@@ -155,14 +157,17 @@ The Fabrication panel is implemented as one split button with three commands.
 - Creates hollow pipe and fitting geometry and blocks unresolved or unsafe geometry instead of guessing.
 - Applies the approved butt-weld rule where applicable: a 30-degree bevel measured from the end face with a 1 mm root face.
 - Keeps flange joints, tap-half coupling joints, and copper capillary reducer joints plain-ended.
-- Supports flange-to-flange through bores, SET-ON shaped branches, tap-half side couplings, concentric butt-weld reducers, and plain-end copper capillary concentric reducers.
+- Supports flange-to-flange through bores, SET-ON shaped branches, tap-half side couplings, concentric butt-weld reducers, and plain-end copper capillary concentric reducers. A selected tap-half coupling on a selected header can use validated physical outlet dimensions from its family when the outlet pipe is outside the selected assembly.
 - When the selection contains a flange, lists each detected name, nominal diameter, and Atlas table match, then asks for `Original model geometry` or `Atlas Steels configuration`.
-- Original mode exports each flange source solid one-to-one without generated bores, chamfers, or bolt drilling. Atlas mode retains that source body and existing central opening, then cuts only the matched row's bolt-hole quantity and diameter on its pitch-circle diameter.
+- Original mode exports each flange source solid one-to-one without generated bores, chamfers, or bolt drilling. Atlas mode procedurally rebuilds supported bodies, creates a continuous central opening, and cuts the matched row's bolt-hole quantity and diameter on its pitch-circle diameter.
+- ASME slip-on and welding-neck bodies use the applicable `O`, `tf`, `X`, `Ah`, `Y`, and `B` dimensions. Table plate/SOW bodies use `A` and the applicable `D` thickness; AS 4087 and EN 1092 raised-face dimensions are included where supplied. The plate/SOW opening uses the verified connected pipe OD plus the Atlas-permitted maximum 4 mm diametral clearance. AS 2129 standard stock remains flat-faced as stated by the manual.
+- Atlas mode blocks table welding-neck/boss and ASME threaded/socket/lapped generation when the manual omits subtype details required for an exact body. Use Original mode for those cases rather than generating guessed geometry.
+- For a positively identified Atlas table/plate SOW flange included with its connected pipe, the Revit connector remains the design datum while the generated physical pipe extends into the flange bore by `flange thickness - configured pipe-face setback`. The flange mating face stays fixed and the pipe and flange remain separate STEP solids. A missing, negative, or non-entering setback blocks generation.
 - Atlas lookup recognizes Class 150/300/600/900/1500/2500, Table D/E/F/H, AS 4087 PN16, or EN 1092 PN16 in the family/type name and uses the physical connector nominal diameter. Missing names, disagreeing connector sizes, incomplete dimensions, or a non-unique row block Atlas generation. Both modes retain the normal centred STEP placement.
 - For SET-ON shaped branches, the physical branch outlet axis is intersected with the selected header cylinder. This supports adjustable families whose header connector is unconnected or omitted.
 - Cuts the required branch opening through the near-side header wall only; the opposite wall is preserved. The opening remains circular or elliptical according to the branch angle and curved header surface.
 - Trims the shaped branch flush to the header outside surface, then performs a final coaxial bore cleanup so no sleeve, saddle lip, or thin membrane blocks either flow path.
-- When no branch pipe supplies outlet dimensions, an explicitly classified `STD WT-CS` family can use the controlled standard-weight carbon-steel table. A successful controlled lookup is reported as Information and does not count as a warning.
+- When no branch pipe supplies outlet dimensions, an explicitly classified `STD WT-CS` or Schedule 10 stainless-steel family can use its controlled dimension table. A successful controlled lookup is reported as Information and does not count as a warning.
 - Allows a connected carbon flange to inherit verified outlet dimensions from the shaped branch when the flange family does not expose an independent inside diameter.
 - Skips weld-gap and non-connector helper families from the STEP while traversing through them to the actual connected component.
 - Creates a dedicated Fine-detail Revit 3D inspection view and one Generic Model DirectShape per generated source element.
@@ -545,7 +550,7 @@ No MSMQ, old Activity Queue Service, or central workstation SQLite database is p
 - Connect fitting-only selections to pipework with an unambiguous pipe specification, or provide approved fitting dimensions.
 - Inspect reducers, tees, crosses, elbows, chamfers, flange joints, and internal bores in section before release.
 - `Information` entries document a deterministic resolver or family-specific path and do not block export.
-- A validated `STD WT-CS` shaped-branch lookup is informational. It becomes blocking only when the classification, nominal size, or resulting dimensions cannot be resolved safely.
+- A validated `STD WT-CS` or Schedule 10 stainless-steel shaped-branch lookup is informational. It becomes blocking only when the classification, nominal size, or resulting dimensions cannot be resolved safely.
 - Do not bypass a blocking geometry message by inventing a value.
 
 ### Show Ready Finds Nothing

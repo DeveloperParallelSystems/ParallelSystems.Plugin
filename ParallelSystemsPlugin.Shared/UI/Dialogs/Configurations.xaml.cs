@@ -136,6 +136,20 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             ShowDialog();
         }
 
+        // Created by Jhay: allow fabrication generation to take the user
+        // directly to the unresolved WPS value instead of ending with a
+        // repeated blocking report and no correction path.
+        public void FocusSlipOnFlangeFitUp()
+        {
+            ConfigurationTabs.SelectedItem = FabricationTab;
+            Loaded += (sender, args) =>
+            {
+                SlipOnPipeFaceSetbackTextBox.Focus();
+                SlipOnPipeFaceSetbackTextBox.SelectAll();
+                Keyboard.Focus(SlipOnPipeFaceSetbackTextBox);
+            };
+        }
+
         #endregion
 
         #region Load/Refresh UI
@@ -155,6 +169,13 @@ namespace ParallelSystemsPlugin.UI.Dialogs
 
             PipeUnconnectedTextBox.Text = config.PipeMapParameters?.Unconnected ?? "";
             PipeEnableUnconnectedMappingCheckbox.IsChecked = config.PipeMapParameters?.EnableMapping ?? false;
+
+            // Created by Jhay: a blank value is meaningful and remains
+            // unresolved until an approved fabrication/WPS value is entered.
+            SlipOnPipeFaceSetbackTextBox.Text =
+                config.Fabrication?.SlipOnPipeFaceSetbackMillimetres
+                    ?.ToString("0.###", CultureInfo.InvariantCulture) ??
+                string.Empty;
 
             // ===== Fittings End Prep =====
             FittingsEndPreps = new ObservableCollection<EndPrep>(config.FittingsEndPreps ?? new List<EndPrep>());
@@ -1130,6 +1151,34 @@ namespace ParallelSystemsPlugin.UI.Dialogs
                 newConfig.AllowedMapFittingsElements = (AllowedMappingElements ?? new ObservableCollection<AllowedMapFittingsElement>())
                     .Where(x => !string.IsNullOrWhiteSpace(x.NameContains))
                     .ToList();
+
+                // Created by Jhay: persist one central, explicit fit-up value.
+                // No default is substituted because AS 2129 does not define it.
+                double? slipOnSetback = null;
+                string slipOnSetbackText =
+                    (SlipOnPipeFaceSetbackTextBox.Text ?? string.Empty).Trim();
+
+                if (!string.IsNullOrWhiteSpace(slipOnSetbackText))
+                {
+                    double parsedSetback;
+
+                    if (!TryParseUserDouble(
+                            slipOnSetbackText,
+                            out parsedSetback) ||
+                        parsedSetback < 0)
+                    {
+                        throw new InvalidOperationException(
+                            "Slip-on pipe-face setback must be blank or a " +
+                            "non-negative value in millimetres.");
+                    }
+
+                    slipOnSetback = parsedSetback;
+                }
+
+                newConfig.Fabrication = new FabricationConfig
+                {
+                    SlipOnPipeFaceSetbackMillimetres = slipOnSetback
+                };
 
                 // ===== Pipe Weight =====
                 newConfig.PipeWeightMapParameters = new MapParameters

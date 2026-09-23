@@ -393,9 +393,9 @@ namespace ParallelSystemsPlugin.Fabrication
                                 Message =
                                     "Standalone shaped-branch outlet " +
                                     "dimensions were resolved from the explicit " +
-                                    "STD WT-CS family classification, nominal " +
-                                    "size, and the controlled standard-weight " +
-                                    "carbon-steel dimension table."
+                                    "schedule/material family classification, " +
+                                    "nominal size, and its controlled pipe " +
+                                    "dimension table."
                             });
                         }
 
@@ -631,7 +631,8 @@ namespace ParallelSystemsPlugin.Fabrication
                             "but the plugin needs valid branch ID/OD data from " +
                             "a connected pipe, a connected fitting, shaped-branch " +
                             "parameters, physical family geometry, or an explicit " +
-                            "STD WT-CS family classification."
+                            "supported schedule/material family classification " +
+                            "(STD WT-CS or Schedule 10 stainless steel)."
                     });
 
                     continue;
@@ -768,9 +769,10 @@ namespace ParallelSystemsPlugin.Fabrication
                 {
                     // This path is deterministic rather than an unresolved
                     // geometry condition. It runs only when:
-                    // - the family explicitly identifies itself as STD WT-CS;
-                    // - a valid nominal/OD match exists in the controlled
-                    //   standard-weight carbon-steel dimension table; and
+                    // - the family explicitly identifies a supported schedule
+                    //   and material;
+                    // - a valid nominal/OD match exists in its controlled pipe
+                    //   dimension table; and
                     // - the resulting OD, ID, and wall thickness are valid.
                     //
                     // Keep the audit evidence, but do not report it as a
@@ -784,9 +786,9 @@ namespace ParallelSystemsPlugin.Fabrication
                         ElementName = GetElementDisplayName(fitting),
                         Message =
                             "Shaped-branch outlet dimensions were resolved " +
-                            "from the explicit STD WT-CS family classification, " +
-                            "nominal size, and the controlled standard-weight " +
-                            "carbon-steel dimension table because no branch " +
+                            "from the explicit schedule/material family " +
+                            "classification, nominal size, and its controlled " +
+                            "pipe dimension table because no branch " +
                             "pipe was included in the selected assembly."
                     });
                 }
@@ -903,8 +905,8 @@ namespace ParallelSystemsPlugin.Fabrication
                 error =
                     "The standalone shaped-branch outlet dimensions could " +
                     "not be resolved from a connected component, family " +
-                    "parameters, physical family geometry, or the explicit " +
-                    "STD WT-CS dimension table.";
+                    "parameters, physical family geometry, or an explicit " +
+                    "supported schedule/material dimension table.";
 
                 return false;
             }
@@ -2008,8 +2010,9 @@ namespace ParallelSystemsPlugin.Fabrication
                 nominal = connectorNominal;
 
             // When no physical branch pipe is available, an explicitly
-            // classified STD WT-CS family must use the controlled standard
-            // dimensions before attempting to infer a wall from family
+            // classified supported schedule/material family must use the
+            // controlled pipe dimensions before attempting to infer a wall
+            // from family
             // graphics. Adjustable branch families can contain symbolic,
             // nested, or clearance faces that look cylindrical but do not
             // represent the fabrication wall thickness. Using those faces can
@@ -2018,6 +2021,11 @@ namespace ParallelSystemsPlugin.Fabrication
             PipeDimensions controlledStandardDimensions;
 
             if (TryResolveStandardWeightCarbonSteelDimensions(
+                    doc,
+                    fitting,
+                    nominal,
+                    out controlledStandardDimensions) ||
+                TryResolveSchedule10StainlessSteelDimensions(
                     doc,
                     fitting,
                     nominal,
@@ -2149,6 +2157,11 @@ namespace ParallelSystemsPlugin.Fabrication
             }
 
             if (TryResolveStandardWeightCarbonSteelDimensions(
+                    doc,
+                    fitting,
+                    nominal,
+                    out dimensions) ||
+                TryResolveSchedule10StainlessSteelDimensions(
                     doc,
                     fitting,
                     nominal,
@@ -2300,6 +2313,145 @@ namespace ParallelSystemsPlugin.Fabrication
             return true;
         }
 
+        private static bool
+            TryResolveSchedule10StainlessSteelDimensions(
+                Document doc,
+                Element fitting,
+                double nominalDiameter,
+                out PipeDimensions dimensions)
+        {
+            dimensions = null;
+
+            if (fitting == null ||
+                nominalDiameter <= GeometryTolerance)
+            {
+                return false;
+            }
+
+            string classification =
+                NormalizeClassificationText(
+                    BuildElementClassificationText(
+                        doc,
+                        fitting));
+
+            bool isSchedule10 =
+                classification.Contains("SCH10") ||
+                classification.Contains("SCH 10") ||
+                classification.Contains("SCHEDULE10") ||
+                classification.Contains("SCHEDULE 10");
+
+            bool isStainlessSteel =
+                classification.Contains("STAINLESS") ||
+                classification.Contains("316") ||
+                classification.Contains("304") ||
+                classification.Contains(" SS ") ||
+                classification.EndsWith(
+                    " SS",
+                    StringComparison.Ordinal);
+
+            if (!isSchedule10 ||
+                !isStainlessSteel ||
+                classification.Contains("CARBON"))
+            {
+                return false;
+            }
+
+            double nominalMillimetres =
+                nominalDiameter * FeetToMillimetres;
+
+            // Atlas Steels Product Manual Section 3, Stainless Steel Pipe,
+            // Schedule 10S. Dimensions are based on ASTM A312M / A790M and
+            // ASME B36.19M. Rows without a published 10S wall are omitted.
+            double[,] schedule10S =
+            {
+                { 6.0, 10.3, 1.24 },
+                { 8.0, 13.7, 1.65 },
+                { 10.0, 17.1, 1.65 },
+                { 15.0, 21.3, 2.11 },
+                { 20.0, 26.7, 2.11 },
+                { 25.0, 33.4, 2.77 },
+                { 32.0, 42.2, 2.77 },
+                { 40.0, 48.3, 2.77 },
+                { 50.0, 60.3, 2.77 },
+                { 65.0, 73.0, 3.05 },
+                { 80.0, 88.9, 3.05 },
+                { 90.0, 101.6, 3.05 },
+                { 100.0, 114.3, 3.05 },
+                { 125.0, 141.3, 3.40 },
+                { 150.0, 168.3, 3.40 },
+                { 200.0, 219.1, 3.76 },
+                { 250.0, 273.1, 4.19 },
+                { 300.0, 323.9, 4.57 },
+                { 350.0, 355.6, 4.78 },
+                { 400.0, 406.4, 4.78 },
+                { 450.0, 457.0, 4.78 },
+                { 500.0, 508.0, 5.54 },
+                { 550.0, 559.0, 5.54 },
+                { 600.0, 610.0, 6.35 },
+                { 750.0, 762.0, 7.92 }
+            };
+
+            int bestIndex = -1;
+            double bestDifference = double.MaxValue;
+
+            for (int index = 0;
+                 index < schedule10S.GetLength(0);
+                 index++)
+            {
+                double difference = Math.Min(
+                    Math.Abs(
+                        schedule10S[index, 0] -
+                        nominalMillimetres),
+                    Math.Abs(
+                        schedule10S[index, 1] -
+                        nominalMillimetres));
+
+                if (difference < bestDifference)
+                {
+                    bestDifference = difference;
+                    bestIndex = index;
+                }
+            }
+
+            double toleranceMillimetres = Math.Max(
+                1.5,
+                nominalMillimetres * 0.01);
+
+            if (bestIndex < 0 ||
+                bestDifference > toleranceMillimetres)
+            {
+                return false;
+            }
+
+            double outsideMillimetres =
+                schedule10S[bestIndex, 1];
+            double wallMillimetres =
+                schedule10S[bestIndex, 2];
+            double insideMillimetres =
+                outsideMillimetres -
+                (2.0 * wallMillimetres);
+
+            dimensions = new PipeDimensions
+            {
+                NominalDiameter =
+                    schedule10S[bestIndex, 0] /
+                    FeetToMillimetres,
+                OutsideDiameter =
+                    outsideMillimetres /
+                    FeetToMillimetres,
+                InsideDiameter =
+                    insideMillimetres /
+                    FeetToMillimetres,
+                WallThickness =
+                    wallMillimetres /
+                    FeetToMillimetres,
+                SourceDescription =
+                    "ASME B36.19M Schedule 10S stainless-steel fallback from explicit family classification"
+            };
+
+            return true;
+        }
+
         private static bool ConnectorOriginsMatch(
             XYZ first,
             XYZ second)
@@ -2386,7 +2538,7 @@ namespace ParallelSystemsPlugin.Fabrication
                     });
                 }
 
-                if (candidates.Count != 2)
+                if (candidates.Count < 1 || candidates.Count > 2)
                 {
                     issues.Add(new FabricationIssue
                     {
@@ -2394,9 +2546,10 @@ namespace ParallelSystemsPlugin.Fabrication
                         ElementId = fitting.Id,
                         ElementName = GetElementDisplayName(fitting),
                         Message =
-                            "A tap-half coupling must resolve exactly two pipe " +
-                            "connections: one large header pipe and one smaller " +
-                            "outlet pipe. Resolved pipe connections: " +
+                            "A tap-half coupling must resolve one selected " +
+                            "header pipe and either a selected outlet pipe or " +
+                            "explicit outlet dimensions in the fitting family. " +
+                            "Resolved pipe connections: " +
                             candidates.Count.ToString(
                                 CultureInfo.InvariantCulture) + "."
                     });
@@ -2410,11 +2563,82 @@ namespace ParallelSystemsPlugin.Fabrication
                     .ToList();
 
                 ShapedBranchPipeCandidate header = ordered[0];
-                ShapedBranchPipeCandidate outlet = ordered[1];
+                ShapedBranchPipeCandidate outlet =
+                    ordered.Count == 2 ? ordered[1] : null;
+
+                PipeDimensions outletDimensions;
+                ElementId outletPipeId;
+                Connector outletConnector;
+                string outletDimensionSource;
+
+                if (outlet != null)
+                {
+                    outletDimensions = outlet.Dimensions;
+                    outletPipeId = outlet.Pipe.Id;
+                    outletConnector = outlet.Connector;
+                    outletDimensionSource =
+                        "selected outlet pipe " +
+                        RevitApiCompatibility.GetElementIdValue(
+                            outletPipeId).ToString(
+                                CultureInfo.InvariantCulture);
+                }
+                else
+                {
+                    outletPipeId = ElementId.InvalidElementId;
+                    List<Connector> outletConnectors = manager.Connectors
+                        .Cast<Connector>()
+                        .Where(x =>
+                            x != null &&
+                            x.Domain == Domain.DomainPiping &&
+                            x.ConnectorType == ConnectorType.End &&
+                            x.Shape == ConnectorProfileType.Round &&
+                            !ConnectorOriginsMatch(
+                                x.Origin,
+                                header.Connector.Origin))
+                        .ToList();
+
+                    outletConnector = outletConnectors.Count == 1
+                        ? outletConnectors[0]
+                        : null;
+
+                    Element connectedOutlet = outletConnector == null
+                        ? null
+                        : GetConnectedElement(
+                            fitting,
+                            outletConnector,
+                            selectedSourceIds);
+
+                    if (outletConnector == null ||
+                        connectedOutlet is Pipe ||
+                        !TryResolveTapHalfCouplingFamilyOutletDimensions(
+                            doc,
+                            fitting,
+                            outletConnector,
+                            header.Dimensions,
+                            out outletDimensions))
+                    {
+                        issues.Add(new FabricationIssue
+                        {
+                            Severity = FabricationIssueSeverity.Blocking,
+                            ElementId = fitting.Id,
+                            ElementName = GetElementDisplayName(fitting),
+                            Message =
+                                "The tap-half coupling has no selected outlet " +
+                                "pipe. Its other connector must be unique and " +
+                                "the family must provide validated outlet " +
+                                "nominal size, bore, and outside diameter."
+                        });
+
+                        continue;
+                    }
+
+                    outletDimensionSource =
+                        outletDimensions.SourceDescription;
+                }
 
                 double diameterDifference =
                     header.Dimensions.OutsideDiameter -
-                    outlet.Dimensions.OutsideDiameter;
+                    outletDimensions.OutsideDiameter;
 
                 double minimumDifference = Math.Max(
                     DiameterTolerance,
@@ -2429,14 +2653,15 @@ namespace ParallelSystemsPlugin.Fabrication
                         ElementName = GetElementDisplayName(fitting),
                         Message =
                             "The tap-half coupling header could not be identified. " +
-                            "The two connected pipe outside diameters are equal " +
-                            "or too close to classify safely."
+                            "The header outside diameter and resolved outlet " +
+                            "outside diameter are equal or too close to " +
+                            "classify safely."
                     });
 
                     continue;
                 }
 
-                if (outlet.Dimensions.InsideDiameter >=
+                if (outletDimensions.InsideDiameter >=
                     header.Dimensions.InsideDiameter - DiameterTolerance)
                 {
                     issues.Add(new FabricationIssue
@@ -2453,7 +2678,8 @@ namespace ParallelSystemsPlugin.Fabrication
                 }
 
                 if (!selectedSourceIds.Contains(header.Pipe.Id) ||
-                    !selectedSourceIds.Contains(outlet.Pipe.Id))
+                    (outlet != null &&
+                     !selectedSourceIds.Contains(outlet.Pipe.Id)))
                 {
                     issues.Add(new FabricationIssue
                     {
@@ -2461,9 +2687,9 @@ namespace ParallelSystemsPlugin.Fabrication
                         ElementId = fitting.Id,
                         ElementName = GetElementDisplayName(fitting),
                         Message =
-                            "The tap-half coupling, large header pipe, and " +
-                            "smaller outlet pipe must all be included in the " +
-                            "fabrication selection."
+                            "The tap-half coupling and large header pipe " +
+                            "must be included in the fabrication selection; " +
+                            "a resolved outlet pipe must also be selected."
                     });
 
                     continue;
@@ -2587,13 +2813,19 @@ namespace ParallelSystemsPlugin.Fabrication
                             GetElementDisplayName(fitting),
 
                         HeaderPipeId = header.Pipe.Id,
-                        OutletPipeId = outlet.Pipe.Id,
+                        OutletPipeId = outletPipeId,
 
                         HeaderDimensions =
                             header.Dimensions,
 
                         OutletDimensions =
-                            outlet.Dimensions,
+                            outletDimensions,
+
+                        OutletConnectorOrigin =
+                            outletConnector.Origin,
+
+                        OutletDimensionSource =
+                            outletDimensionSource,
 
                         HeaderConnectorOrigin =
                             connectorOrigin,
@@ -2610,9 +2842,103 @@ namespace ParallelSystemsPlugin.Fabrication
                         HeaderAxisLength =
                             headerAxisLength
                     };
+
+                if (outlet == null)
+                {
+                    issues.Add(new FabricationIssue
+                    {
+                        Severity = FabricationIssueSeverity.Information,
+                        ElementId = fitting.Id,
+                        ElementName = GetElementDisplayName(fitting),
+                        Message =
+                            "The tap-half coupling outlet dimensions were " +
+                            "resolved from validated physical family " +
+                            "parameters because no outlet pipe was included " +
+                            "in the selected assembly."
+                    });
+                }
             }
 
             return result;
+        }
+
+        private static bool
+            TryResolveTapHalfCouplingFamilyOutletDimensions(
+                Document doc,
+                Element fitting,
+                Connector outletConnector,
+                PipeDimensions headerDimensions,
+                out PipeDimensions dimensions)
+        {
+            dimensions = null;
+
+            if (fitting == null ||
+                outletConnector == null ||
+                headerDimensions == null)
+            {
+                return false;
+            }
+
+            double nominal = outletConnector.Radius * 2.0;
+            double namedHeaderNominal = GetNamedDoubleParameter(
+                doc,
+                fitting,
+                "Nominal Diameter",
+                "Header Nominal Diameter");
+            double namedNominal = GetNamedDoubleParameter(
+                doc,
+                fitting,
+                "Nominal Diameter 2",
+                "Outlet Nominal Diameter",
+                "Branch Nominal Diameter");
+
+            if (nominal <= GeometryTolerance ||
+                (namedHeaderNominal > GeometryTolerance &&
+                 headerDimensions.NominalDiameter > GeometryTolerance &&
+                 !NominalDiametersMatch(
+                     namedHeaderNominal,
+                     headerDimensions.NominalDiameter)) ||
+                (namedNominal > GeometryTolerance &&
+                 !NominalDiametersMatch(nominal, namedNominal)))
+            {
+                return false;
+            }
+
+            double inside = GetNamedDoubleParameter(
+                doc,
+                fitting,
+                "Actual Diameter",
+                "Outlet Inside Diameter",
+                "Branch Inside Diameter");
+
+            double outside = GetNamedDoubleParameter(
+                doc,
+                fitting,
+                "Fitting_Outside_Diameter",
+                "Outlet Outside Diameter",
+                "Branch Outside Diameter");
+
+            if (inside <= GeometryTolerance ||
+                outside <= inside + DiameterTolerance ||
+                outside >= headerDimensions.OutsideDiameter -
+                    DiameterTolerance ||
+                inside >= headerDimensions.InsideDiameter -
+                    DiameterTolerance)
+            {
+                return false;
+            }
+
+            dimensions = new PipeDimensions
+            {
+                NominalDiameter = nominal,
+                InsideDiameter = inside,
+                OutsideDiameter = outside,
+                WallThickness = (outside - inside) / 2.0,
+                SourceDescription =
+                    "tap-half coupling physical family outlet dimensions"
+            };
+
+            return true;
         }
 
         private static bool TryFindPipeDimensionsInConnectedNetwork(
@@ -3322,6 +3648,9 @@ namespace ParallelSystemsPlugin.Fabrication
 
             public PipeDimensions HeaderDimensions { get; set; }
             public PipeDimensions OutletDimensions { get; set; }
+
+            public XYZ OutletConnectorOrigin { get; set; }
+            public string OutletDimensionSource { get; set; }
 
             public XYZ HeaderConnectorOrigin { get; set; }
             public XYZ HeaderInwardDirection { get; set; }

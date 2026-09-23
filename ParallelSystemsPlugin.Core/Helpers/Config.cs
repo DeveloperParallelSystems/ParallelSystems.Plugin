@@ -134,6 +134,13 @@ namespace ParallelSystemsPlugin.Helpers
                     new EndPrep { NameContains = "branch",   Value = "SC" }
                 };
 
+                // Created by Jhay: intentionally blank until an approved
+                // project fabrication/WPS setback is supplied by the user.
+                defaultConfig.Fabrication = new FabricationConfig
+                {
+                    SlipOnPipeFaceSetbackMillimetres = null
+                };
+
                 //Fittings End Prep
                 // Map Parameters
                 defaultConfig.FittingsMapParameters = new MapParameters();

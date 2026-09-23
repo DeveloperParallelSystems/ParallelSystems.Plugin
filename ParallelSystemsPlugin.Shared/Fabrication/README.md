@@ -13,10 +13,11 @@ The fabrication implementation is organised as partial `FabricationStepService` 
 | `FabricationStepService.StepTopology.cs` | STEP topology helpers and reusable topology construction |
 | `FabricationStepService.Diagnostics.cs` | Command-scoped geometry, topology, fallback, and validation diagnostics |
 | `FabricationStepService.Dimensions.cs` | Pipe/fitting ID, OD, wall, and geometry inference |
-| `FabricationStepService.Connections.cs` | Connector traversal, weld skipping, branch/coupling relationships, physical branch-axis resolution, controlled STD WT-CS dimensions, and adjacent fitting dimension overrides |
+| `FabricationStepService.Connections.cs` | Connector traversal, weld skipping, branch/coupling relationships, physical branch-axis resolution, controlled STD WT-CS and Schedule 10S stainless dimensions, and adjacent fitting dimension overrides |
 | `FabricationStepService.PipeGeometry.cs` | Pipe solids and pipe-end preparation |
 | `FabricationStepService.FittingGeometry.cs` | Generic fitting bores and fitting solids, shaped-branch flush trimming, and post-trim saddle-bore cleanup |
 | `FabricationStepService.FlangeGeometry.cs` | Exact flange catalog resolution and bolt-hole cutter generation |
+| `FabricationStepService.FlangeFitUp.cs` | Explicit Atlas table/plate slip-on pipe-face setback resolution, validation, and physical pipe-end mapping |
 | `FabricationStepService.ReducerGeometry.cs` | Butt-weld and capillary concentric reducer construction |
 | `FabricationStepService.ChamferGeometry.cs` | 30-degree bevel generation and verification |
 | `FabricationStepService.BranchGeometry.cs` | SET-ON branch and side-coupling openings/continuity, near-side wall protection, and circular outlet-axis bore cleanup |
@@ -54,11 +55,14 @@ The fabrication implementation is organised as partial `FabricationStepService` 
 - Preserve the opposite header wall for every supported header size.
 - Trim the shaped-branch fitting against the analytical header outside cylinder so no branch sleeve protrudes into the main bore.
 - Run the final coaxial post-trim cleanup after the flush trim, because trimming a multi-solid adjustable family can expose a saddle lip that did not exist before the trim.
-- Use a selected/connected branch pipe as the first dimension authority. The explicit `STD WT-CS` controlled table is a deterministic fallback only for correctly classified families with a valid nominal size.
+- Use a selected/connected branch pipe as the first dimension authority. Explicit `STD WT-CS` and Schedule 10 stainless-steel controlled tables are deterministic fallbacks only for correctly classified families with a valid nominal size.
 - Record a successful controlled fallback as Information. Do not suppress blocking issues when classification or dimensions remain unsafe.
 - A connected carbon flange may inherit the resolved shaped-branch outlet bore; do not invent an unrelated flange ID.
+- For a selected tap-half coupling with a selected header but no selected outlet pipe, validate the outlet connector and the family's explicit bore/OD parameters before generating the coupling bore and header opening. Keep an unselected connected pipe blocking rather than silently substituting family dimensions.
 - Resolve flange bolt patterns only from an explicit standard/class-table
   identity plus the connector nominal size. Generate the configured cylindrical
   cutters on the catalog PCD with holes straddling the connector centreline
   axes, and block export if the catalog row is ambiguous, incomplete, or any
   cutter fails to remove flange material.
+- Build flat Atlas plate/SOW bodies as annular extrusions. A full-revolution annulus creates two coplanar half-faces at each end in Revit and exposes an unwanted diameter seam in STEP.
+- Treat a slip-on flange connector as the design connection datum, not automatically as the physical pipe cut face. Resolve the project/WPS pipe-face setback centrally, validate the joint, and adjust the pipe solid before the normal assembly-centering transform. Never move the flange mating face or boolean-union the separately exported pipe and flange solids.

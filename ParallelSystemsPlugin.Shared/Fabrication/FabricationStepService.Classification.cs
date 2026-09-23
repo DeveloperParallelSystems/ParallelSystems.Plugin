@@ -60,6 +60,42 @@ namespace ParallelSystemsPlugin.Fabrication
                    classification.Contains("BLINDFLANGE");
         }
 
+        // Created by Jhay: keep the deliberately narrow plate/slip-on
+        // classifier in one place so fabrication allowances cannot leak into
+        // welding-neck, blind, threaded, socket, lap-joint, or boss flanges.
+        private static bool IsConfirmedPlateSlipOnFlange(
+            Document doc,
+            Element element)
+        {
+            if (element == null)
+                return false;
+
+            string name = NormalizeClassificationText(
+                BuildFlangeReferenceNameText(doc, element));
+            string padded = " " + name + " ";
+
+            bool excluded =
+                name.Contains("BLIND") ||
+                name.Contains("BLANK") ||
+                name.Contains("WELDING NECK") ||
+                name.Contains("WELD NECK") ||
+                padded.Contains(" WN ") ||
+                padded.Contains(" BOSS ") ||
+                name.Contains("THREADED") ||
+                name.Contains("SOCKET") ||
+                name.Contains("LAPPED") ||
+                name.Contains("LAP JOINT");
+
+            bool explicitPlateSlipOn =
+                padded.Contains(" SOW ") ||
+                padded.Contains(" SOFF ") ||
+                name.Contains("SLIP ON") ||
+                name.Contains("SLIPON") ||
+                padded.Contains(" PLATE ");
+
+            return !excluded && explicitPlateSlipOn;
+        }
+
         private static bool IsShapedBranchLike(
             Document doc,
             Element element)

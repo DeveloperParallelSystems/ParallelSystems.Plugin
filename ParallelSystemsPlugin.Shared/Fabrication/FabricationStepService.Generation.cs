@@ -84,8 +84,9 @@ namespace ParallelSystemsPlugin.Fabrication
                     Message = selection.FlangeGeometryMode ==
                         FabricationFlangeGeometryMode.AtlasConfiguration
                             ? "Flange geometry mode: Atlas Steels configuration. " +
-                              "Each source flange body is retained and only the " +
-                              "matched Atlas table bolt drilling is applied."
+                              "Each supported flange body, continuous opening, " +
+                              "and bolt drilling are generated from the matched " +
+                              "Atlas table dimensions."
                             : "Flange geometry mode: Original model. Source flange " +
                               "solids are exported without generated bores, chamfers, " +
                               "or Atlas bolt drilling."
@@ -220,6 +221,19 @@ namespace ParallelSystemsPlugin.Fabrication
                             x => x.Key,
                             x => x.ToList());
 
+            // Changed by Jhay: resolve explicit slip-on fabrication fit-up
+            // before building pipe solids so the Revit connector remains a
+            // design datum while the physical pipe end can enter the flange.
+            Dictionary<ElementId, List<SlipOnFlangeFitUp>>
+                slipOnFlangeFitUpsByPipe =
+                    ResolveSelectedAtlasSlipOnFlangeFitUps(
+                        doc,
+                        sourceElements,
+                        pipeDimensions,
+                        selectedSourceIds,
+                        selection.FlangeGeometryMode,
+                        result.Issues);
+
             // Special side-outlet fittings can provide the authoritative
             // branch/outlet dimensions to adjacent flanges and fittings even
             // when no physical branch pipe exists in the selected assembly.
@@ -266,6 +280,7 @@ namespace ParallelSystemsPlugin.Fabrication
                             shapedBranchConnections,
                             sideCouplingsByHeaderPipe,
                             sideCouplingConnections,
+                            slipOnFlangeFitUpsByPipe,
                             result.Issues);
 
                     if (pipeGeometry != null)

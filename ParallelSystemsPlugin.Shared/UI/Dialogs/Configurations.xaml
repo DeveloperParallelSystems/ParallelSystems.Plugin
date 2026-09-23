@@ -27,7 +27,7 @@
             <!-- Buttons -->
         </Grid.RowDefinitions>
 
-        <TabControl>
+        <TabControl x:Name="ConfigurationTabs">
             <TabItem Header="Pipe End Prep">
                 <Grid Margin="10">
                     <Grid.ColumnDefinitions>
@@ -767,7 +767,7 @@
             </TabItem>
 
             <!-- Fabrication -->
-            <TabItem Header="Fabrication">
+            <TabItem x:Name="FabricationTab" Header="Fabrication">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -792,7 +792,7 @@
                                 <TextBlock Margin="0,4,0,0"
                                            Foreground="#475569"
                                            TextWrapping="Wrap"
-                                           Text="Choose a component type, review its published reference dimensions, and use the diagram to identify each table symbol. Reference data is read-only in this release."/>
+                                           Text="Choose a component type, review its published reference dimensions, and use the diagram to identify each table symbol. Reference data is read-only; fabrication fit-up values are project/WPS inputs."/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -806,6 +806,7 @@
                             CornerRadius="4">
                         <Grid>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -836,7 +837,18 @@
                                           Width="140"
                                           SelectionChanged="FabricationFilter_SelectionChanged"/>
                             </StackPanel>
-                            <TextBlock Grid.Column="3"
+                            <!-- Created by Jhay: explicit project/WPS input;
+                                 blank intentionally blocks slip-on STEP fit-up. -->
+                            <StackPanel Grid.Column="3" Margin="0,0,12,0">
+                                <TextBlock Text="Pipe-face setback (mm)"
+                                           Margin="0,0,0,4"
+                                           FontWeight="SemiBold"/>
+                                <TextBox x:Name="SlipOnPipeFaceSetbackTextBox"
+                                         Width="165"
+                                         PreviewTextInput="NumericOnly"
+                                         ToolTip="Distance from the finished slip-on flange mating face back to the physical pipe end. Leave blank until approved by the project fabrication specification or WPS."/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="4"
                                        Margin="20,0,0,0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"

@@ -32,7 +32,8 @@ InformationalVersion    1.17.10
 ## Release Focus in 1.17.10
 
 - Configuration: a read-only Fabrication tab presents six Atlas ASME B16.5 class tables, four AS 2129 tables, PN16 AS 4087, and PN16 EN 1092 from the Section 3 manual. It builds the correct nominal-size and dimension columns for the selected table, including the distinct PN16 thickness fields, swaps between the ASME/ANSI and common table-flange diagrams, and resolves the packaged data, diagrams, and offline PDF beside the executing add-in before checking the shared ProgramData installer location.
-- Fabrication STEP: when selected source elements contain flanges, the command prompts for original or Atlas-configured flange geometry. Original mode returns Fine-detail source solids before all bore/chamfer/drilling rules. Atlas mode resolves one exact Section 3 table from the family/type name and physical-connector nominal diameter, retains the source body and central opening, and applies only the row's hole count, diameter, and pitch-circle diameter. Hole axes use a half-pitch angular offset so they straddle the flange centreline axes.
+- Fabrication STEP: when selected source elements contain flanges, the command prompts for original or Atlas-configured flange geometry. Original mode returns Fine-detail source solids before all bore/chamfer/drilling rules. Atlas mode resolves one exact Section 3 table from the family/type name and physical-connector nominal diameter, procedurally rebuilds supported bodies, guarantees a full-depth central opening for non-blind flanges, and applies the row's hole count, diameter, and pitch-circle diameter. Hole axes use a half-pitch angular offset and full-body cutters so they straddle the flange centreline axes and pass through the complete generated thickness.
+- Slip-on fit-up: Atlas table/plate SOW joints treat the Revit connector as the design connection datum. `FabricationStepService.FlangeFitUp.cs` validates the pipe OD, generated bore, axis, and configured project/WPS pipe-face setback before `PipeGeometry` extends only the physical pipe endpoint. The flange body/mating face is not translated, and missing fit-up configuration is blocking.
 - Validation: missing metadata, disagreeing physical connector sizes, ambiguous catalog rows, unusable dimensions, or Boolean cutters that do not remove material remain blocking conditions rather than guessed geometry.
 - Pipe End Prep: End 1, End 2, and End Prep are optional independent outputs. Mapping preflight validates complete writable Text instance coverage, offers to create or extend compatible project-parameter bindings for Pipes, and revalidates before modifying elements.
 
@@ -327,13 +328,13 @@ The retained DirectShapes are generated only from `FabricationSelection.SourceEl
 The final shaped-branch workflow is intentionally split between connection resolution, header opening, fitting trimming, and fitting bore cleanup:
 
 1. `FabricationStepService.Connections.cs` resolves the physical branch outlet axis and finds the selected header through axis-to-cylinder intersection when the family header connector is missing or unconnected.
-2. Outlet dimensions come from a selected/connected branch pipe first. Explicit `STD WT-CS` adjustable families may use the controlled standard-weight carbon-steel table only after classification and nominal-size validation.
+2. Outlet dimensions come from a selected/connected branch pipe first. Explicit `STD WT-CS` and Schedule 10 stainless-steel adjustable families may use their controlled pipe-dimension tables only after classification and nominal-size validation.
 3. Connected carbon flanges may inherit the resolved branch outlet bore when the flange family does not provide its own ID.
 4. `FabricationStepService.BranchGeometry.cs` creates the full branch opening and limits its depth so only the near-side header wall is removed. Do not restore a rectangular clipping slab that collapses the opening into a slit.
 5. `FabricationStepService.FittingGeometry.cs` removes shaped-branch material inside the analytical header outside cylinder so the branch terminates flush and does not protrude into the main bore.
 6. A final coaxial post-trim cleanup cutter removes saddle lips exposed by multi-solid adjustable families and preserves a circular branch-side bore.
 
-A successful controlled `STD WT-CS` lookup is an `Information` issue, not a `Warning`. It remains visible in the validation audit but does not require corrective action. Missing classification, nominal size, ID/OD, wall thickness, or a safe header intersection remains blocking.
+A successful controlled `STD WT-CS` or Schedule 10 stainless-steel lookup is an `Information` issue, not a `Warning`. It remains visible in the validation audit but does not require corrective action. Missing classification, nominal size, ID/OD, wall thickness, or a safe header intersection remains blocking.
 
 ### Large-model performance
 
@@ -390,9 +391,10 @@ Before release:
 - Run the Fabrication STEP geometry test in Revit 2025 and inspect the STEP downstream.
 - Test at least the 200 mm and 250 mm SET-ON header cases, including an 80 mm branch where applicable. Inspect the header from both ends and the branch from its outlet.
 - Confirm the header opening does not reach the opposite wall, the main bore is smooth end to end, the branch terminates flush, and the branch-side bore is circular without saddle lips.
-- Confirm a valid `STD WT-CS` fallback reports Information with zero warnings and that an unresolved family still blocks export.
+- Confirm valid `STD WT-CS` and Schedule 10 stainless-steel fallbacks report Information with zero warnings and that an unresolved family still blocks export.
 - Build the Frontend production bundle.
 - Build Backend and run API/PostgreSQL tests.
+- For Atlas table/plate SOW regression coverage, test a pipe with a flange at each end, a one-flange selection boundary, reversed connector orientation, and a rotated flange. Confirm the configured setback is reported independently per end, both pipe ends enter their bores, flange mating faces remain at the design datums, and pipe/flange solids remain separate.
 
 ## Coding Boundaries
 
