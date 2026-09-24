@@ -15,7 +15,10 @@ internal static class Program
             NamingRejectsInvalidInputAndOverflow();
             DocumentationSubstitutionReplacesOnlyExactAssemblyToken();
             DocumentationSubstitutionReportsAmbiguity();
+            DocumentationSubstitutionRejectsPartialAssemblyTokens();
             PreflightReturnsAllNameConflicts();
+            PreflightDetectsBatchDocumentationDuplicates();
+            MemberIdentityRequiresExactCopiedIdCoverage();
             Console.WriteLine("PASS: Assembly name parser tests.");
             Console.WriteLine("PASS: Assembly naming sequence tests.");
             Console.WriteLine("PASS: Assembly preflight tests.");
@@ -150,6 +153,13 @@ internal static class Program
         AssertEqual("CHW001-CHW001", result.Value, "ambiguous name remains unchanged");
     }
 
+    private static void DocumentationSubstitutionRejectsPartialAssemblyTokens()
+    {
+        AssertSubstitution("FAB-CHW0010", "CHW001", "CHW500", "FAB-CHW0010", false);
+        AssertSubstitution("FAB-XCHW001", "CHW001", "CHW500", "FAB-XCHW001", false);
+        AssertSubstitution("CHW001A-SHEET", "CHW001", "CHW500", "CHW001A-SHEET", false);
+    }
+
     private static void PreflightReturnsAllNameConflicts()
     {
         var index = new AssemblyConflictIndex(
@@ -203,6 +213,54 @@ internal static class Program
             Array.Empty<ProposedDocumentationName>());
 
         AssertEqual(0, clean.Count, "clean preflight issue count");
+    }
+
+    private static void PreflightDetectsBatchDocumentationDuplicates()
+    {
+        IReadOnlyList<AssemblyPreflightIssue> issues = AssemblyPreflightService.ValidateNames(
+            Array.Empty<ProposedAssemblyName>(),
+            new AssemblyConflictIndex(
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>()),
+            new[]
+            {
+                new ProposedDocumentationName("CHW001", DocumentationNameKind.SheetNumber, "FAB100"),
+                new ProposedDocumentationName("CHW002", DocumentationNameKind.SheetNumber, "fab100"),
+                new ProposedDocumentationName("CHW003", DocumentationNameKind.ViewName, "Assembly 3D"),
+                new ProposedDocumentationName("CHW004", DocumentationNameKind.ViewName, "ASSEMBLY 3D")
+            });
+
+        AssertEqual(
+            1,
+            issues.Count(x => x.Kind == AssemblyPreflightIssueKind.SheetNumberConflict),
+            "batch sheet-number duplicate count");
+        AssertEqual(
+            1,
+            issues.Count(x => x.Kind == AssemblyPreflightIssueKind.ViewNameConflict),
+            "batch view-name duplicate count");
+    }
+
+    private static void MemberIdentityRequiresExactCopiedIdCoverage()
+    {
+        AssertEqual(
+            true,
+            AssemblyMemberSetComparer.Matches(
+                new long[] { 30, 10, 20 },
+                new long[] { 10, 20, 30 }),
+            "same copied-member IDs in different order");
+        AssertEqual(
+            false,
+            AssemblyMemberSetComparer.Matches(
+                new long[] { 10, 20, 30 },
+                new long[] { 10, 20, 40 }),
+            "different member IDs with equal counts");
+        AssertEqual(
+            false,
+            AssemblyMemberSetComparer.Matches(
+                new long[] { 10, 20 },
+                new long[] { 10, 20, 20 }),
+            "duplicate IDs do not satisfy exact coverage");
     }
 
     private static void AssertSubstitution(

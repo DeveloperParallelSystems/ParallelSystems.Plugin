@@ -38,15 +38,23 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             if (assembly == null || !assembly.IsValidObject)
                 throw new ArgumentException("Assembly instance is unavailable.", nameof(assembly));
 
-            List<AssemblyMemberEvidence> members = assembly
-                .GetMemberIds()
-                .Select(id => document.GetElement(id))
-                .Where(element => element != null)
-                .Select(element => new AssemblyMemberEvidence(
-                    RevitApiCompatibility.GetElementIdValue(element.Id),
-                    RevitApiCompatibility.GetElementIdValue(element.AssemblyInstanceId)))
-                .OrderBy(member => member.MemberId)
-                .ToList();
+            var members = new List<AssemblyMemberEvidence>();
+            foreach (ElementId memberId in assembly.GetMemberIds())
+            {
+                Element member = document.GetElement(memberId);
+                if (member == null)
+                {
+                    throw new InvalidOperationException(
+                        "Assembly evidence could not resolve member id " +
+                        RevitApiCompatibility.GetElementIdValue(memberId) + ".");
+                }
+
+                members.Add(new AssemblyMemberEvidence(
+                    RevitApiCompatibility.GetElementIdValue(member.Id),
+                    RevitApiCompatibility.GetElementIdValue(member.AssemblyInstanceId)));
+            }
+
+            members = members.OrderBy(member => member.MemberId).ToList();
 
             return new AssemblyEvidence(
                 RevitApiCompatibility.GetElementIdValue(assembly.Id),

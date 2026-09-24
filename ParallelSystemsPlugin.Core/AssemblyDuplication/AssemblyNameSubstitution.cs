@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ParallelSystemsPlugin.AssemblyDuplication
 {
@@ -17,20 +18,35 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             if (proposedAssemblyName == null)
                 throw new ArgumentNullException(nameof(proposedAssemblyName));
 
-            int first = documentName.IndexOf(
-                sourceAssemblyName,
-                StringComparison.OrdinalIgnoreCase);
+            var matches = new List<int>();
+            int searchStart = 0;
+            while (searchStart <= documentName.Length - sourceAssemblyName.Length)
+            {
+                int match = documentName.IndexOf(
+                    sourceAssemblyName,
+                    searchStart,
+                    StringComparison.OrdinalIgnoreCase);
+                if (match < 0)
+                    break;
 
-            if (first < 0)
+                int matchEnd = match + sourceAssemblyName.Length;
+                bool startsAtBoundary = match == 0 ||
+                                        !char.IsLetterOrDigit(documentName[match - 1]);
+                bool endsAtBoundary = matchEnd == documentName.Length ||
+                                      !char.IsLetterOrDigit(documentName[matchEnd]);
+
+                if (startsAtBoundary && endsAtBoundary)
+                    matches.Add(match);
+
+                searchStart = match + sourceAssemblyName.Length;
+            }
+
+            if (matches.Count == 0)
                 return new AssemblyNameSubstitutionResult(documentName, false, false);
-
-            int second = documentName.IndexOf(
-                sourceAssemblyName,
-                first + sourceAssemblyName.Length,
-                StringComparison.OrdinalIgnoreCase);
-
-            if (second >= 0)
+            if (matches.Count > 1)
                 return new AssemblyNameSubstitutionResult(documentName, false, true);
+
+            int first = matches[0];
 
             string value = documentName.Substring(0, first) +
                            proposedAssemblyName +

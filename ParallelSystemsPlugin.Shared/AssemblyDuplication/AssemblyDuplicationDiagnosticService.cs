@@ -113,6 +113,10 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                             "The copied elements are not valid members for a new assembly.");
                     }
 
+                    List<long> expectedCopiedMemberIds = copiedMemberIds
+                        .Select(RevitApiCompatibility.GetElementIdValue)
+                        .ToList();
+
                     AssemblyInstance target;
                     using (var createTransaction = new Transaction(
                                document,
@@ -159,6 +163,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                         result.SourceBefore,
                         result.SourceAfter,
                         result.TargetAfter,
+                        expectedCopiedMemberIds,
                         targetName));
 
                     using (var verificationTransaction = new Transaction(
@@ -179,6 +184,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                         result.SourceBefore,
                         sourceAfterRegeneration,
                         targetAfterRegeneration,
+                        expectedCopiedMemberIds,
                         targetName));
 
                     AssemblyDuplicationInvariant failed = result.Invariants
@@ -238,6 +244,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             AssemblyEvidence sourceBefore,
             AssemblyEvidence sourceAfter,
             AssemblyEvidence targetAfter,
+            IReadOnlyCollection<long> expectedCopiedMemberIds,
             string targetName)
         {
             var checks = new List<AssemblyDuplicationInvariant>();
@@ -255,6 +262,13 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             Add(checks, "Independent type", sourceBefore.TypeId != targetAfter.TypeId, "Target type id differs from source.");
             Add(checks, "Target name", string.Equals(targetName, targetAfter.TypeName, StringComparison.Ordinal), "Target type name matches the requested diagnostic name.");
             Add(checks, "Member count", sourceBefore.Members.Count == targetAfter.Members.Count, "Target member count matches source.");
+            Add(
+                checks,
+                "Exact copied membership",
+                AssemblyMemberSetComparer.Matches(
+                    expectedCopiedMemberIds,
+                    targetAfter.Members.Select(x => x.MemberId).ToList()),
+                "The target member ids exactly match every copied element id.");
             Add(checks, "Target member ownership", targetAfter.Members.All(x => x.OwnerAssemblyId == targetAfter.InstanceId), "Every target member belongs to the target assembly.");
             return checks;
         }

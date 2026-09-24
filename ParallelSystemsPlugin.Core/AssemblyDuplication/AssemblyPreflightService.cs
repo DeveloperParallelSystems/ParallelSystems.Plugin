@@ -65,7 +65,39 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                     $"{proposal.Kind} '{proposal.ProposedName}' already exists."));
             }
 
+            AddDocumentationBatchDuplicates(
+                issues,
+                documentationNames,
+                DocumentationNameKind.SheetNumber,
+                AssemblyPreflightIssueKind.SheetNumberConflict);
+            AddDocumentationBatchDuplicates(
+                issues,
+                documentationNames,
+                DocumentationNameKind.ViewName,
+                AssemblyPreflightIssueKind.ViewNameConflict);
+
             return issues;
+        }
+
+        private static void AddDocumentationBatchDuplicates(
+            ICollection<AssemblyPreflightIssue> issues,
+            IEnumerable<ProposedDocumentationName> documentationNames,
+            DocumentationNameKind documentationKind,
+            AssemblyPreflightIssueKind issueKind)
+        {
+            foreach (IGrouping<string, ProposedDocumentationName> duplicate in
+                     documentationNames
+                         .Where(x => x.Kind == documentationKind)
+                         .GroupBy(x => x.ProposedName, StringComparer.OrdinalIgnoreCase)
+                         .Where(x => x.Count() > 1))
+            {
+                issues.Add(new AssemblyPreflightIssue(
+                    issueKind,
+                    string.Join(", ", duplicate.Select(x => x.SourceAssemblyName)),
+                    duplicate.Key,
+                    $"More than one selected assembly proposes {documentationKind} " +
+                    $"'{duplicate.Key}'."));
+            }
         }
     }
 }
