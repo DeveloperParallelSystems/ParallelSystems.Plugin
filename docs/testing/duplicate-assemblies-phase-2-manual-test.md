@@ -1,63 +1,60 @@
-# Duplicate Assemblies Phase 2 Manual Test
+# Duplicate Assemblies Identity-Marker POC
 
 Run this proof only on a disposable copy of a representative Revit model. Do not use a production model.
 
-## Before Testing
+## Before testing
 
 1. Close every Revit session.
-2. Run `Development Tools\Enable-DevelopmentMode.cmd`.
-3. Build and deploy the adapter for the Revit version being tested with `Build\Deploy-Revit-Full.ps1 -RevitVersion YEAR -Configuration Debug`.
-4. Start that Revit version. When prompted, enable development mode with the established development password.
-5. Open a disposable model copy containing a normal production assembly such as `CHW01` or `CHW001`.
-6. Confirm the `ParallelSystems` ribbon contains the `DEVELOPMENT MODE` panel and its `Assembly Independence Diagnostic` button.
+2. Build and deploy the adapter for the Revit version being tested with `Build\Deploy-Revit-Full.ps1 -RevitVersion YEAR -Configuration Debug -KeepNuGetCache`.
+3. Confirm the deployed `ParallelSystemPlugin\Families` directory contains `PS_AssemblyIdentity.rfa`.
+4. Start Revit and open a disposable model containing a production assembly whose name ends with a number, such as `CHW01` or `CHW001`.
+5. Confirm `ParallelSystems → Tools → Duplicate Assemblies` is visible. No development-mode ribbon is required.
 
-## Test Procedure
-
-Repeat all steps separately in Revit 2021, 2022, 2023, 2024, 2025, and 2026.
+## Live POC
 
 1. Save the disposable model before starting.
-2. Select exactly one `AssemblyInstance`. Do not select its members, views, sheet, or any additional element.
-3. Record the source assembly name, instance ID, type ID, and member count using RevitLookup or the information available in the diagnostic result.
-4. Click `ParallelSystems → DEVELOPMENT MODE → Assembly Independence Diagnostic`.
-5. Read the confirmation carefully and click Yes.
-6. If the diagnostic reports failure, copy the report path from the result, preserve that report, stop testing that Revit version, and do not begin Phase 3.
-7. If it reports success, confirm every listed invariant is `PASS` and record the target instance ID, type ID, name, and member count.
-8. Confirm the target instance ID differs from the source instance ID.
-9. Confirm the target type ID differs from the source type ID.
-10. Confirm the source name and source type ID still match the values recorded before the command.
-11. Confirm the source member count and ownership are unchanged.
-12. Confirm every target member belongs to the target assembly.
-13. Rename the target assembly to another unique value such as `CHW_TEST_101`.
-14. Confirm the source assembly name does not change.
-15. Save the disposable model, close Revit completely, and reopen the model.
-16. Confirm both assemblies still exist with distinct instance IDs and type IDs.
-17. Confirm the source retains its original name and the target retains `CHW_TEST_101`.
-18. Change the target name once more and confirm the source remains unchanged.
-19. Attach the generated diagnostic report and complete the results row below.
+2. Select exactly one source `AssemblyInstance`.
+3. Record the source instance ID, assembly type ID/name, member IDs, and member count.
+4. Click `ParallelSystems → Tools → Duplicate Assemblies` and approve the confirmation.
+5. The command must propose sequence 500 and 501 using the source naming pattern and must report success only after every transaction and invariant passes.
+6. Preserve the generated report from `%TEMP%\ParallelSystems\AssemblyDuplicationDiagnostic`.
+7. Confirm the report shows source type A, target-500 type B, and target-501 type C with `A != B`, `A != C`, and `B != C`.
+8. Confirm the source member IDs, ownership, type ID, and name are unchanged.
+9. Confirm each target has the same production-member evidence as the source plus exactly one internal `PS_AssemblyIdentity` marker.
+10. Confirm each marker uses a different generated type beginning `PS_ASM_ID_`, is located at the reported source assembly origin, and uses the reported deterministic level and offset.
+11. Confirm the built-in rename probe passed: target 500 temporarily changed while the source and target 501 names remained unchanged, then target 500 was restored.
+12. If the command reports failure, verify no target, marker, generated marker type, or newly loaded family remains, attach the report, and stop testing that version.
 
-## Stop Conditions
+## Contamination checks
 
-Stop immediately and report the diagnostic output if any of these occurs:
+Record each result without creating production documentation solely for the test. Write `not available in test model` when a surface does not exist.
 
-- The source assembly name, type ID, member list, or member ownership changes.
-- The target shares the source type ID.
-- Renaming the target renames the source.
-- Copied members remain assigned to the source assembly or are not assigned to the target.
-- Revit creates extra copied dependency elements, and the diagnostic rolls back rather than guessing membership.
-- The command leaves copied members or a partial target after reporting failure.
-- Save/reload changes either assembly's identity relationship.
+- Normal project view: marker geometry/visibility and whether it can be selected or highlighted.
+- Existing target assembly view: marker geometry/visibility.
+- Existing part list, multi-category schedule, and BOM-related schedules: whether the marker appears.
+- Project Browser: `PS_AssemblyIdentity`, `PS_ASSEMBLY_IDENTITY_BASE`, and the two generated `PS_ASM_ID_*` types.
+- Assembly member editing/selection: marker ownership and whether it interferes with normal assembly operations.
 
-## Results
+## Save/reload persistence
 
-| Revit | Diagnostic | Source unchanged | Separate type | Rename independent | Save/reload independent | Report path / notes |
+1. Save the disposable model under a new test filename.
+2. Close Revit completely and reopen that file.
+3. Record the source, target-500, and target-501 instance IDs, type IDs, and names again.
+4. Confirm the three type IDs remain pairwise different and all names remain correct.
+5. Rename target 500 temporarily; confirm the source and target 501 do not change; restore target 500.
+6. Repeat the contamination checks and return the report plus observations before later production phases begin.
+
+## Stop conditions
+
+Stop and report the output if the source changes, any two assemblies share a type, either target has other than one identity marker, production evidence differs, a rename propagates, a failed command leaves artifacts, or save/reload changes the independence relationship.
+
+## Verification order
+
+Prove the mechanism first in Revit 2025. Only after it succeeds, repeat the live and persistence checks in Revit 2021, 2024, and 2026. Add version-specific code only for an observed incompatibility.
+
+| Revit | Live POC | Pairwise types | Production + one marker | Rename isolated | Save/reload | Contamination/report notes |
 |---|---|---|---|---|---|---|
 | 2021 | Not run | — | — | — | — | |
-| 2022 | Not run | — | — | — | — | |
-| 2023 | Not run | — | — | — | — | |
 | 2024 | Not run | — | — | — | — | |
 | 2025 | Not run | — | — | — | — | |
 | 2026 | Not run | — | — | — | — | |
-
-Phase 3 is authorized only after all required versions have passed or an explicitly approved version-specific alternative has been designed and verified.
-
-After testing, close Revit and run `Development Tools\Disable-DevelopmentMode.cmd` unless development mode is still required for other work.
