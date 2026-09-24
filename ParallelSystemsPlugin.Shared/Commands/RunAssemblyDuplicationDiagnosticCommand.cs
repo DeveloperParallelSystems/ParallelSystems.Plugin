@@ -4,14 +4,16 @@ using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Selection;
 using ParallelSystemPlugin.UI;
 using ParallelSystemsPlugin.AssemblyDuplication;
+using ParallelSystemsPlugin.Compatibility;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 
 namespace ParallelSystemsPlugin.Commands
 {
-    // Created by Jhay: internal Phase 2 command; intentionally not on the production ribbon.
+    // Created by Jhay: live two-target proof of independent assembly identity.
     [Transaction(TransactionMode.Manual)]
     public sealed class RunAssemblyDuplicationDiagnosticCommand : IExternalCommand
     {
@@ -49,14 +51,17 @@ namespace ParallelSystemsPlugin.Commands
                 if (source == null)
                     return Result.Cancelled;
 
-                string targetName = FindUniqueDiagnosticName(document);
+                IReadOnlyList<ProposedAssemblyName> targetNames = CreateTargetNames(source);
+                string target500Name = targetNames[0].ProposedName;
+                string target501Name = targetNames[1].ProposedName;
                 bool confirmed = AppDialog.ConfirmDetailed(
                     uiApp,
                     DialogTitle,
                     "Run the model-only independence proof on a disposable model copy?",
-                    "This command will copy one assembly's members and attempt to create " +
-                    "a new assembly named '" + targetName + "'.",
+                    "This command will copy one assembly twice and create '" +
+                    target500Name + "' and '" + target501Name + "'.",
                     "Source: " + source.AssemblyTypeName + Environment.NewLine +
+                    "Each target receives one no-geometry internal identity marker with a unique type. " +
                     "No source element, source type, source view, or source sheet will be edited. " +
                     "Any failed independence check rolls back all target artifacts.",
                     true);
@@ -68,7 +73,9 @@ namespace ParallelSystemsPlugin.Commands
                     AssemblyDuplicationDiagnosticService.Run(
                         document,
                         source,
-                        targetName);
+                        target500Name,
+                        target501Name,
+                        Path.GetDirectoryName(typeof(App).Assembly.Location));
 
                 AppDialog.ShowDetailed(
                     uiApp,
@@ -135,27 +142,19 @@ namespace ParallelSystemsPlugin.Commands
             return document.GetElement(picked.ElementId) as AssemblyInstance;
         }
 
-        private static string FindUniqueDiagnosticName(Document document)
+        private static IReadOnlyList<ProposedAssemblyName> CreateTargetNames(
+            AssemblyInstance source)
         {
-            var existing = new HashSet<string>(
-                new FilteredElementCollector(document)
-                    .OfClass(typeof(AssemblyInstance))
-                    .Cast<AssemblyInstance>()
-                    .Select(assembly => assembly.AssemblyTypeName),
-                StringComparer.OrdinalIgnoreCase);
-
-            const string baseName = "CHW_TEST_100";
-            if (!existing.Contains(baseName))
-                return baseName;
-
-            for (int suffix = 1; suffix < int.MaxValue; suffix++)
-            {
-                string candidate = baseName + "_" + suffix;
-                if (!existing.Contains(candidate))
-                    return candidate;
-            }
-
-            throw new InvalidOperationException("Unable to generate a unique diagnostic assembly name.");
+            var candidate = new AssemblyNamingCandidate(
+                source.AssemblyTypeName,
+                RevitApiCompatibility.GetElementIdValue(source.Id));
+            ProposedAssemblyName target500 = AssemblyNamingService.Generate(
+                new[] { candidate },
+                500)[0];
+            ProposedAssemblyName target501 = AssemblyNamingService.Generate(
+                new[] { candidate },
+                501)[0];
+            return new[] { target500, target501 };
         }
 
         private static string BuildDetails(AssemblyDuplicationDiagnosticResult result)
@@ -163,7 +162,27 @@ namespace ParallelSystemsPlugin.Commands
             var details = new StringBuilder();
             AppendEvidence(details, "Source before", result.SourceBefore);
             AppendEvidence(details, "Source after", result.SourceAfter);
-            AppendEvidence(details, "Target after", result.TargetAfter);
+            AppendEvidence(details, "Target 500 after", result.Target500After);
+            AppendEvidence(details, "Target 501 after", result.Target501After);
+            AppendMarker(details, "Marker 500", result.Target500Marker);
+            AppendMarker(details, "Marker 501", result.Target501Marker);
+            if (result.FamilyResolution != null)
+            {
+                details.AppendLine(
+                    "Identity family: " + result.FamilyResolution.CategoryName +
+                    ", placement " + result.FamilyResolution.PlacementType +
+                    ", loaded " + result.FamilyResolution.WasLoaded +
+                    ", path " + result.FamilyResolution.AssetPath);
+            }
+
+            details.AppendLine(
+                "Pairwise type IDs: " +
+                (result.SourceAfter ?? result.SourceBefore)?.TypeId + " / " +
+                result.Target500After?.TypeId + " / " +
+                result.Target501After?.TypeId);
+            details.AppendLine(
+                "Rename probe: " + (result.RenameProbePassed ? "PASS" : "FAIL") +
+                " - " + (result.RenameProbeDetails ?? "not run"));
             details.AppendLine();
             details.AppendLine("Checks:");
             foreach (AssemblyDuplicationInvariant invariant in result.Invariants)
@@ -172,6 +191,16 @@ namespace ParallelSystemsPlugin.Commands
                     (invariant.Passed ? "PASS" : "FAIL") +
                     " - " + invariant.Name + ": " + invariant.Details);
             }
+
+            details.AppendLine();
+            details.AppendLine("Transaction stages:");
+            foreach (AssemblyTransactionStage stage in result.TransactionStages)
+                details.AppendLine(stage.Status + " - " + stage.Name);
+
+            details.AppendLine();
+            details.AppendLine("Marker observations:");
+            foreach (AssemblyContaminationObservation observation in result.ContaminationObservations)
+                details.AppendLine(observation.Surface + ": " + observation.Result);
 
             details.AppendLine();
             details.AppendLine(
@@ -198,7 +227,26 @@ namespace ParallelSystemsPlugin.Commands
                 label + ": Instance " + evidence.InstanceId +
                 ", Type " + evidence.TypeId +
                 ", Name " + evidence.TypeName +
-                ", Members " + evidence.Members.Count);
+                ", Production " + evidence.ProductionMembers.Count +
+                ", Internal " + evidence.InternalMembers.Count);
+        }
+
+        private static void AppendMarker(
+            StringBuilder details,
+            string label,
+            AssemblyIdentityMarkerEvidence marker)
+        {
+            if (marker == null)
+            {
+                details.AppendLine(label + ": not captured");
+                return;
+            }
+
+            details.AppendLine(
+                label + ": Element " + marker.MarkerId +
+                ", Symbol " + marker.SymbolId + " (" + marker.SymbolName + ")" +
+                ", Level " + marker.LevelId + " (" + marker.LevelName + ")" +
+                ", Offset " + marker.Offset);
         }
     }
 }

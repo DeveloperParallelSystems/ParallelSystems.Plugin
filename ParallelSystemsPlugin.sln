@@ -18,8 +18,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.2025"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.2026", "ParallelSystemsPlugin.2026\ParallelSystemsPlugin.2026.csproj", "{DFA9DD38-0A24-4372-977C-5FFB2060EF18}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystemsPlugin.CoreTests", "ParallelSystemsPlugin.CoreTests\ParallelSystemsPlugin.CoreTests.csproj", "{1EC05F5E-B6CB-4F77-8217-E2CA04308536}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -54,10 +52,6 @@ Global
 		{DFA9DD38-0A24-4372-977C-5FFB2060EF18}.Debug|x64.Build.0 = Debug|x64
 		{DFA9DD38-0A24-4372-977C-5FFB2060EF18}.Release|x64.ActiveCfg = Release|x64
 		{DFA9DD38-0A24-4372-977C-5FFB2060EF18}.Release|x64.Build.0 = Release|x64
-		{1EC05F5E-B6CB-4F77-8217-E2CA04308536}.Debug|x64.ActiveCfg = Debug|x64
-		{1EC05F5E-B6CB-4F77-8217-E2CA04308536}.Debug|x64.Build.0 = Debug|x64
-		{1EC05F5E-B6CB-4F77-8217-E2CA04308536}.Release|x64.ActiveCfg = Release|x64
-		{1EC05F5E-B6CB-4F77-8217-E2CA04308536}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

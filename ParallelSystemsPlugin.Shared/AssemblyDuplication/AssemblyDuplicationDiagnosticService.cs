@@ -3,7 +3,6 @@ using ParallelSystemsPlugin.Compatibility;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 
 namespace ParallelSystemsPlugin.AssemblyDuplication
@@ -163,15 +162,6 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             }
 
             return result;
-        }
-
-        public static AssemblyDuplicationDiagnosticResult Run(
-            Document document,
-            AssemblyInstance source,
-            string targetName)
-        {
-            string directory = Path.GetDirectoryName(typeof(App).Assembly.Location);
-            return Run(document, source, targetName, targetName + "_501", directory);
         }
 
         private static CreatedAssemblyTarget CreateTarget(

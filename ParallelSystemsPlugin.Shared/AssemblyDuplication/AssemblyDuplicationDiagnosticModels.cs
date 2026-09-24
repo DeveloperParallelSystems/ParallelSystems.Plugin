@@ -208,10 +208,5 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
         public IList<AssemblyDuplicationInvariant> Invariants { get; } =
             new List<AssemblyDuplicationInvariant>();
 
-        public AssemblyEvidence TargetAfter
-        {
-            get => Target500After;
-            set => Target500After = value;
-        }
     }
 }

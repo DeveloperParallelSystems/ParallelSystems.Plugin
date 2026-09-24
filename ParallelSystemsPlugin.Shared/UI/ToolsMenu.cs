@@ -52,6 +52,12 @@ namespace ParallelSystemsPlugin.UI
                 "ParallelSystemPlugin.Commands.BOMCheckCommand"
             );
 
+            PushButtonData duplicateAssembliesBtn = Helpers.PushButton.Create(
+                "PS_DuplicateAssemblies",
+                "Duplicate\nAssemblies",
+                "ParallelSystemsPlugin.Commands.RunAssemblyDuplicationDiagnosticCommand"
+            );
+
             // =========================================================
             // Add Buttons to Ribbon (Stacked Layout)
             // =========================================================
@@ -99,6 +105,9 @@ namespace ParallelSystemsPlugin.UI
             List<RibbonItem> stackedItems2 = panel
                 .AddStackedItems(pipeLengthDropdownBtn, endPrepPulldownButton, bomCheckBtn)
                 .ToList();
+
+            Autodesk.Revit.UI.PushButton duplicateAssembliesButton =
+                panel.AddItem(duplicateAssembliesBtn) as Autodesk.Revit.UI.PushButton;
 
             // =========================================================
             // Pipe Length Check Pulldown Setup
@@ -164,6 +173,13 @@ namespace ParallelSystemsPlugin.UI
                 stackedItems2[2] as Autodesk.Revit.UI.PushButton,
                 tooltip: "BOM Check",
                 icon16: Path.Combine(assemblyDirectory, "Icons", "quality-control16.ico")
+            );
+
+            Helpers.PushButton.ApplySettings(
+                duplicateAssembliesButton,
+                tooltip: "Duplicate one selected Revit assembly for live validation.",
+                icon16: Path.Combine(assemblyDirectory, "Icons", "ParallelSystemLogo16.ico"),
+                icon32: Path.Combine(assemblyDirectory, "Icons", "ParallelSystemLogo32.ico")
             );
 
             // Rename - Import CSV
