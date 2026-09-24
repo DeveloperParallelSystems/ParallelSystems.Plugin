@@ -27,6 +27,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDuplicationDiagnosticReport.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDuplicationDiagnosticService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyIdentityFamilyService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyIdentityFailureHandling.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyIdentityMarkerEvidence.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyInstanceSelectionFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AboutUsCommand.cs" />

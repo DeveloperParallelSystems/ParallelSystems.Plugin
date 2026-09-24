@@ -41,12 +41,6 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
 
                 try
                 {
-                    List<ElementId> sourceProductionIds = source.GetMemberIds()
-                        .Where(id => !IsIdentityMarker(document.GetElement(id)))
-                        .ToList();
-                    if (sourceProductionIds.Count == 0)
-                        throw new InvalidOperationException("The source assembly has no production members.");
-
                     result.FamilyResolution = AssemblyIdentityFamilyService.ResolveOrLoad(
                         document,
                         assemblyDirectory);
@@ -58,6 +52,10 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                             Status = result.FamilyResolution.LoadTransactionStatus.Value
                         });
                     }
+
+                    List<ElementId> sourceProductionIds = source.GetMemberIds().ToList();
+                    if (sourceProductionIds.Count == 0)
+                        throw new InvalidOperationException("The source assembly has no production members.");
 
                     CreatedAssemblyTarget target500 = CreateTarget(
                         document,
@@ -135,18 +133,33 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 {
                     failure = exception;
                     result.Succeeded = false;
-                    result.Summary = "The identity marker POC was rolled back.";
                     result.Details = exception.Message;
 
-                    if (group.GetStatus() == TransactionStatus.Started)
+                    TransactionStatus groupStatus = group.GetStatus();
+                    if (groupStatus == TransactionStatus.Started)
                     {
-                        TransactionStatus rollbackStatus = group.RollBack();
-                        result.TransactionStages.Add(new AssemblyTransactionStage
+                        try
                         {
-                            Name = "Transaction group rollback",
-                            Status = rollbackStatus
-                        });
+                            groupStatus = group.RollBack();
+                            result.TransactionStages.Add(new AssemblyTransactionStage
+                            {
+                                Name = "Transaction group rollback",
+                                Status = groupStatus
+                            });
+                        }
+                        catch (Exception rollbackException)
+                        {
+                            result.Details += Environment.NewLine +
+                                "Transaction group rollback could not be confirmed: " +
+                                rollbackException.Message;
+                            groupStatus = group.GetStatus();
+                        }
                     }
+
+                    result.Summary = groupStatus == TransactionStatus.RolledBack
+                        ? "The identity marker POC was rolled back."
+                        : "The identity marker POC failed; rollback was not confirmed (group status " +
+                          groupStatus + "). Close the model without saving and inspect the report.";
                 }
             }
 
@@ -219,10 +232,15 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                     sourceProductionMemberIds);
 
                 var combinedIds = new List<ElementId>(copiedProductionIds) { marker.Marker.Id };
+                if (!AssemblyInstance.IsValidNamingCategory(
+                        document,
+                        source.NamingCategoryId,
+                        combinedIds))
+                    throw new InvalidOperationException(stagePrefix + " naming category is not valid for the selected members.");
                 if (!AssemblyInstance.AreElementsValidForAssembly(
                         document,
                         combinedIds,
-                        source.NamingCategoryId))
+                        ElementId.InvalidElementId))
                     throw new InvalidOperationException(stagePrefix + " members are not valid for a new assembly.");
 
                 target = AssemblyInstance.Create(document, combinedIds, source.NamingCategoryId);
@@ -609,6 +627,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                     result.TransactionStages.Add(new AssemblyTransactionStage { Name = name, Status = start });
                     throw new InvalidOperationException(name + " did not start: " + start + ".");
                 }
+                AssemblyIdentityFailureHandling.Configure(transaction);
 
                 try
                 {
@@ -665,19 +684,17 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 throw new InvalidOperationException("Assembly name '" + conflict + "' already exists.");
         }
 
-        private static bool IsIdentityMarker(Element element)
-        {
-            var instance = element as FamilyInstance;
-            return instance?.Symbol?.Family != null && string.Equals(
-                instance.Symbol.Family.Name,
-                AssemblyIdentityFamilyService.FamilyName,
-                StringComparison.Ordinal);
-        }
-
         private static bool MembersEqual(AssemblyEvidence left, AssemblyEvidence right)
         {
-            return left.Members.Select(member => member.MemberId + ":" + member.OwnerAssemblyId)
-                .SequenceEqual(right.Members.Select(member => member.MemberId + ":" + member.OwnerAssemblyId));
+            return left.Members.Select(MemberIdentity)
+                .SequenceEqual(right.Members.Select(MemberIdentity));
+        }
+
+        private static string MemberIdentity(AssemblyMemberEvidence member)
+        {
+            return member.MemberId + ":" + member.OwnerAssemblyId + ":" +
+                member.CategoryId + ":" + member.TypeId + ":" +
+                member.PlacementFingerprint + ":" + member.ParameterFingerprint;
         }
 
         private static bool MemberEvidenceSetsMatch(
@@ -700,6 +717,10 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
         {
             if (left.CategoryId != right.CategoryId || left.TypeId != right.TypeId ||
                 !string.Equals(left.LocationKind, right.LocationKind, StringComparison.Ordinal))
+                return false;
+
+            if (!string.Equals(left.PlacementFingerprint, right.PlacementFingerprint, StringComparison.Ordinal) ||
+                !string.Equals(left.ParameterFingerprint, right.ParameterFingerprint, StringComparison.Ordinal))
                 return false;
 
             bool direct = CoordinatesMatch(left.RelativeX, right.RelativeX) &&

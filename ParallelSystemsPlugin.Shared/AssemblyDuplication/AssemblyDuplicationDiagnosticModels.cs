@@ -2,7 +2,9 @@ using Autodesk.Revit.DB;
 using ParallelSystemsPlugin.Compatibility;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 
 namespace ParallelSystemsPlugin.AssemblyDuplication
 {
@@ -91,6 +93,8 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
         public double? RelativeEndX { get; private set; }
         public double? RelativeEndY { get; private set; }
         public double? RelativeEndZ { get; private set; }
+        public string PlacementFingerprint { get; private set; }
+        public string ParameterFingerprint { get; private set; }
 
         public static AssemblyMemberEvidence Capture(Element member, XYZ assemblyOrigin)
         {
@@ -106,7 +110,8 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 string.Equals(
                     familyInstance.Symbol.Family.Name,
                     AssemblyIdentityFamilyService.FamilyName,
-                    StringComparison.Ordinal);
+                    StringComparison.Ordinal) &&
+                familyInstance.Symbol.Name.StartsWith("PS_ASM_ID_", StringComparison.Ordinal);
 
             var evidence = new AssemblyMemberEvidence
             {
@@ -121,13 +126,15 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 IsIdentityMarker = isMarker,
                 LocationKind = member.Location == null
                     ? "None"
-                    : member.Location.GetType().Name
+                    : member.Location.GetType().Name,
+                ParameterFingerprint = CaptureParameters(member)
             };
 
             var point = member.Location as LocationPoint;
             if (point != null)
             {
                 SetRelativeStart(evidence, point.Point, assemblyOrigin);
+                evidence.PlacementFingerprint = CapturePlacement(member, assemblyOrigin);
                 return evidence;
             }
 
@@ -139,13 +146,114 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 evidence.RelativeEndX = end.X;
                 evidence.RelativeEndY = end.Y;
                 evidence.RelativeEndZ = end.Z;
+                evidence.PlacementFingerprint = CapturePlacement(member, assemblyOrigin);
                 return evidence;
             }
 
             if (familyInstance != null)
                 SetRelativeStart(evidence, familyInstance.GetTransform().Origin, assemblyOrigin);
 
+            evidence.PlacementFingerprint = CapturePlacement(member, assemblyOrigin);
             return evidence;
+        }
+
+        private static string CapturePlacement(Element member, XYZ assemblyOrigin)
+        {
+            var text = new StringBuilder();
+            var familyInstance = member as FamilyInstance;
+            if (familyInstance != null)
+            {
+                Transform transform = familyInstance.GetTransform();
+                AppendVector(text, "O", transform.Origin - assemblyOrigin);
+                AppendVector(text, "X", transform.BasisX);
+                AppendVector(text, "Y", transform.BasisY);
+                AppendVector(text, "Z", transform.BasisZ);
+                text.Append("M=").Append(familyInstance.Mirrored).Append(';');
+            }
+
+            var curve = member.Location as LocationCurve;
+            if (curve?.Curve != null)
+            {
+                int index = 0;
+                foreach (XYZ point in curve.Curve.Tessellate())
+                    AppendVector(text, "C" + index++, point - assemblyOrigin);
+            }
+
+            BoundingBoxXYZ bounds = member.get_BoundingBox(null);
+            if (bounds != null)
+            {
+                AppendVector(text, "B0", bounds.Min - assemblyOrigin);
+                AppendVector(text, "B1", bounds.Max - assemblyOrigin);
+            }
+
+            return text.ToString();
+        }
+
+        private static string CaptureParameters(Element member)
+        {
+            long assemblyNameId = (long)BuiltInParameter.ASSEMBLY_NAME;
+            long elementIdParameter = (long)BuiltInParameter.ID_PARAM;
+            var values = new List<string>();
+            foreach (Parameter parameter in member.Parameters.Cast<Parameter>())
+            {
+                long parameterId = RevitApiCompatibility.GetElementIdValue(parameter.Id);
+                if (parameterId == assemblyNameId || parameterId == elementIdParameter)
+                    continue;
+
+                string value;
+                switch (parameter.StorageType)
+                {
+                    case StorageType.Double:
+                        value = Format(parameter.AsDouble());
+                        break;
+                    case StorageType.Integer:
+                        value = parameter.AsInteger().ToString(CultureInfo.InvariantCulture);
+                        break;
+                    case StorageType.String:
+                        value = parameter.AsString() ?? string.Empty;
+                        break;
+                    case StorageType.ElementId:
+                        value = NormalizeElementReference(member.Document, parameter.AsElementId());
+                        break;
+                    default:
+                        continue;
+                }
+
+                values.Add(parameterId.ToString(CultureInfo.InvariantCulture) + "=" + value);
+            }
+
+            values.Sort(StringComparer.Ordinal);
+            return string.Join("|", values);
+        }
+
+        private static string NormalizeElementReference(Document document, ElementId id)
+        {
+            long value = RevitApiCompatibility.GetElementIdValue(id);
+            if (value <= 0)
+                return value.ToString(CultureInfo.InvariantCulture);
+
+            Element referenced = document.GetElement(id);
+            if (referenced == null)
+                return "missing:" + value.ToString(CultureInfo.InvariantCulture);
+
+            long categoryId = referenced.Category == null
+                ? -1L
+                : RevitApiCompatibility.GetElementIdValue(referenced.Category.Id);
+            long typeId = RevitApiCompatibility.GetElementIdValue(referenced.GetTypeId());
+            return referenced.GetType().FullName + ":" + categoryId + ":" + typeId;
+        }
+
+        private static void AppendVector(StringBuilder text, string label, XYZ vector)
+        {
+            text.Append(label).Append('=')
+                .Append(Format(vector.X)).Append(',')
+                .Append(Format(vector.Y)).Append(',')
+                .Append(Format(vector.Z)).Append(';');
+        }
+
+        private static string Format(double value)
+        {
+            return Math.Round(value, 6).ToString("G17", CultureInfo.InvariantCulture);
         }
 
         private static void SetRelativeStart(

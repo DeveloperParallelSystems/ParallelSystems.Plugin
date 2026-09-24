@@ -126,7 +126,9 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                     " | Category: " + member.CategoryName + " (" + member.CategoryId + ")" +
                     " | Type: " + member.ElementTypeName + " (" + member.TypeId + ")" +
                     " | IdentityMarker: " + member.IsIdentityMarker +
-                    " | Location: " + FormatMemberLocation(member));
+                    " | Location: " + FormatMemberLocation(member) +
+                    " | PlacementFingerprint: " + member.PlacementFingerprint +
+                    " | ParameterFingerprint: " + member.ParameterFingerprint);
             }
             text.AppendLine();
         }
