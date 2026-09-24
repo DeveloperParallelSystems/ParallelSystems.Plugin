@@ -21,6 +21,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Classes\PdfReportBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Classes\PdfRuntime.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compatibility\RevitApiCompatibility.cs" />
+    <!-- Changed by Jhay: Phase 2 assembly independence diagnostic. -->
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDuplicationDiagnosticModels.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDuplicationDiagnosticReport.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AboutUsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ApplyDetailingCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ApplyEndPrepFilterCommand.cs" />
