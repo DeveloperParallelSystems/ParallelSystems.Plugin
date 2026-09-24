@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)App.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ReconnectCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\RunAssemblyDuplicationDiagnosticCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\AutomaticContextResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\EvidenceAccumulator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\LocalOutboxClient.cs" />
@@ -25,6 +26,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDuplicationDiagnosticModels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDuplicationDiagnosticReport.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDuplicationDiagnosticService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyInstanceSelectionFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AboutUsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ApplyDetailingCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ApplyEndPrepFilterCommand.cs" />
