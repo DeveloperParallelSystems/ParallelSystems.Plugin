@@ -29,6 +29,16 @@ InformationalVersion    1.17.10
 
 `TimesheetTracker.cs` uses the same assembly informational version, strips a +suffix, trims .0, and sends 1.17.10 in TrackerCheckpointRequest.PluginVersion. It sends SchemaVersion 3 when the tracker is enabled.
 
+## Project Launch Architecture
+
+`ProjectLaunchCommand` owns one modeless `ProjectLaunchWindow`, one `ExternalEvent`, and one `ProjectSetupExternalEventHandler` per Revit process. The window queues a request containing simple UI state; the handler resolves `UIApplication.ActiveUIDocument` at execution time and delegates all Revit API access to `ProjectSetupService`. No live `Document` or `Element` wrapper is retained by the window. View activation silently refreshes an open Project Launch window so switching projects cannot leave stale project data displayed.
+
+`ProjectSetupStorage` stores schema-versioned 01.1 data on `Document.ProjectInformation` using the stable schema GUID `9bca1054-8655-4c43-9af8-d7607fd2a111`. Project Name and Project Number use their built-in Project Information parameters. Manager and Overseer mirror matching writable string parameters when present and otherwise remain in Extensible Storage. Storage and parameter writes use transactions; `EnableWorksharing`, `EnableCloudWorksharing`, and native command posting run with no transaction open.
+
+`ProjectSetupValidator` is read-only and version-independent. It evaluates actual worksharing/cloud flags, workset names, loaded required link types, host Grid/Level monitoring evidence, confirmations, and explicit not-applicable reasons. Historical completion metadata is separate from current compliance.
+
+All native-command differences are confined to `Compatibility/RevitApiCompatibility.cs`. Revit 2022–2026 compile the `SaveAsCloudModel`, `ManageLinks`, and `CopyMonitorSelectLink` postable commands. The Revit 2021 compile excludes the unavailable enum members and reports a manual handoff for cloud saving and Copy/Monitor; it still posts Manage Links. No undocumented command identifiers, keyboard automation, OAuth credentials, or APS project/folder IDs are used.
+
 ## Release Focus in 1.17.10
 
 - Configuration: a read-only Fabrication tab presents six Atlas ASME B16.5 class tables, four AS 2129 tables, PN16 AS 4087, and PN16 EN 1092 from the Section 3 manual. It builds the correct nominal-size and dimension columns for the selected table, including the distinct PN16 thickness fields, swaps between the ASME/ANSI and common table-flange diagrams, and resolves the packaged data, diagrams, and offline PDF beside the executing add-in before checking the shared ProgramData installer location.

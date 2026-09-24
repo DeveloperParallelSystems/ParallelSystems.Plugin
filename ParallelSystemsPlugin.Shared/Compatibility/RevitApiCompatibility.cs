@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.UI;
+using ParallelSystemsPlugin.ProjectLaunch;
 
 namespace ParallelSystemsPlugin.Compatibility
 {
@@ -9,6 +11,77 @@ namespace ParallelSystemsPlugin.Compatibility
     /// </summary>
     internal static class RevitApiCompatibility
     {
+        // Changed by Jhay: central capability boundary for Project Launch native handoffs.
+        public static ProjectSetupAutomationLevel SaveAsCloudModelAutomation
+        {
+            get
+            {
+#if REVIT2021
+                return ProjectSetupAutomationLevel.ManualRevitHandoff;
+#else
+                return ProjectSetupAutomationLevel.RevitNativeHandoff;
+#endif
+            }
+        }
+
+        public static ProjectSetupAutomationLevel ManageLinksAutomation =>
+            ProjectSetupAutomationLevel.RevitNativeHandoff;
+
+        public static ProjectSetupAutomationLevel CopyMonitorAutomation
+        {
+            get
+            {
+#if REVIT2021
+                return ProjectSetupAutomationLevel.ManualRevitHandoff;
+#else
+                return ProjectSetupAutomationLevel.RevitNativeHandoff;
+#endif
+            }
+        }
+
+        public static bool TryPostSaveAsCloudModel(UIApplication app, out string error)
+        {
+#if REVIT2021
+            error = "Manual Revit Action Required";
+            return false;
+#else
+            return TryPost(app, PostableCommand.SaveAsCloudModel, out error);
+#endif
+        }
+
+        public static bool TryPostManageLinks(UIApplication app, out string error) =>
+            TryPost(app, PostableCommand.ManageLinks, out error);
+
+        public static bool TryPostCopyMonitorSelectLink(UIApplication app, out string error)
+        {
+#if REVIT2021
+            error = "Manual Revit Action Required";
+            return false;
+#else
+            return TryPost(app, PostableCommand.CopyMonitorSelectLink, out error);
+#endif
+        }
+
+        private static bool TryPost(UIApplication app, PostableCommand command, out string error)
+        {
+            error = null;
+            if (app == null)
+            {
+                error = "The Revit application is unavailable.";
+                return false;
+            }
+
+            RevitCommandId commandId = RevitCommandId.LookupPostableCommandId(command);
+            if (commandId == null || !app.CanPostCommand(commandId))
+            {
+                error = "The native Revit command is not available in the current context.";
+                return false;
+            }
+
+            app.PostCommand(commandId);
+            return true;
+        }
+
         public static bool SupportsNativePdfExport
         {
             get

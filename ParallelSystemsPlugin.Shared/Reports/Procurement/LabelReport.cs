@@ -191,28 +191,37 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             string worksheetName,
             bool includePackageColumn)
         {
-            var headers = includePackageColumn
-                ? new[] { "Package", "Spool Number", "Mark Item", "Material Grade", "Pipe Size", "Pipe End Prep", "Cut Length", "QR Code" }
-                : new[] { "Spool Number", "Mark Item", "Material Grade", "Pipe Size", "Pipe End Prep", "Cut Length", "QR Code" };
+            var headers = new[]
+            {
+                "Project Number",
+                "Project Name",
+                "Project Phase",
+                "Spool Number",
+                "Mark Item",
+                "Material Grade",
+                "Pipe Size",
+                "Pipe End Prep",
+                "Cut Length",
+                "QR Code"
+            };
 
-            var sheet = ExcelReportExporter.CreateReportSheet(
-                cfg,
-                "LABEL REPORT",
-                headers,
-                note,
-                projectPhases);
+            var sheet = new ExcelReportExporter.ExcelWorksheet("LABEL REPORT");
 
             if (!string.IsNullOrWhiteSpace(worksheetName))
                 sheet.Name = worksheetName;
+
+            sheet.Add(
+                ExcelReportExporter.RowKind.Header,
+                headers.Cast<object>().ToArray());
 
             bool alternate = false;
 
             foreach (var r in data)
             {
                 var values = new List<object>();
-                if (includePackageColumn)
-                    values.Add(string.IsNullOrWhiteSpace(r.Package) ? "NO PACKAGE ASSIGNED" : r.Package);
-
+                values.Add(r.ProjectNumber ?? "");
+                values.Add(r.ProjectName ?? "");
+                values.Add(r.ProjectPhase ?? "");
                 values.Add(r.SpoolNumber ?? "");
                 values.Add(r.MarkItem ?? "");
                 values.Add(r.MaterialGrade ?? "");
@@ -228,12 +237,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     values.ToArray());
 
                 alternate = !alternate;
-            }
-
-            if (!string.IsNullOrWhiteSpace(note))
-            {
-                sheet.Add(ExcelReportExporter.RowKind.Blank);
-                sheet.Add(ExcelReportExporter.RowKind.RedNote, note);
             }
 
             return sheet;

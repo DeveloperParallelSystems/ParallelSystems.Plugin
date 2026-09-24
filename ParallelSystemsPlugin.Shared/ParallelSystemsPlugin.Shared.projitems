@@ -42,6 +42,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\MapPipesCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\PipeSlopeCheckCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\PipeWeightCommand.cs" />
+    <!-- Created by Jhay: 01.1 Project Setup workflow. -->
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ProjectLaunchCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\PublishBomCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RenameExportCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RenameImportCommand.cs" />
@@ -85,6 +87,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\PushButton.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\SplitButton.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\AtlasFlangeReference.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ProjectLaunch\ProjectSetupModels.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ProjectLaunch\ProjectSetupRequest.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ProjectLaunch\ProjectSetupExternalEventHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ProjectLaunch\ProjectSetupService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ProjectLaunch\ProjectSetupStorage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ProjectLaunch\ProjectSetupValidator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomAssemblyRegisterReport.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomAccessoryReport.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Reports\Procurement\BomCutListReport.cs" />
@@ -115,12 +123,16 @@
     <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\ProgressWindow.xaml.cs">
       <DependentUpon>ProgressWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\ProjectLaunchWindow.xaml.cs">
+      <DependentUpon>ProjectLaunchWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\StartupSplashWindow.xaml.cs">
       <DependentUpon>StartupSplashWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="$(MSBuildThisFileDirectory)UI\Helper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\ProcurementMenu.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\PropertyMappingMenu.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\ProjectLaunchMenu.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\SettingsPanelMenu.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\ToolsMenu.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\WindowCentering.cs" />
@@ -147,6 +159,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="$(MSBuildThisFileDirectory)UI\Dialogs\ProgressWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="$(MSBuildThisFileDirectory)UI\Dialogs\ProjectLaunchWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

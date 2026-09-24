@@ -11,6 +11,16 @@
 
 The public plugin version is 1.17.10. The V2 label used in monitoring and deployment documentation describes the monitoring architecture generation; it is not the Revit plugin release number.
 
+## Project Launch — 01.1 Project Setup
+
+The first ParallelSystems ribbon panel is **Project Launch**. Its modeless window remains open while you use Revit and guides the active project through project information, the client naming convention, worksharing and worksets, Autodesk Docs cloud saving, Revit links, Grid/Level Copy/Monitor, and final validation. Sections 01.2 through 01.6 are visible as Coming Soon and are not implemented.
+
+Use **Save Setup Information** to write Project Name and Project Number to Revit Project Information and save the remaining setup profile in project-specific Extensible Storage. The profile resumes when the model is reopened. **Refresh** never changes the model; it reloads the active document, worksets, links, cloud state, and monitoring evidence. Switching active documents also refreshes the window.
+
+For a local project, configure the two initial worksets and any additional worksets before enabling worksharing. Revit clears Undo history when worksharing is enabled, so the command requires confirmation. Cloud saving, Manage Links, and Copy/Monitor remain native Revit workflows. Revit 2022–2026 can launch all three workflows from Project Launch. Revit 2021 launches Manage Links directly and provides manual menu instructions for Save As Cloud Model and Copy/Monitor. In every version, status is based on the actual model after Refresh/Recheck—not on whether a launcher button was selected.
+
+**Complete 01.1** is available only when the active project, required information, naming confirmation, worksharing, configured worksets, cloud worksharing, links, and Grid/Level coordination pass validation. Copy/Monitor may be marked not required only with an explicit reason. Completion records the Revit user, UTC time, and plugin version, but does not hide later compliance failures.
+
 ## What Is New in 1.17.10
 
 - Added a read-only Atlas Steels Section 3 flange reference under `Configurations > Fabrication`, covering six ASME B16.5 classes, AS 2129 Tables D, E, F, and H, PN16 AS 4087, and PN16 EN 1092.

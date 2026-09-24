@@ -2,6 +2,9 @@
 
 ## 1.17.10 - Flange Configuration and STEP Bolt Holes (Internal / Unreleased)
 
+- Added the modeless Project Launch ribbon panel and complete 01.1 Project Setup workflow for Revit 2021–2026, including active-project safety checks, Project Information, client naming confirmation, worksharing/worksets, cloud-state verification, required-link validation, Grid/Level monitoring evidence, and completion audit data.
+- Added project-specific, versioned Extensible Storage on Project Information so setup can resume without using global user configuration. Final validation remains read-only and distinguishes historical completion from current compliance.
+- Added native Revit handoffs for Save As Cloud Model, Manage Links, and Copy/Monitor where postable commands exist. Revit 2021 uses branded manual handoffs for the two unavailable postable commands while validating the same actual cloud and monitoring state as every other adapter.
 - Added an explicit project/WPS `Pipe-face setback` setting for Atlas table/plate slip-on flange fabrication. When configured, the STEP pipe extends through the flange bore to `mating face - setback` while the flange mating face and Atlas dimensions stay fixed; when missing or invalid, generation blocks rather than guessing.
 - When Atlas STEP is selected with a table/plate slip-on flange and the setback is blank, the command now opens Configurations directly on the focused Fabrication setback field before geometry generation. Saving resumes the command; leaving it blank cancels once with a clear explanation.
 - Changed flat Atlas plate/SOW flange bodies from a revolved annulus to a direct annular extrusion so each end exports as one continuous planar surface instead of two coplanar half-faces divided by a revolution seam.

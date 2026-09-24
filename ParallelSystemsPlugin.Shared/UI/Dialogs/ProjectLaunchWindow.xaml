@@ -1,0 +1,68 @@
+<!-- Created by Jhay -->
+<Window x:Class="ParallelSystemPlugin.UI.ProjectLaunchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Parallel Systems - Project Launch" Width="1120" Height="850"
+        MinWidth="920" MinHeight="650" Background="#F3F5F7" WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <Style TargetType="GroupBox">
+            <Setter Property="Margin" Value="0,0,0,12"/><Setter Property="Padding" Value="12"/>
+            <Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#CCD3D9"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="14,7"/><Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+        <Style TargetType="TextBox"><Setter Property="Margin" Value="0,3,0,7"/><Setter Property="Padding" Value="6"/></Style>
+        <Style TargetType="CheckBox"><Setter Property="Margin" Value="0,5,0,7"/></Style>
+    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="62"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Border Background="#172A3A" Padding="20,0">
+            <Grid><TextBlock Text="PARALLEL SYSTEMS" Foreground="White" FontSize="21" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock Text="PROJECT LAUNCH" Foreground="#8ED1FC" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
+        </Border>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Background="#E5E9ED" Padding="18">
+                <StackPanel>
+                    <TextBlock Text="●  01.1  Project Setup" FontWeight="Bold" Foreground="#126782" Margin="0,8,0,18"/>
+                    <TextBlock Text="○  01.2  Global Parameters" Foreground="#7A838A" Margin="0,0,0,5"/><TextBlock Text="    Coming Soon" FontSize="11" Foreground="#92999E" Margin="0,0,0,13"/>
+                    <TextBlock Text="○  01.3  Valve Schedule" Foreground="#7A838A" Margin="0,0,0,5"/><TextBlock Text="    Coming Soon" FontSize="11" Foreground="#92999E" Margin="0,0,0,13"/>
+                    <TextBlock Text="○  01.4  Insulation" Foreground="#7A838A" Margin="0,0,0,5"/><TextBlock Text="    Coming Soon" FontSize="11" Foreground="#92999E" Margin="0,0,0,13"/>
+                    <TextBlock Text="○  01.5  Materials" Foreground="#7A838A" Margin="0,0,0,5"/><TextBlock Text="    Coming Soon" FontSize="11" Foreground="#92999E" Margin="0,0,0,13"/>
+                    <TextBlock Text="○  01.6  Scope / Areas" Foreground="#7A838A" Margin="0,0,0,5"/><TextBlock Text="    Coming Soon" FontSize="11" Foreground="#92999E"/>
+                </StackPanel>
+            </Border>
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="22">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,16"><Button Content="Refresh" DockPanel.Dock="Right" Click="OnRefreshClick"/>
+                        <StackPanel><TextBlock Text="01.1 — PROJECT SETUP" FontSize="24" FontWeight="Bold" Foreground="#172A3A"/>
+                            <TextBlock x:Name="PART_ProjectSummary" Margin="0,4,0,0" Foreground="#55636D"/></StackPanel></DockPanel>
+                    <GroupBox Header="ACTIVE PROJECT"><StackPanel><TextBlock x:Name="PART_ActiveProject" FontWeight="SemiBold"/><TextBlock x:Name="PART_ActiveState" Margin="0,5,0,0"/></StackPanel></GroupBox>
+                    <GroupBox Header="PROJECT INFORMATION"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <StackPanel><TextBlock Text="Project Name"/><TextBox x:Name="PART_ProjectName"/><TextBlock Text="Project Number"/><TextBox x:Name="PART_ProjectNumber"/></StackPanel>
+                        <StackPanel Grid.Column="2"><TextBlock Text="Project Manager"/><TextBox x:Name="PART_ProjectManager"/><TextBlock Text="Project Overseer"/><TextBox x:Name="PART_ProjectOverseer"/></StackPanel></Grid></GroupBox>
+                    <GroupBox Header="CLIENT NAMING CONVENTION"><StackPanel><TextBlock Text="Client Naming Convention"/><TextBox x:Name="PART_NamingConvention"/><CheckBox x:Name="PART_NamingConfirmed" Content="I confirm the current model follows the client's convention"/></StackPanel></GroupBox>
+                    <GroupBox Header="WORKSHARING &amp; WORKSETS"><StackPanel><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <StackPanel><TextBlock Text="Grid / Level Workset"/><TextBox x:Name="PART_GridWorkset"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="Initial Model Workset"/><TextBox x:Name="PART_InitialWorkset"/></StackPanel></Grid>
+                        <TextBlock Text="Additional Worksets" Margin="0,5,0,3"/><ListBox x:Name="PART_AdditionalWorksets" MinHeight="52"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,7,0,10"><TextBox x:Name="PART_NewWorkset" Width="260" Margin="0,0,8,0"/><Button Content="Add Workset" Click="OnAddWorksetClick"/><Button Content="Remove Selected" Click="OnRemoveWorksetClick"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><Button x:Name="PART_EnableWorksharing" Content="Enable Worksharing &amp; Create Worksets" Click="OnEnableWorksharingClick"/><Button Content="Create Missing Worksets" Click="OnCreateWorksetsClick"/></StackPanel></StackPanel></GroupBox>
+                    <GroupBox Header="CLOUD MODEL"><StackPanel><TextBlock x:Name="PART_CloudStatus" Margin="0,0,0,9"/><StackPanel Orientation="Horizontal"><Button x:Name="PART_SaveAsCloud" Content="Save As Cloud Model" Click="OnSaveAsCloudClick"/><Button x:Name="PART_EnableCloudWorksharing" Content="Enable Cloud Worksharing" Click="OnEnableCloudWorksharingClick" Visibility="Collapsed"/></StackPanel></StackPanel></GroupBox>
+                    <GroupBox Header="REVIT LINKS"><StackPanel><StackPanel Orientation="Horizontal"><Button Content="Manage Links" Click="OnManageLinksClick"/><Button Content="Refresh Links" Click="OnRefreshClick"/></StackPanel>
+                        <DataGrid x:Name="PART_Links" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column" Margin="0,10,0,4" MinHeight="80">
+                            <DataGrid.Columns><DataGridCheckBoxColumn Header="Required" Binding="{Binding IsRequired}" Width="80"/><DataGridTextColumn Header="Link" Binding="{Binding Name}" Width="*" IsReadOnly="True"/><DataGridCheckBoxColumn Header="Loaded" Binding="{Binding IsLoaded}" Width="70" IsReadOnly="True"/></DataGrid.Columns>
+                        </DataGrid><CheckBox x:Name="PART_NoLinksRequired" Content="No Revit links are required for this project"/></StackPanel></GroupBox>
+                    <GroupBox Header="GRID / LEVEL COORDINATION"><StackPanel><TextBlock Text="Coordination Source Link"/><ComboBox x:Name="PART_CoordinationSource" DisplayMemberPath="Name" SelectedValuePath="Name" Margin="0,3,0,8"/>
+                        <TextBlock x:Name="PART_MonitoringCounts" Margin="0,0,0,8"/><StackPanel Orientation="Horizontal"><Button x:Name="PART_CopyMonitor" Content="Open Copy / Monitor" Click="OnCopyMonitorClick"/><Button Content="Recheck" Click="OnRefreshClick"/></StackPanel>
+                        <CheckBox x:Name="PART_CoordinationReviewed" Content="Required Grid / Level coordination has been reviewed"/>
+                        <CheckBox x:Name="PART_CopyMonitorNotRequired" Content="Copy / Monitor is not required for this project"/>
+                        <TextBlock Text="Required reason when not applicable"/><TextBox x:Name="PART_CopyMonitorReason"/></StackPanel></GroupBox>
+                    <GroupBox Header="FINAL VALIDATION"><StackPanel><ItemsControl x:Name="PART_Statuses"><ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="#D7DDE2" BorderThickness="0,0,0,1" Padding="0,7"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="110"/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="Bold"/><TextBlock Grid.Column="2" Text="{Binding Message}" TextWrapping="Wrap"/></Grid></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                        <TextBlock x:Name="PART_CompletionAudit" Margin="0,10,0,8" Foreground="#55636D" TextWrapping="Wrap"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="Save Setup Information" Click="OnSaveClick"/><Button Content="Validate Setup" Click="OnValidateClick"/><Button x:Name="PART_Complete" Content="Complete 01.1" Click="OnCompleteClick" IsEnabled="False"/></StackPanel></StackPanel></GroupBox>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</Window>

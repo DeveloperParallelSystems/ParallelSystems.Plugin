@@ -667,6 +667,16 @@ namespace ParallelSystemsPlugin
                 // The ribbon tab may already exist.
             }
 
+            // Changed by Jhay: Project Launch is the first workflow panel.
+            RibbonPanel projectLaunchPanel =
+                GetOrCreatePanel(
+                    app,
+                    TabName,
+                    "Project Launch");
+
+            ProjectLaunchMenu.Build(
+                projectLaunchPanel);
+
             RibbonPanel propertyMappingPanel =
                 GetOrCreatePanel(
                     app,
@@ -864,6 +874,10 @@ namespace ParallelSystemsPlugin
             catch
             {
             }
+
+            // Changed by Jhay: keep the modeless Project Launch view bound to the active document.
+            ParallelSystemPlugin.Commands.ProjectLaunchCommand
+                .RefreshForActiveDocumentChange();
         }
 
         public Result OnShutdown(
