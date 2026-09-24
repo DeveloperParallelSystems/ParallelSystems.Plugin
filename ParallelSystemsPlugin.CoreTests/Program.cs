@@ -13,8 +13,12 @@ internal static class Program
             NamingUsesDeterministicTieBreakers();
             NamingPreservesSuffixAndPadding();
             NamingRejectsInvalidInputAndOverflow();
+            DocumentationSubstitutionReplacesOnlyExactAssemblyToken();
+            DocumentationSubstitutionReportsAmbiguity();
+            PreflightReturnsAllNameConflicts();
             Console.WriteLine("PASS: Assembly name parser tests.");
             Console.WriteLine("PASS: Assembly naming sequence tests.");
+            Console.WriteLine("PASS: Assembly preflight tests.");
             return 0;
         }
         catch (Exception exception)
@@ -124,6 +128,98 @@ internal static class Program
             start)[0];
 
         AssertEqual(expected, proposal.ProposedName, source + " generated name");
+    }
+
+    private static void DocumentationSubstitutionReplacesOnlyExactAssemblyToken()
+    {
+        AssertSubstitution("FAB-CHW001", "CHW001", "CHW500", "FAB-CHW500", true);
+        AssertSubstitution("CHW001-SHEET", "CHW001", "CHW500", "CHW500-SHEET", true);
+        AssertSubstitution("PRD-CHW-50SM", "CHW-50SM", "CHW-60SM", "PRD-CHW-60SM", true);
+        AssertSubstitution("fab-chw001", "CHW001", "CHW500", "fab-CHW500", true);
+        AssertSubstitution("DETAIL-001", "CHW001", "CHW500", "DETAIL-001", false);
+    }
+
+    private static void DocumentationSubstitutionReportsAmbiguity()
+    {
+        AssemblyNameSubstitutionResult result = AssemblyNameSubstitution.ReplaceExactToken(
+            "CHW001-CHW001",
+            "CHW001",
+            "CHW500");
+
+        AssertEqual(true, result.IsAmbiguous, "repeated source token ambiguity");
+        AssertEqual("CHW001-CHW001", result.Value, "ambiguous name remains unchanged");
+    }
+
+    private static void PreflightReturnsAllNameConflicts()
+    {
+        var index = new AssemblyConflictIndex(
+            new[] { "CHW500" },
+            new[] { "FAB-CHW500" },
+            new[] { "CHW500 - 3D" });
+
+        var proposals = new[]
+        {
+            new ProposedAssemblyName("CHW001", 1, 1, 500, "chw500"),
+            new ProposedAssemblyName("CHR002", 2, 2, 501, "CHR501"),
+            new ProposedAssemblyName("CHW003", 3, 3, 502, "CHR501")
+        };
+
+        IReadOnlyList<AssemblyPreflightIssue> issues = AssemblyPreflightService.ValidateNames(
+            proposals,
+            index,
+            new[]
+            {
+                new ProposedDocumentationName(
+                    "CHW001",
+                    DocumentationNameKind.SheetNumber,
+                    "FAB-CHW500"),
+                new ProposedDocumentationName(
+                    "CHW001",
+                    DocumentationNameKind.ViewName,
+                    "CHW500 - 3D")
+            });
+
+        AssertEqual(4, issues.Count, "all preflight conflicts");
+        AssertEqual(
+            1,
+            issues.Count(x => x.Kind == AssemblyPreflightIssueKind.AssemblyNameConflict),
+            "assembly-name conflict count");
+        AssertEqual(
+            1,
+            issues.Count(x => x.Kind == AssemblyPreflightIssueKind.DuplicateProposedName),
+            "batch duplicate count");
+        AssertEqual(
+            1,
+            issues.Count(x => x.Kind == AssemblyPreflightIssueKind.SheetNumberConflict),
+            "sheet conflict count");
+        AssertEqual(
+            1,
+            issues.Count(x => x.Kind == AssemblyPreflightIssueKind.ViewNameConflict),
+            "view conflict count");
+
+        IReadOnlyList<AssemblyPreflightIssue> clean = AssemblyPreflightService.ValidateNames(
+            new[] { new ProposedAssemblyName("CHW001", 1, 1, 700, "CHW700") },
+            index,
+            Array.Empty<ProposedDocumentationName>());
+
+        AssertEqual(0, clean.Count, "clean preflight issue count");
+    }
+
+    private static void AssertSubstitution(
+        string current,
+        string source,
+        string proposed,
+        string expected,
+        bool expectedReplacement)
+    {
+        AssemblyNameSubstitutionResult result = AssemblyNameSubstitution.ReplaceExactToken(
+            current,
+            source,
+            proposed);
+
+        AssertEqual(expected, result.Value, current + " substitution");
+        AssertEqual(expectedReplacement, result.WasReplaced, current + " replacement flag");
+        AssertEqual(false, result.IsAmbiguous, current + " ambiguity flag");
     }
 
     private static void AssertParts(
