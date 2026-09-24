@@ -790,6 +790,34 @@ namespace ParallelSystemsPlugin
 
             if (button != null)
                 button.Enabled = false;
+
+            // Changed by Jhay: expose the Phase 2 POC only in password-gated development mode.
+            var assemblyDiagnosticData = new PushButtonData(
+                "PS_AssemblyIndependenceDiagnostic",
+                "Assembly\nIndependence\nDiagnostic",
+                assemblyPath,
+                "ParallelSystemsPlugin.Commands.RunAssemblyDuplicationDiagnosticCommand")
+            {
+                ToolTip =
+                    "Internal model-only proof that a copied Revit assembly " +
+                    "receives an independent AssemblyType. Use a disposable model copy."
+            };
+
+            if (File.Exists(icon16))
+            {
+                assemblyDiagnosticData.Image =
+                    new System.Windows.Media.Imaging.BitmapImage(
+                        new Uri(icon16));
+            }
+
+            if (File.Exists(icon32))
+            {
+                assemblyDiagnosticData.LargeImage =
+                    new System.Windows.Media.Imaging.BitmapImage(
+                        new Uri(icon32));
+            }
+
+            panel.AddItem(assemblyDiagnosticData);
         }
 
         private void ControlledApplication_DocumentOpened(
