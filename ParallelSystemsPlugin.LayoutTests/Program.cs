@@ -1,4 +1,5 @@
 using System.Reflection;
+using ParallelSystemsPlugin.AssemblyDuplication;
 using ParallelSystemsPlugin.Helpers;
 using ParallelSystemsPlugin.Models.Configs;
 using ParallelSystemsPlugin.Reports.Procurement;
@@ -24,7 +25,9 @@ internal static class Program
         try
         {
             LabelReportExcelSheetStartsWithSimpleHeaderAndRepeatsProjectDetails();
+            AssemblyIdentityMarkerNamesAreSafeAndUnique();
             Console.WriteLine("PASS: Label report Excel sheet uses the simple row-based layout.");
+            Console.WriteLine("PASS: Assembly identity marker names are safe and unique.");
             return 0;
         }
         catch (Exception exception)
@@ -32,6 +35,25 @@ internal static class Program
             Console.Error.WriteLine("FAIL: " + exception.Message);
             return 1;
         }
+    }
+
+    private static void AssemblyIdentityMarkerNamesAreSafeAndUnique()
+    {
+        Guid first = Guid.Parse("7f3c18a2-0000-0000-0000-000000000000");
+        Guid second = Guid.Parse("9a5d2b11-0000-0000-0000-000000000000");
+
+        string a = AssemblyIdentityMarkerName.Create("CHW500", first);
+        string b = AssemblyIdentityMarkerName.Create("CHW500", second);
+        string unusual = AssemblyIdentityMarkerName.Create("CHW/500:{bad}|name", first);
+        string bounded = AssemblyIdentityMarkerName.Create(new string('X', 200), first);
+
+        AssertEqual("PS_ASM_ID_CHW500_7F3C18A2", a, "first identity name");
+        AssertEqual(false, string.Equals(a, b, StringComparison.Ordinal), "unique identity names");
+        AssertEqual(
+            false,
+            unusual.IndexOfAny(new[] { '/', ':', '{', '}', '|' }) >= 0,
+            "safe identity characters");
+        AssertEqual(true, bounded.Length <= 120, "bounded identity name length");
     }
 
     private static void LabelReportExcelSheetStartsWithSimpleHeaderAndRepeatsProjectDetails()
