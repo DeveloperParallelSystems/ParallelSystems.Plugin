@@ -1,4 +1,5 @@
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Plumbing;
 using ParallelSystemsPlugin.Compatibility;
 using System;
 using System.Collections.Generic;
@@ -95,6 +96,10 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
         public double? RelativeEndZ { get; private set; }
         public string PlacementFingerprint { get; private set; }
         public string ParameterFingerprint { get; private set; }
+        public IReadOnlyDictionary<long, string> ParameterValues { get; private set; }
+        // Changed by Jhay: retain actual Double values so formatting such as -0 versus 0 is not semantic.
+        public IReadOnlyDictionary<long, double> DoubleParameterValues { get; private set; }
+        public IReadOnlyDictionary<long, AssemblyParameterMetadata> ParameterMetadata { get; private set; }
 
         public static AssemblyMemberEvidence Capture(Element member, XYZ assemblyOrigin)
         {
@@ -104,6 +109,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 ? null
                 : member.Document.GetElement(typeId) as ElementType;
             var familyInstance = member as FamilyInstance;
+            bool isPipeInsulation = member is PipeInsulation;
             bool isMarker = familyInstance != null &&
                 familyInstance.Symbol != null &&
                 familyInstance.Symbol.Family != null &&
@@ -113,6 +119,13 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                     StringComparison.Ordinal) &&
                 familyInstance.Symbol.Name.StartsWith("PS_ASM_ID_", StringComparison.Ordinal);
 
+            // Changed by Jhay: retain parameter semantics so destination-level exceptions are evidence-based.
+            Dictionary<long, AssemblyParameterMetadata> parameterMetadata;
+            Dictionary<long, double> doubleParameterValues;
+            Dictionary<long, string> parameterValues = CaptureParameters(
+                member,
+                out parameterMetadata,
+                out doubleParameterValues);
             var evidence = new AssemblyMemberEvidence
             {
                 MemberId = RevitApiCompatibility.GetElementIdValue(member.Id),
@@ -127,14 +140,31 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 LocationKind = member.Location == null
                     ? "None"
                     : member.Location.GetType().Name,
-                ParameterFingerprint = CaptureParameters(member)
+                ParameterValues = parameterValues,
+                DoubleParameterValues = doubleParameterValues,
+                ParameterMetadata = parameterMetadata,
+                ParameterFingerprint = string.Join(
+                    "|",
+                    parameterValues
+                        .OrderBy(item => item.Key)
+                        .Select(item => item.Key.ToString(CultureInfo.InvariantCulture) + "=" + item.Value))
             };
 
             var point = member.Location as LocationPoint;
             if (point != null)
             {
                 SetRelativeStart(evidence, point.Point, assemblyOrigin);
-                evidence.PlacementFingerprint = CapturePlacement(member, assemblyOrigin);
+                evidence.PlacementFingerprint = CapturePlacement(member, assemblyOrigin, isPipeInsulation);
+                return evidence;
+            }
+
+            // Changed by Jhay: PipeInsulation.LocationCurve can be non-world API data; bounds are authoritative.
+            if (isPipeInsulation)
+            {
+                BoundingBoxXYZ insulationBounds = member.get_BoundingBox(null);
+                if (insulationBounds != null)
+                    SetRelativeStart(evidence, (insulationBounds.Min + insulationBounds.Max) * 0.5, assemblyOrigin);
+                evidence.PlacementFingerprint = CapturePlacement(member, assemblyOrigin, true);
                 return evidence;
             }
 
@@ -146,18 +176,21 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 evidence.RelativeEndX = end.X;
                 evidence.RelativeEndY = end.Y;
                 evidence.RelativeEndZ = end.Z;
-                evidence.PlacementFingerprint = CapturePlacement(member, assemblyOrigin);
+                evidence.PlacementFingerprint = CapturePlacement(member, assemblyOrigin, false);
                 return evidence;
             }
 
             if (familyInstance != null)
                 SetRelativeStart(evidence, familyInstance.GetTransform().Origin, assemblyOrigin);
 
-            evidence.PlacementFingerprint = CapturePlacement(member, assemblyOrigin);
+            evidence.PlacementFingerprint = CapturePlacement(member, assemblyOrigin, false);
             return evidence;
         }
 
-        private static string CapturePlacement(Element member, XYZ assemblyOrigin)
+        private static string CapturePlacement(
+            Element member,
+            XYZ assemblyOrigin,
+            bool excludeRawLocationCurve)
         {
             var text = new StringBuilder();
             var familyInstance = member as FamilyInstance;
@@ -172,7 +205,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             }
 
             var curve = member.Location as LocationCurve;
-            if (curve?.Curve != null)
+            if (!excludeRawLocationCurve && curve?.Curve != null)
             {
                 int index = 0;
                 foreach (XYZ point in curve.Curve.Tessellate())
@@ -189,11 +222,16 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             return text.ToString();
         }
 
-        private static string CaptureParameters(Element member)
+        private static Dictionary<long, string> CaptureParameters(
+            Element member,
+            out Dictionary<long, AssemblyParameterMetadata> metadata,
+            out Dictionary<long, double> doubleValues)
         {
             long assemblyNameId = (long)BuiltInParameter.ASSEMBLY_NAME;
             long elementIdParameter = (long)BuiltInParameter.ID_PARAM;
-            var values = new List<string>();
+            var values = new Dictionary<long, string>();
+            metadata = new Dictionary<long, AssemblyParameterMetadata>();
+            doubleValues = new Dictionary<long, double>();
             foreach (Parameter parameter in member.Parameters.Cast<Parameter>())
             {
                 long parameterId = RevitApiCompatibility.GetElementIdValue(parameter.Id);
@@ -204,7 +242,9 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 switch (parameter.StorageType)
                 {
                     case StorageType.Double:
-                        value = Format(parameter.AsDouble());
+                        double doubleValue = parameter.AsDouble();
+                        doubleValues[parameterId] = doubleValue;
+                        value = Format(doubleValue);
                         break;
                     case StorageType.Integer:
                         value = parameter.AsInteger().ToString(CultureInfo.InvariantCulture);
@@ -219,11 +259,12 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                         continue;
                 }
 
-                values.Add(parameterId.ToString(CultureInfo.InvariantCulture) + "=" + value);
+                values[parameterId] = value;
+                // Changed by Jhay: capture the Revit definition rather than inferring semantics from a raw id.
+                metadata[parameterId] = AssemblyParameterMetadata.Capture(parameter, parameterId);
             }
 
-            values.Sort(StringComparer.Ordinal);
-            return string.Join("|", values);
+            return values;
         }
 
         private static string NormalizeElementReference(Document document, ElementId id)
@@ -265,6 +306,61 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             evidence.RelativeX = relative.X;
             evidence.RelativeY = relative.Y;
             evidence.RelativeZ = relative.Z;
+        }
+    }
+
+    internal sealed class AssemblyParameterMetadata
+    {
+        private AssemblyParameterMetadata()
+        {
+        }
+
+        public string DefinitionName { get; private set; }
+        public long ParameterId { get; private set; }
+        public string BuiltInParameterName { get; private set; }
+        public string StorageType { get; private set; }
+        public string DataType { get; private set; }
+        public bool IsReadOnly { get; private set; }
+
+        public static AssemblyParameterMetadata Capture(Parameter parameter, long parameterId)
+        {
+            string builtInName = parameterId >= int.MinValue && parameterId <= int.MaxValue
+                ? Enum.GetName(typeof(BuiltInParameter), unchecked((int)parameterId))
+                : null;
+
+#if REVIT2021
+            string dataType = parameter.Definition == null
+                ? "<unavailable>"
+                : parameter.Definition.ParameterType.ToString();
+#else
+            ForgeTypeId forgeDataType = parameter.Definition?.GetDataType();
+            string dataType = forgeDataType == null || string.IsNullOrEmpty(forgeDataType.TypeId)
+                ? "<unavailable>"
+                : forgeDataType.TypeId;
+#endif
+
+            return new AssemblyParameterMetadata
+            {
+                DefinitionName = parameter.Definition?.Name ?? "<unnamed>",
+                ParameterId = parameterId,
+                BuiltInParameterName = builtInName ?? "<not built-in>",
+                StorageType = parameter.StorageType.ToString(),
+                DataType = dataType,
+                IsReadOnly = parameter.IsReadOnly
+            };
+        }
+
+        public string Describe()
+        {
+            return "Definition.Name=" + DefinitionName +
+                ", ParameterId=" + ParameterId.ToString(CultureInfo.InvariantCulture) +
+                ", BuiltInParameter=" + BuiltInParameterName +
+                (BuiltInParameterName == "<not built-in>"
+                    ? string.Empty
+                    : " (" + ParameterId.ToString(CultureInfo.InvariantCulture) + ")") +
+                ", StorageType=" + StorageType +
+                ", ForgeTypeId/DataType=" + DataType +
+                ", IsReadOnly=" + IsReadOnly;
         }
     }
 
@@ -313,6 +409,15 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             new List<AssemblyTransactionStage>();
         public IList<AssemblyContaminationObservation> ContaminationObservations { get; } =
             new List<AssemblyContaminationObservation>();
+        public IList<string> CopyMatchingObservations { get; } =
+            new List<string>();
+        public IList<string> TransformAlignmentObservations { get; } =
+            new List<string>();
+        public IList<string> ProductionEvidenceObservations { get; } =
+            new List<string>();
+        // Changed by Jhay: destination-level movement and reassociation evidence.
+        public IList<string> DestinationLevelObservations { get; } =
+            new List<string>();
         public IList<AssemblyDuplicationInvariant> Invariants { get; } =
             new List<AssemblyDuplicationInvariant>();
 

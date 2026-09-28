@@ -15,6 +15,79 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
         internal const string RelativeAssetPath = @"Families\PS_AssemblyIdentity.rfa";
         private const double PlacementTolerance = 1e-6;
 
+        // Created by Jhay: validate family availability during preflight without mutating Revit.
+        public static AssemblyIdentityFamilyAvailability InspectAvailability(
+            Document document,
+            string assemblyDirectory)
+        {
+            if (document == null)
+                throw new ArgumentNullException(nameof(document));
+            if (string.IsNullOrWhiteSpace(assemblyDirectory))
+                throw new ArgumentException("The add-in assembly directory is required.", nameof(assemblyDirectory));
+
+            string assetPath = Path.Combine(assemblyDirectory, RelativeAssetPath);
+            Family family = FindFamily(document);
+            if (family == null)
+            {
+                if (!File.Exists(assetPath))
+                {
+                    return new AssemblyIdentityFamilyAvailability(
+                        assetPath, false, null, null, null, null, null, false,
+                        "The deployed assembly identity family is missing: " + assetPath);
+                }
+
+                try
+                {
+                    using (FileStream stream = File.Open(
+                        assetPath,
+                        FileMode.Open,
+                        FileAccess.Read,
+                        FileShare.ReadWrite))
+                    {
+                        if (stream.Length < 1)
+                            throw new InvalidDataException("The identity-family asset is empty.");
+                    }
+                }
+                catch (Exception exception)
+                {
+                    return new AssemblyIdentityFamilyAvailability(
+                        assetPath, false, null, null, null, null, null, false,
+                        "The deployed assembly identity family is not readable: " + exception.Message);
+                }
+
+                return new AssemblyIdentityFamilyAvailability(
+                    assetPath, false, null, null, null, null, null, true, null);
+            }
+
+            try
+            {
+                ValidatedFamilyContract contract = ValidateFamilyContract(document, family);
+                return new AssemblyIdentityFamilyAvailability(
+                    assetPath,
+                    true,
+                    RevitApiCompatibility.GetElementIdValue(contract.Family.Id),
+                    RevitApiCompatibility.GetElementIdValue(contract.BaseSymbol.Id),
+                    contract.CategoryId,
+                    contract.Category.Name,
+                    contract.Family.FamilyPlacementType.ToString(),
+                    true,
+                    null);
+            }
+            catch (Exception exception)
+            {
+                return new AssemblyIdentityFamilyAvailability(
+                    assetPath,
+                    true,
+                    RevitApiCompatibility.GetElementIdValue(family.Id),
+                    null,
+                    null,
+                    family.FamilyCategory?.Name,
+                    family.FamilyPlacementType.ToString(),
+                    false,
+                    exception.Message);
+            }
+        }
+
         public static AssemblyIdentityFamilyResolution ResolveOrLoad(
             Document document,
             string assemblyDirectory)
@@ -59,6 +132,28 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 family = FindFamily(document);
             }
 
+            ValidatedFamilyContract contract = ValidateFamilyContract(document, family);
+            Category category = contract.Category;
+            long actualCategoryId = contract.CategoryId;
+
+            return new AssemblyIdentityFamilyResolution
+            {
+                Family = contract.Family,
+                BaseSymbol = contract.BaseSymbol,
+                AssetPath = assetPath,
+                WasLoaded = wasLoaded,
+                FamilyId = RevitApiCompatibility.GetElementIdValue(contract.Family.Id),
+                CategoryId = actualCategoryId,
+                CategoryName = category.Name,
+                PlacementType = contract.Family.FamilyPlacementType.ToString(),
+                LoadTransactionStatus = loadStatus
+            };
+        }
+
+        private static ValidatedFamilyContract ValidateFamilyContract(
+            Document document,
+            Family family)
+        {
             if (family == null)
                 throw new InvalidOperationException("The assembly identity family is unavailable after loading.");
             if (family.IsInPlace)
@@ -109,18 +204,21 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                     family.FamilyPlacementType + ".");
             }
 
-            return new AssemblyIdentityFamilyResolution
+            return new ValidatedFamilyContract
             {
                 Family = family,
                 BaseSymbol = baseSymbol,
-                AssetPath = assetPath,
-                WasLoaded = wasLoaded,
-                FamilyId = RevitApiCompatibility.GetElementIdValue(family.Id),
+                Category = category,
                 CategoryId = actualCategoryId,
-                CategoryName = category.Name,
-                PlacementType = family.FamilyPlacementType.ToString(),
-                LoadTransactionStatus = loadStatus
             };
+        }
+
+        private sealed class ValidatedFamilyContract
+        {
+            public Family Family { get; set; }
+            public FamilySymbol BaseSymbol { get; set; }
+            public Category Category { get; set; }
+            public long CategoryId { get; set; }
         }
 
         public static AssemblyIdentityMarkerPlacement CreateMarker(
@@ -141,6 +239,30 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             if (sourceMemberIds == null)
                 throw new ArgumentNullException(nameof(sourceMemberIds));
 
+            XYZ origin = source.GetTransform().Origin;
+            Level level = SelectLevel(document, source, sourceMemberIds, origin);
+            return CreateMarker(document, baseSymbol, targetName, level, origin);
+        }
+
+        // Changed by Jhay: place the same identity marker at an explicit destination level/origin.
+        public static AssemblyIdentityMarkerPlacement CreateMarker(
+            Document document,
+            FamilySymbol baseSymbol,
+            string targetName,
+            Level level,
+            XYZ origin)
+        {
+            if (document == null)
+                throw new ArgumentNullException(nameof(document));
+            if (!document.IsModifiable)
+                throw new InvalidOperationException("Marker creation requires an open transaction.");
+            if (baseSymbol == null || !baseSymbol.IsValidObject)
+                throw new ArgumentException("The base identity symbol is unavailable.", nameof(baseSymbol));
+            if (level == null || !level.IsValidObject)
+                throw new ArgumentException("The marker level is unavailable.", nameof(level));
+            if (origin == null)
+                throw new ArgumentNullException(nameof(origin));
+
             string symbolName = CreateUnusedSymbolName(document, targetName);
             FamilySymbol symbol = baseSymbol.Duplicate(symbolName) as FamilySymbol;
             if (symbol == null)
@@ -150,8 +272,6 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 symbol.Activate();
             document.Regenerate();
 
-            XYZ origin = source.GetTransform().Origin;
-            Level level = SelectLevel(document, source, sourceMemberIds, origin);
             XYZ levelPoint = new XYZ(origin.X, origin.Y, level.ProjectElevation);
             FamilyInstance marker = document.Create.NewFamilyInstance(
                 levelPoint,

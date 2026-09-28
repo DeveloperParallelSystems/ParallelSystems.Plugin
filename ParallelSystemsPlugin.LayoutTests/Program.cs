@@ -25,8 +25,13 @@ internal static class Program
         try
         {
             LabelReportExcelSheetStartsWithSimpleHeaderAndRepeatsProjectDetails();
+            ModuleStepAllowsPipingWithoutSupports();
+            SlipOnSetbackUsesDynamicNominalDiameterDefaults();
+            SlipOnSetbackUsesConfiguredBandValues();
             AssemblyIdentityMarkerNamesAreSafeAndUnique();
             Console.WriteLine("PASS: Label report Excel sheet uses the simple row-based layout.");
+            Console.WriteLine("PASS: Module STEP allows piping without support components.");
+            Console.WriteLine("PASS: Slip-on setback resolves dynamically from nominal diameter.");
             Console.WriteLine("PASS: Assembly identity marker names are safe and unique.");
             return 0;
         }
@@ -54,6 +59,67 @@ internal static class Program
             unusual.IndexOfAny(new[] { '/', ':', '{', '}', '|' }) >= 0,
             "safe identity characters");
         AssertEqual(true, bounded.Length <= 120, "bounded identity name length");
+    }
+
+    private static void SlipOnSetbackUsesDynamicNominalDiameterDefaults()
+    {
+        var configuration = new FabricationConfig();
+
+        AssertEqual(
+            6d,
+            configuration.ResolveSlipOnPipeFaceSetbackMillimetres(125),
+            "DN125 slip-on default setback");
+        AssertEqual(
+            10d,
+            configuration.ResolveSlipOnPipeFaceSetbackMillimetres(150),
+            "DN150 slip-on default setback");
+    }
+
+    private static void SlipOnSetbackUsesConfiguredBandValues()
+    {
+        var configuration = new FabricationConfig
+        {
+            SlipOnPipeFaceSetbackDn125AndBelowMillimetres = 7d,
+            SlipOnPipeFaceSetbackDn150AndAboveMillimetres = 11d
+        };
+
+        AssertEqual(
+            7d,
+            configuration.ResolveSlipOnPipeFaceSetbackMillimetres(100),
+            "configured DN125-and-below setback");
+        AssertEqual(
+            11d,
+            configuration.ResolveSlipOnPipeFaceSetbackMillimetres(200),
+            "configured DN150-and-above setback");
+    }
+
+    private static void ModuleStepAllowsPipingWithoutSupports()
+    {
+        Type serviceType = typeof(LabelReport).Assembly.GetType(
+            "ParallelSystemsPlugin.Fabrication.FabricationStepService")
+            ?? throw new InvalidOperationException("FabricationStepService was not found.");
+
+        MethodInfo method = serviceType.GetMethod(
+            "IsValidModuleSelectionCounts",
+            BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException(
+                "IsValidModuleSelectionCounts was not found.");
+
+        bool pipingWithoutSupports = (bool)method.Invoke(
+            null,
+            new object[] { 1, 0 });
+        bool supportsWithoutPiping = (bool)method.Invoke(
+            null,
+            new object[] { 0, 1 });
+
+        AssertEqual(
+            true,
+            pipingWithoutSupports,
+            "module selection with piping and no supports");
+        AssertEqual(
+            false,
+            supportsWithoutPiping,
+            "module selection with supports and no piping");
     }
 
     private static void LabelReportExcelSheetStartsWithSimpleHeaderAndRepeatsProjectDetails()

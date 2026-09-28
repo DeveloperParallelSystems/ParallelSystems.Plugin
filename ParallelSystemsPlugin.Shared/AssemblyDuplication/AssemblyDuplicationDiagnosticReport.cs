@@ -56,6 +56,34 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 text.AppendLine(stage.Status + " | " + stage.Name);
             text.AppendLine();
 
+            text.AppendLine("COPY MATCHING");
+            if (result.CopyMatchingObservations.Count == 0)
+                text.AppendLine("<not captured>");
+            foreach (string observation in result.CopyMatchingObservations)
+                text.AppendLine(observation);
+            text.AppendLine();
+
+            text.AppendLine("ASSEMBLY TRANSFORM ALIGNMENT");
+            if (result.TransformAlignmentObservations.Count == 0)
+                text.AppendLine("<not captured>");
+            foreach (string observation in result.TransformAlignmentObservations)
+                text.AppendLine(observation);
+            text.AppendLine();
+
+            text.AppendLine("DESTINATION LEVEL");
+            if (result.DestinationLevelObservations.Count == 0)
+                text.AppendLine("<not requested>");
+            foreach (string observation in result.DestinationLevelObservations)
+                text.AppendLine(observation);
+            text.AppendLine();
+
+            text.AppendLine("PRODUCTION EVIDENCE VALIDATION");
+            if (result.ProductionEvidenceObservations.Count == 0)
+                text.AppendLine("<not captured>");
+            foreach (string observation in result.ProductionEvidenceObservations)
+                text.AppendLine(observation);
+            text.AppendLine();
+
             text.AppendLine("CONTAMINATION OBSERVATIONS");
             if (result.ContaminationObservations.Count == 0)
                 text.AppendLine("<not captured>");
@@ -74,6 +102,30 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 text.AppendLine();
                 text.AppendLine("EXCEPTION");
                 text.AppendLine(exception.ToString());
+            }
+
+            // Changed by Jhay: repeat the aggregate as the final report section for rapid test iteration.
+            int validationSummaryIndex = -1;
+            for (int index = result.DestinationLevelObservations.Count - 1; index >= 0; index--)
+            {
+                if (string.Equals(
+                        result.DestinationLevelObservations[index],
+                        "VALIDATION SUMMARY",
+                        StringComparison.Ordinal))
+                {
+                    validationSummaryIndex = index;
+                    break;
+                }
+            }
+            if (validationSummaryIndex >= 0)
+            {
+                text.AppendLine();
+                for (int index = validationSummaryIndex;
+                    index < result.DestinationLevelObservations.Count;
+                    index++)
+                {
+                    text.AppendLine(result.DestinationLevelObservations[index]);
+                }
             }
 
             File.WriteAllText(path, text.ToString(), new UTF8Encoding(false));

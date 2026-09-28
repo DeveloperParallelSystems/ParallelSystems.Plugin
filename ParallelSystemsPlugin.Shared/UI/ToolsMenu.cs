@@ -54,8 +54,8 @@ namespace ParallelSystemsPlugin.UI
 
             PushButtonData duplicateAssembliesBtn = Helpers.PushButton.Create(
                 "PS_DuplicateAssemblies",
-                "Duplicate\nAssemblies",
-                "ParallelSystemsPlugin.Commands.RunAssemblyDuplicationDiagnosticCommand"
+                "Duplicate Assemblies",
+                "ParallelSystemsPlugin.Commands.DuplicateAssembliesCommand"
             );
 
             // =========================================================
@@ -102,12 +102,18 @@ namespace ParallelSystemsPlugin.UI
             // =========================================================
             // Add Buttons to Ribbon (Stacked Layout)
             // =========================================================
+            // Changed by Jhay: Tools panel uses a 3-3-1 distribution.
             List<RibbonItem> stackedItems2 = panel
-                .AddStackedItems(pipeLengthDropdownBtn, endPrepPulldownButton, bomCheckBtn)
+                .AddStackedItems(
+                    pipeLengthDropdownBtn,
+                    endPrepPulldownButton,
+                    duplicateAssembliesBtn)
                 .ToList();
 
             Autodesk.Revit.UI.PushButton duplicateAssembliesButton =
-                panel.AddItem(duplicateAssembliesBtn) as Autodesk.Revit.UI.PushButton;
+                stackedItems2[2] as Autodesk.Revit.UI.PushButton;
+            Autodesk.Revit.UI.PushButton bomCheckButton =
+                panel.AddItem(bomCheckBtn) as Autodesk.Revit.UI.PushButton;
 
             // =========================================================
             // Pipe Length Check Pulldown Setup
@@ -170,16 +176,17 @@ namespace ParallelSystemsPlugin.UI
 
             // BOM Check
             Helpers.PushButton.ApplySettings(
-                stackedItems2[2] as Autodesk.Revit.UI.PushButton,
+                bomCheckButton,
                 tooltip: "BOM Check",
-                icon16: Path.Combine(assemblyDirectory, "Icons", "quality-control16.ico")
+                icon16: Path.Combine(assemblyDirectory, "Icons", "quality-control16.ico"),
+                icon32: Path.Combine(assemblyDirectory, "Icons", "quality-control16.ico")
             );
 
             Helpers.PushButton.ApplySettings(
                 duplicateAssembliesButton,
-                tooltip: "Duplicate one selected Revit assembly for live validation.",
-                icon16: Path.Combine(assemblyDirectory, "Icons", "ParallelSystemLogo16.ico"),
-                icon32: Path.Combine(assemblyDirectory, "Icons", "ParallelSystemLogo32.ico")
+                tooltip: "Preview and duplicate multiple Revit assemblies to a destination level with deterministic numbering.",
+                icon16: Path.Combine(assemblyDirectory, "Icons", "DuplicateAssemblies16.png"),
+                icon32: Path.Combine(assemblyDirectory, "Icons", "DuplicateAssemblies32.png")
             );
 
             // Rename - Import CSV

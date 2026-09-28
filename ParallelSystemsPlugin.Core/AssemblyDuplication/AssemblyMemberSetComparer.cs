@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ParallelSystemsPlugin.AssemblyDuplication
 {
@@ -14,14 +15,16 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 throw new ArgumentNullException(nameof(expected));
             if (actual == null)
                 throw new ArgumentNullException(nameof(actual));
-            if (expected.Count != actual.Count)
-                return false;
+            return Canonicalize(expected).SequenceEqual(Canonicalize(actual));
+        }
 
-            var expectedSet = new HashSet<long>(expected);
-            var actualSet = new HashSet<long>(actual);
-            return expectedSet.Count == expected.Count &&
-                   actualSet.Count == actual.Count &&
-                   expectedSet.SetEquals(actualSet);
+        // Changed by Jhay: canonical snapshots prevent Revit enumeration order from causing stale plans.
+        public static IReadOnlyList<long> Canonicalize(IEnumerable<long> ids)
+        {
+            if (ids == null)
+                throw new ArgumentNullException(nameof(ids));
+
+            return ids.Distinct().OrderBy(id => id).ToArray();
         }
     }
 }

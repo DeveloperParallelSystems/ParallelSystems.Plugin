@@ -12,6 +12,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)App.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ReconnectCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RunAssemblyDuplicationDiagnosticCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\DuplicateAssembliesCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\AutomaticContextResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\EvidenceAccumulator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Timesheets\LocalOutboxClient.cs" />
@@ -23,9 +24,19 @@
     <Compile Include="$(MSBuildThisFileDirectory)Classes\PdfRuntime.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compatibility\RevitApiCompatibility.cs" />
     <!-- Changed by Jhay: Phase 2 assembly independence diagnostic. -->
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyBatchModels.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyBatchPreflightService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyBatchDuplicationService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyBatchReport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDocumentationModels.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDocumentationDiscoveryService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDocumentationDuplicationService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDocumentationValidationService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDuplicationEngine.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDuplicationDiagnosticModels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDuplicationDiagnosticReport.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDuplicationDiagnosticService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyDestinationLevelService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyIdentityFamilyService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyIdentityFailureHandling.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AssemblyDuplication\AssemblyIdentityMarkerEvidence.cs" />
@@ -120,6 +131,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\Configurations.xaml.cs">
       <DependentUpon>Configurations.xaml</DependentUpon>
     </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\DuplicateAssembliesDialog.xaml.cs">
+      <DependentUpon>DuplicateAssembliesDialog.xaml</DependentUpon>
+    </Compile>
     <Compile Include="$(MSBuildThisFileDirectory)UI\Dialogs\ConfirmApplyRenameSheetDialog.xaml.cs">
       <DependentUpon>ConfirmApplyRenameSheetDialog.xaml</DependentUpon>
     </Compile>
@@ -152,6 +166,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="$(MSBuildThisFileDirectory)UI\Dialogs\Configurations.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="$(MSBuildThisFileDirectory)UI\Dialogs\DuplicateAssembliesDialog.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

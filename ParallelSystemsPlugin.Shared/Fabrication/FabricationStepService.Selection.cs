@@ -212,13 +212,14 @@ namespace ParallelSystemsPlugin.Fabrication
                 .Select(doc.GetElement)
                 .Count(IsModuleSupportElement);
 
-            if (pipingElementCount == 0 || supportElementCount == 0)
+            if (!IsValidModuleSelectionCounts(
+                    pipingElementCount,
+                    supportElementCount))
             {
                 AppDialog.Warn(
                     "Module STEP",
                     "The selected module must contain at least one supported " +
-                    "pipe/fitting and at least one supported bracket or " +
-                    "support component.");
+                    "pipe or fitting.");
 
                 return null;
             }
@@ -248,6 +249,13 @@ namespace ParallelSystemsPlugin.Fabrication
                 exclusions,
                 pipingElementCount,
                 supportElementCount);
+        }
+
+        private static bool IsValidModuleSelectionCounts(
+            int pipingElementCount,
+            int supportElementCount)
+        {
+            return pipingElementCount > 0;
         }
 
         private static FabricationSelection CompleteSelection(

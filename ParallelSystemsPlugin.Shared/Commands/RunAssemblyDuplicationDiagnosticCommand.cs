@@ -13,7 +13,7 @@ using System.Text;
 
 namespace ParallelSystemsPlugin.Commands
 {
-    // Created by Jhay: live two-target proof of independent assembly identity.
+    // Changed by Jhay: single-target destination-level proof using independent assembly identity.
     [Transaction(TransactionMode.Manual)]
     public sealed class RunAssemblyDuplicationDiagnosticCommand : IExternalCommand
     {
@@ -51,38 +51,68 @@ namespace ParallelSystemsPlugin.Commands
                 if (source == null)
                     return Result.Cancelled;
 
-                IReadOnlyList<ProposedAssemblyName> targetNames = CreateTargetNames(source);
-                string target500Name = targetNames[0].ProposedName;
-                string target501Name = targetNames[1].ProposedName;
+                List<Level> levels = new FilteredElementCollector(document)
+                    .OfClass(typeof(Level))
+                    .Cast<Level>()
+                    .OrderBy(level => level.ProjectElevation)
+                    .ThenBy(level => level.Name)
+                    .ToList();
+                if (levels.Count == 0)
+                    throw new InvalidOperationException("The project contains no destination levels.");
+
+                List<string> levelOptions = levels
+                    .Select(level => level.Name + "  |  Elevation " + level.ProjectElevation.ToString("G17"))
+                    .ToList();
+                int selectedLevelIndex = AppDialog.Choose(
+                    uiApp,
+                    DialogTitle,
+                    "Choose Destination Level",
+                    "The duplicate will preserve source X/Y and its vertical offset from the source reference level.",
+                    levelOptions,
+                    0);
+                if (selectedLevelIndex < 0)
+                    return Result.Cancelled;
+
+                Level destinationLevel = levels[selectedLevelIndex];
+                ProposedAssemblyName targetName = CreateTargetName(source);
+                AssemblyDestinationLevelPlan plan = AssemblyDestinationLevelService.CreatePlan(
+                    document,
+                    source,
+                    source.GetMemberIds().ToList(),
+                    destinationLevel);
                 bool confirmed = AppDialog.ConfirmDetailed(
                     uiApp,
                     DialogTitle,
-                    "Run the model-only independence proof on a disposable model copy?",
-                    "This command will copy one assembly twice and create '" +
-                    target500Name + "' and '" + target501Name + "'.",
+                    "Duplicate this assembly to the selected Destination Level?",
+                    "This command will create '" + targetName.ProposedName + "' on '" +
+                    destinationLevel.Name + "'.",
                     "Source: " + source.AssemblyTypeName + Environment.NewLine +
-                    "Each target receives one no-geometry internal identity marker with a unique type. " +
+                    "Source reference level: " + plan.SourceLevel.Name + Environment.NewLine +
+                    "Destination level: " + destinationLevel.Name + Environment.NewLine +
+                    "Vertical delta (internal feet): " + plan.DeltaZ.ToString("G17") + Environment.NewLine +
+                    "Preserved assembly offset (internal feet): " + plan.SourceAssemblyOffset.ToString("G17") + Environment.NewLine +
+                    "The target receives one no-geometry internal identity marker with a unique type. " +
                     "No source element, source type, source view, or source sheet will be edited. " +
-                    "Any failed independence check rolls back all target artifacts.",
+                    "Any failed level, geometry, offset, or independence check rolls back all target artifacts.",
                     true);
 
                 if (!confirmed)
                     return Result.Cancelled;
 
                 AssemblyDuplicationDiagnosticResult result =
-                    AssemblyDuplicationDiagnosticService.Run(
+                    AssemblyDuplicationDiagnosticService.RunSingleToLevel(
                         document,
                         source,
-                        target500Name,
-                        target501Name,
+                        targetName.ProposedName,
+                        destinationLevel,
                         Path.GetDirectoryName(typeof(App).Assembly.Location));
 
                 AppDialog.ShowDetailed(
                     uiApp,
                     DialogTitle,
                     result.Succeeded
-                        ? "The independent assembly proof passed."
-                        : "The proof did not pass; all diagnostic model changes were rolled back.",
+                        ? "The destination-level assembly proof passed."
+                        : "The destination-level proof did not pass; all model changes were rolled back.",
                     result.Summary,
                     BuildDetails(result),
                     result.Succeeded
@@ -142,19 +172,15 @@ namespace ParallelSystemsPlugin.Commands
             return document.GetElement(picked.ElementId) as AssemblyInstance;
         }
 
-        private static IReadOnlyList<ProposedAssemblyName> CreateTargetNames(
+        private static ProposedAssemblyName CreateTargetName(
             AssemblyInstance source)
         {
             var candidate = new AssemblyNamingCandidate(
                 source.AssemblyTypeName,
                 RevitApiCompatibility.GetElementIdValue(source.Id));
-            ProposedAssemblyName target500 = AssemblyNamingService.Generate(
+            return AssemblyNamingService.Generate(
                 new[] { candidate },
                 500)[0];
-            ProposedAssemblyName target501 = AssemblyNamingService.Generate(
-                new[] { candidate },
-                501)[0];
-            return new[] { target500, target501 };
         }
 
         private static string BuildDetails(AssemblyDuplicationDiagnosticResult result)
@@ -163,9 +189,7 @@ namespace ParallelSystemsPlugin.Commands
             AppendEvidence(details, "Source before", result.SourceBefore);
             AppendEvidence(details, "Source after", result.SourceAfter);
             AppendEvidence(details, "Target 500 after", result.Target500After);
-            AppendEvidence(details, "Target 501 after", result.Target501After);
             AppendMarker(details, "Marker 500", result.Target500Marker);
-            AppendMarker(details, "Marker 501", result.Target501Marker);
             if (result.FamilyResolution != null)
             {
                 details.AppendLine(
@@ -176,13 +200,13 @@ namespace ParallelSystemsPlugin.Commands
             }
 
             details.AppendLine(
-                "Pairwise type IDs: " +
+                "Type IDs: " +
                 (result.SourceAfter ?? result.SourceBefore)?.TypeId + " / " +
-                result.Target500After?.TypeId + " / " +
-                result.Target501After?.TypeId);
-            details.AppendLine(
-                "Rename probe: " + (result.RenameProbePassed ? "PASS" : "FAIL") +
-                " - " + (result.RenameProbeDetails ?? "not run"));
+                result.Target500After?.TypeId);
+            details.AppendLine();
+            details.AppendLine("Destination level observations:");
+            foreach (string observation in result.DestinationLevelObservations)
+                details.AppendLine(observation);
             details.AppendLine();
             details.AppendLine("Checks:");
             foreach (AssemblyDuplicationInvariant invariant in result.Invariants)
