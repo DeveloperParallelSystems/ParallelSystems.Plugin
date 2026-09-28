@@ -90,9 +90,14 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                       " • View tags " + viewAnnotations.Count(item =>
                           item.Kind == AssemblyDocumentationViewAnnotationKind.IndependentTag) +
                       " • Reference annotations " + viewAnnotations.Count(item =>
+                          item.Kind == AssemblyDocumentationViewAnnotationKind.SupportedDeferredDimension ||
                           item.Kind == AssemblyDocumentationViewAnnotationKind.Dimension ||
                           item.Kind == AssemblyDocumentationViewAnnotationKind.SpotDimension ||
                           item.Kind == AssemblyDocumentationViewAnnotationKind.MultiReferenceAnnotation) +
+                      " • Dimensions deferred " + viewAnnotations.Count(item =>
+                          item.Kind == AssemblyDocumentationViewAnnotationKind.SupportedDeferredDimension) +
+                      " • Revit view infrastructure " + viewAnnotations.Count(item =>
+                          item.Kind == AssemblyDocumentationViewAnnotationKind.RevitGeneratedInfrastructure) +
                       " • Unsupported view items " + viewAnnotations.Count(item =>
                           item.Kind == AssemblyDocumentationViewAnnotationKind.Unsupported) +
                       " • Sheet annotations " + CategoryEItems.Count(item =>
@@ -169,6 +174,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             AssemblyDocumentationXyzSnapshot upDirection,
             AssemblyDocumentationXyzSnapshot rightDirection,
             AssemblyDocumentationXyzSnapshot eyePosition,
+            bool source3DOrientationLocked,
             long scheduleCategoryId,
             AssemblyDocumentationScheduleDefinitionPlan scheduleDefinition,
             AssemblyDocumentationViewAnnotationPlan annotations)
@@ -192,6 +198,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             UpDirection = upDirection;
             RightDirection = rightDirection;
             EyePosition = eyePosition;
+            Source3DOrientationLocked = source3DOrientationLocked;
             ScheduleCategoryId = scheduleCategoryId;
             ScheduleDefinition = scheduleDefinition;
             Annotations = annotations ?? new AssemblyDocumentationViewAnnotationPlan(
@@ -219,6 +226,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
         public AssemblyDocumentationXyzSnapshot UpDirection { get; }
         public AssemblyDocumentationXyzSnapshot RightDirection { get; }
         public AssemblyDocumentationXyzSnapshot EyePosition { get; }
+        public bool Source3DOrientationLocked { get; }
         public long ScheduleCategoryId { get; }
         public AssemblyDocumentationScheduleDefinitionPlan ScheduleDefinition { get; }
         public AssemblyDocumentationViewAnnotationPlan Annotations { get; }
@@ -226,6 +234,19 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
         public bool IsSchedule => Kind == AssemblyDocumentationViewKind.PartList ||
             Kind == AssemblyDocumentationViewKind.MaterialTakeoff ||
             Kind == AssemblyDocumentationViewKind.SingleCategorySchedule;
+
+        // Changed by Jhay: centralize the lock requirement for every currently
+        // supported annotation class that can be created/copied into a View3D.
+        public bool RequiresLocked3DOrientation =>
+            Kind == AssemblyDocumentationViewKind.Orthographic3D &&
+            Annotations.Items.Any(item =>
+                item.Kind == AssemblyDocumentationViewAnnotationKind.IndependentCopyRoot ||
+                item.Kind == AssemblyDocumentationViewAnnotationKind.IndependentTag ||
+                item.Kind == AssemblyDocumentationViewAnnotationKind.SupportedDeferredDimension);
+
+        public bool Target3DOrientationShouldBeLocked =>
+            Kind == AssemblyDocumentationViewKind.Orthographic3D &&
+            (Source3DOrientationLocked || RequiresLocked3DOrientation);
 
         private string BuildSignature() => string.Join(";", new[]
         {
@@ -236,7 +257,8 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             CropBox?.Signature ?? "<no-crop>", SectionBoxActive.ToString(),
             SectionBox?.Signature ?? "<no-section>", ViewDirection?.Signature ?? string.Empty,
             UpDirection?.Signature ?? string.Empty, RightDirection?.Signature ?? string.Empty,
-            EyePosition?.Signature ?? string.Empty, ScheduleCategoryId.ToString(CultureInfo.InvariantCulture),
+            EyePosition?.Signature ?? string.Empty, Source3DOrientationLocked.ToString(),
+            ScheduleCategoryId.ToString(CultureInfo.InvariantCulture),
             ScheduleDefinition?.Signature ?? "<no-schedule-definition>",
             Annotations.Signature
         });
@@ -247,6 +269,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
         IndependentCopyRoot,
         CopiedWithGroup,
         IndependentTag,
+        SupportedDeferredDimension,
         Dimension,
         SpotDimension,
         MultiReferenceAnnotation,
@@ -363,14 +386,35 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             string curveSignature,
             int segmentCount,
             IEnumerable<AssemblyDocumentationReferencePlan> references,
-            string valueText)
+            string valueText,
+            AssemblyDocumentationXyzSnapshot lineStartInView = null,
+            AssemblyDocumentationXyzSnapshot lineEndInView = null,
+            IDictionary<string, string> formatting = null,
+            bool lineIsBound = true,
+            AssemblyDocumentationXyzSnapshot lineOriginInView = null,
+            AssemblyDocumentationXyzSnapshot lineDirectionInView = null)
         {
             CurveSignature = curveSignature ?? string.Empty;
             SegmentCount = segmentCount;
             References = new ReadOnlyCollection<AssemblyDocumentationReferencePlan>(
                 (references ?? Enumerable.Empty<AssemblyDocumentationReferencePlan>()).ToList());
             ValueText = valueText ?? string.Empty;
+            LineStartInView = lineStartInView;
+            LineEndInView = lineEndInView;
+            Formatting = new ReadOnlyDictionary<string, string>(
+                new Dictionary<string, string>(formatting ??
+                    new Dictionary<string, string>(), StringComparer.Ordinal));
+            LineIsBound = lineIsBound;
+            LineOriginInView = lineOriginInView;
+            LineDirectionInView = lineDirectionInView;
             Signature = string.Join(";", CurveSignature, SegmentCount, ValueText,
+                LineStartInView?.Signature ?? string.Empty,
+                LineEndInView?.Signature ?? string.Empty,
+                LineIsBound,
+                LineOriginInView?.Signature ?? string.Empty,
+                LineDirectionInView?.Signature ?? string.Empty,
+                string.Join("|", Formatting.OrderBy(item => item.Key)
+                    .Select(item => item.Key + "=" + item.Value)),
                 string.Join("|", References.Select(reference => reference.Signature)));
         }
 
@@ -378,6 +422,61 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
         public int SegmentCount { get; }
         public IReadOnlyList<AssemblyDocumentationReferencePlan> References { get; }
         public string ValueText { get; }
+        public AssemblyDocumentationXyzSnapshot LineStartInView { get; }
+        public AssemblyDocumentationXyzSnapshot LineEndInView { get; }
+        public IReadOnlyDictionary<string, string> Formatting { get; }
+        public bool LineIsBound { get; }
+        public AssemblyDocumentationXyzSnapshot LineOriginInView { get; }
+        public AssemblyDocumentationXyzSnapshot LineDirectionInView { get; }
+        public string Signature { get; }
+    }
+
+    internal enum AssemblyDocumentationReferenceSemanticKind
+    {
+        PlanarFace,
+        FamilyReference,
+        ElementPoint,
+        LinearCurve
+    }
+
+    internal sealed class AssemblyDocumentationReferenceSemantic
+    {
+        public AssemblyDocumentationReferenceSemantic(
+            AssemblyDocumentationReferenceSemanticKind kind,
+            AssemblyDocumentationXyzSnapshot originOrPoint,
+            AssemblyDocumentationXyzSnapshot normal,
+            double area,
+            string familyReferenceType,
+            string familyReferenceName,
+            string topologySignature = null,
+            string stableSemanticPath = null)
+        {
+            Kind = kind;
+            OriginOrPoint = originOrPoint;
+            Normal = normal;
+            Area = area;
+            FamilyReferenceType = familyReferenceType ?? string.Empty;
+            FamilyReferenceName = familyReferenceName ?? string.Empty;
+            TopologySignature = topologySignature ?? string.Empty;
+            StableSemanticPath = stableSemanticPath ?? string.Empty;
+            Signature = string.Join(";", Kind,
+                OriginOrPoint?.Signature ?? string.Empty,
+                Normal?.Signature ?? string.Empty,
+                Area.ToString("G17", CultureInfo.InvariantCulture),
+                FamilyReferenceType,
+                FamilyReferenceName,
+                TopologySignature,
+                StableSemanticPath);
+        }
+
+        public AssemblyDocumentationReferenceSemanticKind Kind { get; }
+        public AssemblyDocumentationXyzSnapshot OriginOrPoint { get; }
+        public AssemblyDocumentationXyzSnapshot Normal { get; }
+        public double Area { get; }
+        public string FamilyReferenceType { get; }
+        public string FamilyReferenceName { get; }
+        public string TopologySignature { get; }
+        public string StableSemanticPath { get; }
         public string Signature { get; }
     }
 
@@ -388,16 +487,21 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             ElementReferenceType referenceType,
             string stableRepresentation,
             AssemblyDocumentationXyzSnapshot leaderElbowInView,
-            AssemblyDocumentationXyzSnapshot leaderEndInView)
+            AssemblyDocumentationXyzSnapshot leaderEndInView,
+            string diagnostics = null,
+            AssemblyDocumentationReferenceSemantic semantic = null)
         {
             SourceElementId = sourceElementId;
             ReferenceType = referenceType;
             StableRepresentation = stableRepresentation ?? string.Empty;
             LeaderElbowInView = leaderElbowInView;
             LeaderEndInView = leaderEndInView;
+            Diagnostics = diagnostics ?? string.Empty;
+            Semantic = semantic;
             Signature = string.Join(";", SourceElementId, ReferenceType,
                 StableRepresentation, LeaderElbowInView?.Signature ?? string.Empty,
-                LeaderEndInView?.Signature ?? string.Empty);
+                LeaderEndInView?.Signature ?? string.Empty, Diagnostics,
+                Semantic?.Signature ?? string.Empty);
         }
 
         public long SourceElementId { get; }
@@ -405,6 +509,8 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
         public string StableRepresentation { get; }
         public AssemblyDocumentationXyzSnapshot LeaderElbowInView { get; }
         public AssemblyDocumentationXyzSnapshot LeaderEndInView { get; }
+        public string Diagnostics { get; }
+        public AssemblyDocumentationReferenceSemantic Semantic { get; }
         public string Signature { get; }
     }
 

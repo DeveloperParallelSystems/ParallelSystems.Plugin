@@ -1,4 +1,5 @@
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Plumbing;
 using ParallelSystemsPlugin.Compatibility;
 using System;
 using System.Collections.Generic;
@@ -182,12 +183,14 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             bool sectionActive = false;
             AssemblyDocumentationBoundingBoxSnapshot section = null;
             AssemblyDocumentationXyzSnapshot eye = null;
+            bool source3DOrientationLocked = false;
             if (view is View3D threeD)
             {
                 sectionActive = threeD.IsSectionBoxActive;
                 section = AssemblyDocumentationBoundingBoxSnapshot.Capture(threeD.GetSectionBox());
                 ViewOrientation3D sourceOrientation = threeD.GetOrientation();
                 eye = AssemblyDocumentationXyzSnapshot.Capture(sourceOrientation.EyePosition);
+                source3DOrientationLocked = threeD.IsLocked;
             }
 
             AssemblyDocumentationViewAnnotationPlan annotations = view is ViewSchedule
@@ -195,6 +198,22 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                     Id(view.Id),
                     Enumerable.Empty<AssemblyDocumentationViewAnnotationItem>())
                 : CaptureViewAnnotations(document, source, view, issues);
+
+            // Changed by Jhay: a 3D source containing supported annotations must
+            // have a saved effective orientation before it can define a reliable
+            // target annotation contract.
+            bool requiresLocked3DOrientation = kind ==
+                    AssemblyDocumentationViewKind.Orthographic3D &&
+                annotations.Items.Any(item =>
+                    item.Kind == AssemblyDocumentationViewAnnotationKind.IndependentCopyRoot ||
+                    item.Kind == AssemblyDocumentationViewAnnotationKind.IndependentTag ||
+                    item.Kind == AssemblyDocumentationViewAnnotationKind.SupportedDeferredDimension);
+            if (requiresLocked3DOrientation && !source3DOrientationLocked)
+            {
+                issues.Add(
+                    "Assembly 3D view " + Id(view.Id) + " '" + view.Name +
+                    "' contains supported view annotations but its orientation is not locked.");
+            }
 
             return new AssemblyDocumentationViewPlan(
                 Id(view.Id),
@@ -216,6 +235,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 AssemblyDocumentationXyzSnapshot.Capture(view.UpDirection),
                 AssemblyDocumentationXyzSnapshot.Capture(view.RightDirection),
                 eye,
+                source3DOrientationLocked,
                 scheduleCategoryId,
                 scheduleDefinition,
                 annotations);
@@ -240,10 +260,12 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             {
                 AssemblyDocumentationViewAnnotationItem item = CaptureViewAnnotationItem(
                     document,
+                    source,
                     view,
                     element,
                     groupIds,
-                    sourceMemberIds);
+                    sourceMemberIds,
+                    issues);
                 items.Add(item);
                 if (item.Kind == AssemblyDocumentationViewAnnotationKind.Dimension ||
                     item.Kind == AssemblyDocumentationViewAnnotationKind.SpotDimension ||
@@ -261,16 +283,19 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
 
         private static AssemblyDocumentationViewAnnotationItem CaptureViewAnnotationItem(
             Document document,
+            AssemblyInstance source,
             View view,
             Element element,
             ISet<long> groupIds,
-            ISet<long> sourceMemberIds)
+            ISet<long> sourceMemberIds,
+            ICollection<string> issues)
         {
             long elementId = Id(element.Id);
             long groupId = Id(element.GroupId);
             long copyRootId = elementId;
             AssemblyDocumentationTagPlan tagPlan = null;
             AssemblyDocumentationReferenceAnnotationPlan referencePlan = null;
+            string infrastructureEvidence = string.Empty;
             AssemblyDocumentationViewAnnotationKind kind;
 
             if (element is Group)
@@ -306,13 +331,19 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             else if (element is SpotDimension spot)
             {
                 kind = AssemblyDocumentationViewAnnotationKind.SpotDimension;
-                referencePlan = CaptureDimensionPlan(document, view, spot);
+                referencePlan = CaptureDimensionPlan(document, source, view, spot, issues);
                 copyRootId = Id(ElementId.InvalidElementId);
             }
             else if (element is Dimension dimension)
             {
-                kind = AssemblyDocumentationViewAnnotationKind.Dimension;
-                referencePlan = CaptureDimensionPlan(document, view, dimension);
+                referencePlan = CaptureDimensionPlan(document, source, view, dimension, issues);
+                // Changed by Jhay: target references cannot exist during read-only
+                // preflight. A fully understood linear dimension is therefore a
+                // supported deferred operation, not a preview error.
+                kind = IsSupportedDeferredDimension(
+                    document, dimension, referencePlan, sourceMemberIds, out _)
+                    ? AssemblyDocumentationViewAnnotationKind.SupportedDeferredDimension
+                    : AssemblyDocumentationViewAnnotationKind.Dimension;
                 copyRootId = Id(ElementId.InvalidElementId);
             }
             else if (element is MultiReferenceAnnotation multiReference)
@@ -332,8 +363,8 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             {
                 kind = AssemblyDocumentationViewAnnotationKind.IndependentCopyRoot;
             }
-            else if (element is SketchPlane || element is GraphicsStyle ||
-                     element is SunAndShadowSettings)
+            else if (TryCaptureRevitGeneratedViewInfrastructure(
+                         view, element, out infrastructureEvidence))
             {
                 kind = AssemblyDocumentationViewAnnotationKind.RevitGeneratedInfrastructure;
                 copyRootId = Id(ElementId.InvalidElementId);
@@ -355,10 +386,122 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 copyRootId,
                 kind,
                 kind == AssemblyDocumentationViewAnnotationKind.IndependentCopyRoot
-                    ? CaptureViewContentSignature(document, view, element)
-                    : string.Empty,
+                    ? CaptureViewContentSignature(document, source, view, element, issues)
+                    : kind == AssemblyDocumentationViewAnnotationKind.RevitGeneratedInfrastructure
+                        ? infrastructureEvidence
+                        : kind == AssemblyDocumentationViewAnnotationKind.Unsupported
+                            ? CaptureUnknownViewElementEvidence(view, element)
+                            : string.Empty,
                 tagPlan,
                 referencePlan);
+        }
+
+        private static string CaptureUnknownViewElementEvidence(View view, Element element)
+        {
+            BoundingBoxXYZ bounds = TryGet(() => element.get_BoundingBox(view), null);
+            bool geometryInspected = TryInspectVisibleGeometry(element, view, out int geometryObjects);
+            return string.Join("|", new[]
+            {
+                "runtime=" + element.GetType().FullName,
+                "category=" + (element.Category?.Name ?? "<none>"),
+                "categoryId=" + Id(element.Category?.Id ?? ElementId.InvalidElementId),
+                "typeId=" + Id(element.GetTypeId()),
+                "ownerViewId=" + Id(element.OwnerViewId),
+                "references=" + (element is IndependentTag || element is Dimension ||
+                    element is MultiReferenceAnnotation),
+                "groupId=" + Id(element.GroupId),
+                "location=" + (element.Location == null
+                    ? "<none>"
+                    : element.Location.GetType().FullName),
+                "boundingBox=" + (bounds == null ? "<none>" : "present"),
+                "visibleGeometryObjects=" + (geometryInspected
+                    ? geometryObjects.ToString(CultureInfo.InvariantCulture)
+                    : "<inspection-failed>"),
+                "canBeHidden=" + TryGet(() => element.CanBeHidden(view), false),
+                "copyEligibility=unknown-not-attempted-read-only-preflight"
+            });
+        }
+
+        // Changed by Jhay: classify only positively identified, view-owned Revit
+        // state. Base Element instances require the full no-type/no-location/
+        // no-visible-geometry evidence set; user-created elements remain unknown.
+        private static bool TryCaptureRevitGeneratedViewInfrastructure(
+            View view,
+            Element element,
+            out string evidence)
+        {
+            evidence = string.Empty;
+            bool knownRuntime = element is SketchPlane || element is GraphicsStyle ||
+                element is SunAndShadowSettings;
+            long categoryId = Id(element.Category?.Id ?? ElementId.InvalidElementId);
+            bool sunPath = element.GetType() == typeof(Element) &&
+                (categoryId == (long)BuiltInCategory.OST_SunStudy ||
+                 categoryId == (long)BuiltInCategory.OST_SunPath1 ||
+                 categoryId == (long)BuiltInCategory.OST_SunPath2);
+            bool baseElementWithoutCategory = element.GetType() == typeof(Element) &&
+                element.Category == null;
+            bool invalidType = RevitApiCompatibility.IsInvalidElementId(element.GetTypeId());
+            bool invalidGroup = RevitApiCompatibility.IsInvalidElementId(element.GroupId);
+            bool noLocation = element.Location == null;
+            BoundingBoxXYZ bounds = TryGet(() => element.get_BoundingBox(view), null);
+            bool geometryInspected = TryInspectVisibleGeometry(element, view, out int geometryObjects);
+            bool noVisibleGeometry = geometryInspected && bounds == null && geometryObjects == 0;
+            bool narrowInternalState = baseElementWithoutCategory && invalidType && invalidGroup &&
+                noLocation && noVisibleGeometry;
+            if (!knownRuntime && !sunPath && !narrowInternalState)
+                return false;
+
+            bool canBeHidden = TryGet(() => element.CanBeHidden(view), false);
+            int dependentCount = TryGet(() => element.GetDependentElements(null).Count, -1);
+            evidence = string.Join("|", new[]
+            {
+                "INFO",
+                "RevitGeneratedViewInfrastructure",
+                "runtime=" + element.GetType().FullName,
+                "category=" + (element.Category?.Name ?? "<none>"),
+                "categoryId=" + categoryId,
+                "typeId=" + Id(element.GetTypeId()),
+                "references=false",
+                "groupId=" + Id(element.GroupId),
+                "location=" + (noLocation ? "<none>" : element.Location.GetType().FullName),
+                "boundingBox=" + (bounds == null ? "<none>" : "present"),
+                "visibleGeometryObjects=" + (geometryInspected
+                    ? geometryObjects.ToString(CultureInfo.InvariantCulture)
+                    : "<inspection-failed>"),
+                "canBeHidden=" + canBeHidden,
+                "dependentCount=" + dependentCount,
+                "copyEligibility=not-attempted-read-only-preflight",
+                "automaticTargetEquivalent=required-by-post-create-validation",
+                "evidence=" + (knownRuntime
+                    ? "known-runtime"
+                    : sunPath ? "built-in-sun-path" : "base-element-no-visible-documentation")
+            });
+            return true;
+        }
+
+        private static bool TryInspectVisibleGeometry(
+            Element element,
+            View view,
+            out int geometryObjects)
+        {
+            geometryObjects = 0;
+            try
+            {
+                var options = new Options
+                {
+                    ComputeReferences = false,
+                    IncludeNonVisibleObjects = false,
+                    View = view
+                };
+                GeometryElement geometry = element.get_Geometry(options);
+                if (geometry != null)
+                    geometryObjects = geometry.Cast<GeometryObject>().Count(item => item != null);
+                return true;
+            }
+            catch (Autodesk.Revit.Exceptions.ApplicationException)
+            {
+                return false;
+            }
         }
 
         private static bool IsSupportedViewFamilyInstance(Element element)
@@ -425,46 +568,508 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
 
         private static AssemblyDocumentationReferenceAnnotationPlan CaptureDimensionPlan(
             Document document,
+            AssemblyInstance source,
             View view,
-            Dimension dimension)
+            Dimension dimension,
+            ICollection<string> issues)
         {
             var references = new List<AssemblyDocumentationReferencePlan>();
             if (dimension.References != null)
             {
                 foreach (Reference reference in dimension.References)
                 {
+                    AssemblyDocumentationReferenceSemantic semantic =
+                        CaptureReferenceSemantic(document, view, reference);
                     references.Add(new AssemblyDocumentationReferencePlan(
                         Id(reference.ElementId),
                         reference.ElementReferenceType,
                         TryGet(() => reference.ConvertToStableRepresentation(document), string.Empty),
                         null,
-                        null));
+                        null,
+                        CaptureDimensionReferenceDiagnostics(
+                            document, source, view, dimension, reference, issues),
+                        semantic));
                 }
             }
+            Line line = dimension.Curve as Line;
             return new AssemblyDocumentationReferenceAnnotationPlan(
-                CaptureCurveSignature(view, dimension.Curve),
+                CaptureCurveSignature(source, view, dimension, dimension.Curve, issues),
                 dimension.NumberOfSegments,
                 references,
-                dimension.ValueString ?? string.Empty);
+                dimension.ValueString ?? string.Empty,
+                line != null && line.IsBound ? CaptureViewPoint(view, line.GetEndPoint(0)) : null,
+                line != null && line.IsBound ? CaptureViewPoint(view, line.GetEndPoint(1)) : null,
+                CaptureDimensionFormatting(dimension),
+                line?.IsBound ?? false,
+                line != null && !line.IsBound ? CaptureViewPoint(view, line.Origin) : null,
+                line != null && !line.IsBound
+                    ? CaptureViewVectorSnapshot(view, line.Direction)
+                    : null);
+        }
+
+        // Changed by Jhay: this is deliberately a narrow preflight contract. It
+        // accepts only the observed two-reference, single-segment linear case and
+        // only when every source reference has a proven semantic representation.
+        private static bool IsSupportedDeferredDimension(
+            Document document,
+            Dimension dimension,
+            AssemblyDocumentationReferenceAnnotationPlan plan,
+            ISet<long> sourceMemberIds,
+            out string reason)
+        {
+            reason = string.Empty;
+            if (!string.Equals(
+                    dimension.GetType().FullName,
+                    "Autodesk.Revit.DB.LinearDimension",
+                    StringComparison.Ordinal))
+                reason = "runtime is not Autodesk.Revit.DB.LinearDimension";
+            else if (!(dimension.Curve is Line))
+                reason = "dimension curve is not a line";
+            else if (plan.References.Count != 2)
+                reason = "reference count is " + plan.References.Count + ", expected 2";
+            else if (plan.SegmentCount > 1)
+                reason = "multi-segment dimensions are not supported";
+            else if (plan.References.Any(reference =>
+                         !IsSupportedReferenceOwner(
+                             document, reference.SourceElementId, sourceMemberIds)))
+                reason = "one or more references are neither source production members nor " +
+                    "proven source-hosted Pipe Insulation dependencies";
+            else if (plan.References.Any(reference =>
+                         reference.ReferenceType != ElementReferenceType.REFERENCE_TYPE_SURFACE &&
+                         reference.ReferenceType != ElementReferenceType.REFERENCE_TYPE_LINEAR &&
+                         reference.ReferenceType != ElementReferenceType.REFERENCE_TYPE_NONE))
+                reason = "one or more reference types are unsupported";
+            else if (plan.References.Any(reference => reference.Semantic == null))
+                reason = "one or more source reference semantics are unresolved";
+            else if (plan.LineIsBound &&
+                     (plan.LineStartInView == null || plan.LineEndInView == null))
+                reason = "bounded dimension line endpoints are unavailable";
+            else if (!plan.LineIsBound &&
+                     (plan.LineOriginInView == null || plan.LineDirectionInView == null))
+                reason = "unbounded dimension line origin/direction are unavailable";
+            return string.IsNullOrEmpty(reason);
+        }
+
+        private static bool IsSupportedReferenceOwner(
+            Document document,
+            long sourceElementId,
+            ISet<long> sourceMemberIds)
+        {
+            if (sourceMemberIds.Contains(sourceElementId))
+                return true;
+            var insulation = document.GetElement(
+                RevitApiCompatibility.CreateElementId(sourceElementId)) as PipeInsulation;
+            return insulation != null && sourceMemberIds.Contains(Id(insulation.HostElementId));
+        }
+
+        private static IDictionary<string, string> CaptureDimensionFormatting(Dimension dimension)
+        {
+            var result = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (string propertyName in new[]
+                     {
+                         "Prefix", "Suffix", "Above", "Below", "ValueOverride",
+                         "AreSegmentsEqual"
+                     })
+            {
+                System.Reflection.PropertyInfo property = dimension.GetType().GetProperty(propertyName);
+                if (property == null || !property.CanRead || property.GetIndexParameters().Length != 0)
+                    continue;
+                try
+                {
+                    object value = property.GetValue(dimension, null);
+                    result[propertyName] = Convert.ToString(
+                        value, CultureInfo.InvariantCulture) ?? string.Empty;
+                }
+                catch (Exception)
+                {
+                    // Changed by Jhay: unavailable optional formatting does not
+                    // erase the geometry/reference contract captured above.
+                }
+            }
+            return result;
+        }
+
+        private static AssemblyDocumentationReferenceSemantic CaptureReferenceSemantic(
+            Document document,
+            View view,
+            Reference sourceReference)
+        {
+            Element referenced = document.GetElement(sourceReference.ElementId);
+            if (referenced == null)
+                return null;
+            string expectedStable = TryGet(
+                () => sourceReference.ConvertToStableRepresentation(document), string.Empty);
+            GeometryObject exact = FindExactReferenceGeometry(
+                document, view, referenced, expectedStable);
+
+            // Changed by Jhay: named/typed family references are stronger evidence
+            // than an incidental nested geometry path and survive element copying.
+            if (referenced is FamilyInstance family)
+            {
+                var matches = new List<Tuple<FamilyInstanceReferenceType, string>>();
+                foreach (FamilyInstanceReferenceType referenceType in
+                         Enum.GetValues(typeof(FamilyInstanceReferenceType)))
+                {
+                    if (referenceType == FamilyInstanceReferenceType.NotAReference)
+                        continue;
+                    IList<Reference> familyReferences = TryGet<IList<Reference>>(
+                        () => family.GetReferences(referenceType), null);
+                    if (familyReferences == null)
+                        continue;
+                    foreach (Reference candidate in familyReferences)
+                    {
+                        string stable = TryGet(
+                            () => candidate.ConvertToStableRepresentation(document), string.Empty);
+                        if (string.Equals(stable, expectedStable, StringComparison.Ordinal))
+                        {
+                            matches.Add(Tuple.Create(
+                                referenceType,
+                                TryGet(() => family.GetReferenceName(candidate), string.Empty)));
+                        }
+                    }
+                }
+                if (matches.Count == 1)
+                {
+                    PlanarFace planarFamilyReference = exact as PlanarFace;
+                    return new AssemblyDocumentationReferenceSemantic(
+                        AssemblyDocumentationReferenceSemanticKind.FamilyReference,
+                        planarFamilyReference == null
+                            ? null
+                            : CaptureWorldPoint(planarFamilyReference.Origin),
+                        planarFamilyReference == null
+                            ? null
+                            : CaptureWorldPoint(planarFamilyReference.FaceNormal),
+                        planarFamilyReference?.Area ?? 0.0,
+                        matches[0].Item1.ToString(),
+                        matches[0].Item2,
+                        planarFamilyReference == null
+                            ? string.Empty
+                            : CapturePlanarTopology(planarFamilyReference));
+                }
+            }
+
+            if (exact is PlanarFace planar)
+            {
+                return new AssemblyDocumentationReferenceSemantic(
+                    AssemblyDocumentationReferenceSemanticKind.PlanarFace,
+                    CaptureWorldPoint(planar.Origin),
+                    CaptureWorldPoint(planar.FaceNormal),
+                    planar.Area,
+                    string.Empty,
+                    string.Empty,
+                    CapturePlanarTopology(planar));
+            }
+
+            GeometryObject direct = TryGet<GeometryObject>(
+                () => referenced.GetGeometryObjectFromReference(sourceReference), null);
+            if (sourceReference.ElementReferenceType == ElementReferenceType.REFERENCE_TYPE_NONE &&
+                direct is Point point)
+            {
+                return new AssemblyDocumentationReferenceSemantic(
+                    AssemblyDocumentationReferenceSemanticKind.ElementPoint,
+                    CaptureWorldPoint(point.Coord),
+                    null,
+                    0.0,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    CaptureStableSemanticPath(referenced, expectedStable));
+            }
+
+            if (sourceReference.ElementReferenceType == ElementReferenceType.REFERENCE_TYPE_LINEAR &&
+                referenced is Pipe)
+            {
+                Curve semanticCurve = exact as Curve ??
+                    (referenced.Location as LocationCurve)?.Curve;
+                if (semanticCurve is Line semanticLine && semanticLine.IsBound)
+                {
+                    return new AssemblyDocumentationReferenceSemantic(
+                        AssemblyDocumentationReferenceSemanticKind.LinearCurve,
+                        CaptureWorldPoint(semanticLine.GetEndPoint(0)),
+                        CaptureWorldPoint(semanticLine.Direction),
+                        semanticLine.Length,
+                        string.Empty,
+                        string.Empty,
+                        "Line",
+                        CaptureStableSemanticPath(referenced, expectedStable));
+                }
+            }
+            return null;
+        }
+
+        private static string CaptureStableSemanticPath(
+            Element referenced,
+            string stableRepresentation)
+        {
+            string prefix = referenced?.UniqueId ?? string.Empty;
+            return !string.IsNullOrEmpty(prefix) &&
+                   stableRepresentation.StartsWith(prefix, StringComparison.Ordinal)
+                ? stableRepresentation.Substring(prefix.Length)
+                : string.Empty;
+        }
+
+        private static GeometryObject FindExactReferenceGeometry(
+            Document document,
+            View view,
+            Element referenced,
+            string expectedStable)
+        {
+            var candidates = new List<Tuple<Reference, GeometryObject>>();
+            try
+            {
+                var options = new Options
+                {
+                    ComputeReferences = true,
+                    IncludeNonVisibleObjects = true,
+                    View = view
+                };
+                CollectReferenceCandidates(referenced.get_Geometry(options), candidates);
+            }
+            catch (Autodesk.Revit.Exceptions.ApplicationException)
+            {
+                return null;
+            }
+            List<GeometryObject> matches = candidates
+                .Where(candidate => string.Equals(
+                    TryGet(() => candidate.Item1.ConvertToStableRepresentation(document), string.Empty),
+                    expectedStable,
+                    StringComparison.Ordinal))
+                .Select(candidate => candidate.Item2)
+                .ToList();
+            return matches.Count == 1 ? matches[0] : null;
+        }
+
+        private static AssemblyDocumentationXyzSnapshot CaptureWorldPoint(XYZ point) =>
+            point == null
+                ? null
+                : new AssemblyDocumentationXyzSnapshot(point.X, point.Y, point.Z);
+
+        private static string CapturePlanarTopology(PlanarFace face) =>
+            string.Join(",", face.EdgeLoops.Cast<EdgeArray>()
+                .Select(loop => loop.Size)
+                .OrderBy(size => size));
+
+        // Changed by Jhay: collect source-side semantic reference evidence during
+        // read-only preflight. Target IDs/candidates cannot exist until the locked
+        // physical engine runs, so that boundary is reported explicitly.
+        private static string CaptureDimensionReferenceDiagnostics(
+            Document document,
+            AssemblyInstance source,
+            View view,
+            Dimension dimension,
+            Reference reference,
+            ICollection<string> issues)
+        {
+            var lines = new List<string>();
+            Element referenced = document.GetElement(reference.ElementId);
+            string stable = TryGet(
+                () => reference.ConvertToStableRepresentation(document), string.Empty);
+            Element type = referenced == null ? null : document.GetElement(referenced.GetTypeId());
+            string familyAndType = referenced is FamilyInstance family
+                ? (family.Symbol?.Family?.Name ?? "<no-family>") + " / " +
+                  (family.Symbol?.Name ?? "<no-type>")
+                : type?.Name ?? "<none>";
+            GeometryObject geometry = referenced == null
+                ? null
+                : TryGet<GeometryObject>(
+                    () => referenced.GetGeometryObjectFromReference(reference), null);
+
+            lines.Add(
+                "SOURCE REFERENCE | assembly " + Id(source.Id) + " '" +
+                source.AssemblyTypeName + "' | dimension " + Id(dimension.Id) +
+                " | view " + Id(view.Id) + " '" + view.Name + "' | element " +
+                Id(reference.ElementId) + " | runtime " +
+                (referenced?.GetType().FullName ?? "<missing>") + " | category " +
+                (referenced?.Category?.Name ?? "<none>") + " | family/type " +
+                familyAndType + " | ReferenceType " + reference.ElementReferenceType +
+                " | StableRepresentation " + stable + " | geometry " +
+                CaptureReferenceGeometrySignature(
+                    source, view, dimension, geometry, issues));
+
+            if (referenced != null)
+            {
+                foreach (string candidate in CaptureGeometryReferenceCandidates(
+                             document, source, view, dimension, referenced, stable, issues))
+                {
+                    lines.Add("SOURCE GEOMETRY CANDIDATE | " + candidate);
+                }
+                if (referenced is FamilyInstance instance)
+                {
+                    foreach (string candidate in CaptureFamilyReferenceCandidates(
+                                 document, instance, stable))
+                    {
+                        lines.Add("SOURCE FAMILY CANDIDATE | " + candidate);
+                    }
+                }
+            }
+
+            lines.Add(
+                "TARGET MAPPING | mapped target element id unavailable during read-only " +
+                "preflight; target candidate enumeration is deferred until the locked " +
+                "physical source-to-target map exists. No mapping rule was inferred.");
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        private static IReadOnlyList<string> CaptureGeometryReferenceCandidates(
+            Document document,
+            AssemblyInstance source,
+            View view,
+            Element annotation,
+            Element referenced,
+            string expectedStable,
+            ICollection<string> issues)
+        {
+            var candidates = new List<Tuple<Reference, GeometryObject>>();
+            var diagnostics = new List<string>();
+            try
+            {
+                var options = new Options
+                {
+                    ComputeReferences = true,
+                    IncludeNonVisibleObjects = true,
+                    View = view
+                };
+                CollectReferenceCandidates(referenced.get_Geometry(options), candidates);
+            }
+            catch (Autodesk.Revit.Exceptions.ApplicationException exception)
+            {
+                diagnostics.Add("enumeration failed | " + exception.Message);
+                return diagnostics;
+            }
+
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (Tuple<Reference, GeometryObject> candidate in candidates)
+            {
+                string stable = TryGet(
+                    () => candidate.Item1.ConvertToStableRepresentation(document), string.Empty);
+                if (!seen.Add(stable))
+                    continue;
+                diagnostics.Add("stable " + stable + " | type " +
+                    candidate.Item1.ElementReferenceType + " | geometry " +
+                    CaptureReferenceGeometrySignature(
+                        source, view, annotation, candidate.Item2, issues) +
+                    " | decision " + (string.Equals(stable, expectedStable, StringComparison.Ordinal)
+                        ? "ACCEPT exact source reference"
+                        : "REJECT stable representation differs from source reference"));
+            }
+            if (seen.Count == 0)
+                diagnostics.Add("<none returned by referenced element geometry>");
+            return diagnostics;
+        }
+
+        private static void CollectReferenceCandidates(
+            GeometryElement geometry,
+            ICollection<Tuple<Reference, GeometryObject>> candidates)
+        {
+            if (geometry == null)
+                return;
+            foreach (GeometryObject item in geometry)
+            {
+                if (item is Solid solid)
+                {
+                    foreach (Face face in solid.Faces)
+                    {
+                        if (face.Reference != null)
+                            candidates.Add(Tuple.Create(face.Reference, (GeometryObject)face));
+                    }
+                    foreach (Edge edge in solid.Edges)
+                    {
+                        if (edge.Reference != null)
+                            candidates.Add(Tuple.Create(edge.Reference, (GeometryObject)edge));
+                    }
+                }
+                else if (item is GeometryInstance instance)
+                {
+                    CollectReferenceCandidates(instance.GetInstanceGeometry(), candidates);
+                }
+                else if (item is Curve curve && curve.Reference != null)
+                {
+                    candidates.Add(Tuple.Create(curve.Reference, item));
+                }
+            }
+        }
+
+        private static IEnumerable<string> CaptureFamilyReferenceCandidates(
+            Document document,
+            FamilyInstance family,
+            string expectedStable)
+        {
+            foreach (FamilyInstanceReferenceType referenceType in
+                     Enum.GetValues(typeof(FamilyInstanceReferenceType)))
+            {
+                if (referenceType == FamilyInstanceReferenceType.NotAReference)
+                    continue;
+                IList<Reference> references = TryGet<IList<Reference>>(
+                    () => family.GetReferences(referenceType), null);
+                if (references == null)
+                    continue;
+                foreach (Reference candidate in references)
+                {
+                    string stable = TryGet(
+                        () => candidate.ConvertToStableRepresentation(document), string.Empty);
+                    string name = TryGet(() => family.GetReferenceName(candidate), string.Empty);
+                    yield return "kind " + referenceType + " | name " +
+                        (string.IsNullOrWhiteSpace(name) ? "<unnamed>" : name) +
+                        " | stable " + stable + " | decision " +
+                        (string.Equals(stable, expectedStable, StringComparison.Ordinal)
+                            ? "ACCEPT exact source reference"
+                            : "REJECT stable representation differs from source reference");
+                }
+            }
+        }
+
+        private static string CaptureReferenceGeometrySignature(
+            AssemblyInstance source,
+            View view,
+            Element annotation,
+            GeometryObject geometry,
+            ICollection<string> issues)
+        {
+            if (geometry == null)
+                return "<none>";
+            if (geometry is PlanarFace planar)
+            {
+                return "PlanarFace|origin=" + CaptureViewPoint(view, planar.Origin).Signature +
+                    "|normal=" + CaptureViewVector(view, planar.FaceNormal) +
+                    "|x=" + CaptureViewVector(view, planar.XVector) +
+                    "|y=" + CaptureViewVector(view, planar.YVector) +
+                    "|area=" + Format(planar.Area);
+            }
+            if (geometry is Face face)
+                return face.GetType().FullName + "|area=" + Format(face.Area);
+            if (geometry is Edge edge)
+            {
+                return "Edge|" + CaptureCurveSignature(
+                    source, view, annotation, edge.AsCurve(), issues);
+            }
+            if (geometry is Curve curve)
+                return CaptureCurveSignature(source, view, annotation, curve, issues);
+            return geometry.GetType().FullName;
         }
 
         private static string CaptureViewContentSignature(
             Document document,
+            AssemblyInstance source,
             View view,
-            Element element)
+            Element element,
+            ICollection<string> issues)
         {
-            string own = CaptureViewElementSignature(view, element);
+            string own = CaptureViewElementSignature(source, view, element, issues);
             if (!(element is Group group))
                 return own;
             string members = string.Join("|", group.GetMemberIds()
                 .Select(document.GetElement)
                 .Where(member => member != null)
-                .Select(member => CaptureViewElementSignature(view, member))
+                .Select(member => CaptureViewElementSignature(source, view, member, issues))
                 .OrderBy(value => value, StringComparer.Ordinal));
             return own + "|members=" + members;
         }
 
-        private static string CaptureViewElementSignature(View view, Element element)
+        private static string CaptureViewElementSignature(
+            AssemblyInstance source,
+            View view,
+            Element element,
+            ICollection<string> issues)
         {
             BoundingBoxXYZ bounds = TryGet(() => element.get_BoundingBox(view), null);
             return string.Join(";", new[]
@@ -473,13 +1078,17 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 Id(element.Category?.Id ?? ElementId.InvalidElementId).ToString(CultureInfo.InvariantCulture),
                 Id(element.GetTypeId()).ToString(CultureInfo.InvariantCulture),
                 CaptureViewBoxSignature(view, bounds),
-                CaptureViewElementSemantics(view, element)
+                CaptureViewElementSemantics(source, view, element, issues)
             });
         }
 
         // Changed by Jhay: independent view content is validated by its semantic
         // content and placement, not by a count or bounding box alone.
-        private static string CaptureViewElementSemantics(View view, Element element)
+        private static string CaptureViewElementSemantics(
+            AssemblyInstance source,
+            View view,
+            Element element,
+            ICollection<string> issues)
         {
             if (element is TextNote text)
             {
@@ -490,14 +1099,15 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             }
             if (element is CurveElement curveElement)
             {
-                return "curve=" + CaptureCurveSignature(view, curveElement.GeometryCurve) +
+                return "curve=" + CaptureCurveSignature(
+                           source, view, element, curveElement.GeometryCurve, issues) +
                     "|line-style=" + Id(curveElement.LineStyle?.Id ?? ElementId.InvalidElementId);
             }
             if (element is FilledRegion region)
             {
                 return "boundaries=" + string.Join("||", region.GetBoundaries()
                     .Select(loop => string.Join("|", loop.Select(curve =>
-                        CaptureCurveSignature(view, curve)))));
+                        CaptureCurveSignature(source, view, element, curve, issues)))));
             }
             if (element is FamilyInstance family)
             {
@@ -505,7 +1115,8 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                     ? "point=" + CaptureViewPoint(view, point.Point).Signature +
                       "|rotation=" + point.Rotation.ToString("G17", CultureInfo.InvariantCulture)
                     : family.Location is LocationCurve curve
-                        ? "curve=" + CaptureCurveSignature(view, curve.Curve)
+                        ? "curve=" + CaptureCurveSignature(
+                            source, view, element, curve.Curve, issues)
                         : "location=<none>";
                 return location + "|facing=" + CaptureViewVector(view, family.FacingOrientation) +
                     "|hand=" + CaptureViewVector(view, family.HandOrientation) +
@@ -524,6 +1135,18 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 vector.DotProduct(view.UpDirection),
                 vector.DotProduct(view.ViewDirection)
             }.Select(value => value.ToString("G17", CultureInfo.InvariantCulture)));
+        }
+
+        private static AssemblyDocumentationXyzSnapshot CaptureViewVectorSnapshot(
+            View view,
+            XYZ vector)
+        {
+            if (vector == null)
+                return null;
+            return new AssemblyDocumentationXyzSnapshot(
+                vector.DotProduct(view.RightDirection),
+                vector.DotProduct(view.UpDirection),
+                vector.DotProduct(view.ViewDirection));
         }
 
         private static string CaptureViewBoxSignature(View view, BoundingBoxXYZ box)
@@ -553,21 +1176,170 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 delta.DotProduct(view.ViewDirection));
         }
 
-        private static string CaptureCurveSignature(View view, Curve curve)
+        // Changed by Jhay: annotation discovery must never ask an unbounded curve
+        // for bounded-only data or allow an expected Revit geometry exception to
+        // abort the complete preview.
+        private static string CaptureCurveSignature(
+            AssemblyInstance source,
+            View view,
+            Element annotation,
+            Curve curve,
+            ICollection<string> issues)
         {
             if (curve == null)
-                return "<none>";
-            return curve.GetType().FullName + ";" + string.Join(";", curve.Tessellate()
-                .Select(point => CaptureViewPoint(view, point).Signature));
+                return "CurveSignature|CaptureStatus=None";
+
+            bool? capturedIsBound = null;
+            try
+            {
+                capturedIsBound = curve.IsBound;
+                bool isBound = capturedIsBound.Value;
+                if (curve is Line line)
+                {
+                    string signature = "CurveType=Line|RuntimeType=" + curve.GetType().FullName +
+                        "|IsBound=" + isBound + "|Direction=" +
+                        CaptureViewVector(view, line.Direction);
+                    if (!isBound)
+                    {
+                        return signature + "|Origin=" +
+                            CaptureViewPoint(view, line.Origin).Signature +
+                            "|CaptureStatus=Semantic";
+                    }
+                    return signature + "|" + CaptureBoundedCurveDetails(view, line, true) +
+                        "|CaptureStatus=Semantic";
+                }
+
+                if (curve is Arc arc)
+                {
+                    string signature = "CurveType=Arc|RuntimeType=" + curve.GetType().FullName +
+                        "|IsBound=" + isBound + "|Center=" +
+                        CaptureViewPoint(view, arc.Center).Signature + "|Radius=" +
+                        Format(arc.Radius) + "|Normal=" + CaptureViewVector(view, arc.Normal) +
+                        "|XDirection=" + CaptureViewVector(view, arc.XDirection) +
+                        "|YDirection=" + CaptureViewVector(view, arc.YDirection);
+                    return isBound
+                        ? signature + "|" + CaptureBoundedCurveDetails(view, arc, false) +
+                          "|CaptureStatus=Semantic"
+                        : signature + "|CaptureStatus=Semantic";
+                }
+
+                if (curve is Ellipse ellipse)
+                {
+                    string signature = "CurveType=Ellipse|RuntimeType=" + curve.GetType().FullName +
+                        "|IsBound=" + isBound + "|Center=" +
+                        CaptureViewPoint(view, ellipse.Center).Signature + "|RadiusX=" +
+                        Format(ellipse.RadiusX) + "|RadiusY=" + Format(ellipse.RadiusY) +
+                        "|Normal=" + CaptureViewVector(view, ellipse.Normal) +
+                        "|XDirection=" + CaptureViewVector(view, ellipse.XDirection) +
+                        "|YDirection=" + CaptureViewVector(view, ellipse.YDirection);
+                    return isBound
+                        ? signature + "|" + CaptureBoundedCurveDetails(view, ellipse, false) +
+                          "|CaptureStatus=Semantic"
+                        : signature + "|CaptureStatus=Semantic";
+                }
+
+                if (!isBound)
+                {
+                    return UnsupportedCurveSignature(
+                        source,
+                        view,
+                        annotation,
+                        curve,
+                        capturedIsBound,
+                        issues,
+                        "Cannot safely derive a semantic signature for this unbounded curve type.");
+                }
+
+                try
+                {
+                    IList<XYZ> points = curve.Tessellate();
+                    return "CurveType=Other|RuntimeType=" + curve.GetType().FullName +
+                        "|IsBound=True|Tessellation=" + string.Join(";", points.Select(point =>
+                            CaptureViewPoint(view, point).Signature)) +
+                        "|CaptureStatus=Tessellated";
+                }
+                catch (Autodesk.Revit.Exceptions.ApplicationException exception)
+                {
+                    return UnsupportedCurveSignature(
+                        source,
+                        view,
+                        annotation,
+                        curve,
+                        capturedIsBound,
+                        issues,
+                        "Tessellation failed: " + exception.Message);
+                }
+            }
+            catch (Autodesk.Revit.Exceptions.ApplicationException exception)
+            {
+                return UnsupportedCurveSignature(
+                    source,
+                    view,
+                    annotation,
+                    curve,
+                    capturedIsBound,
+                    issues,
+                    "Semantic curve capture failed: " + exception.Message);
+            }
         }
+
+        private static string CaptureBoundedCurveDetails(
+            View view,
+            Curve curve,
+            bool includeLength)
+        {
+            string details = "Start=" + CaptureViewPoint(view, curve.GetEndPoint(0)).Signature +
+                "|End=" + CaptureViewPoint(view, curve.GetEndPoint(1)).Signature +
+                "|StartParameter=" + Format(curve.GetEndParameter(0)) +
+                "|EndParameter=" + Format(curve.GetEndParameter(1));
+            return includeLength ? details + "|Length=" + Format(curve.Length) : details;
+        }
+
+        private static string UnsupportedCurveSignature(
+            AssemblyInstance source,
+            View view,
+            Element annotation,
+            Curve curve,
+            bool? capturedIsBound,
+            ICollection<string> issues,
+            string reason)
+        {
+            string runtimeType = curve?.GetType().FullName ?? "<none>";
+            string isBound = capturedIsBound.HasValue
+                ? capturedIsBound.Value.ToString()
+                : "<unknown>";
+            string issue = "VIEW ANNOTATION CURVE UNSUPPORTED | source assembly " +
+                Id(source.Id) + " '" + source.AssemblyTypeName + "' | OwnerViewId " +
+                Id(view.Id) + " '" + view.Name + "' | ElementId " + Id(annotation.Id) +
+                " | " + annotation.GetType().FullName + " | category " +
+                (annotation.Category?.Name ?? "<none>") + " | curve " + runtimeType +
+                " | IsBound " + isBound + " | CaptureStatus Unsupported | " + reason;
+            if (!issues.Contains(issue))
+                issues.Add(issue);
+            return "CurveType=" + runtimeType + "|IsBound=" + isBound +
+                "|CaptureStatus=Unsupported|Reason=" + reason;
+        }
+
+        private static string Format(double value) =>
+            value.ToString("G17", CultureInfo.InvariantCulture);
 
         private static string BuildViewReferenceMappingIssue(
             View view,
-            AssemblyDocumentationViewAnnotationItem item) =>
-            "VIEW ANNOTATION REFERENCE MAPPING REQUIRED | view " + Id(view.Id) +
-            " '" + view.Name + "' | ElementId " + item.ElementId + " | " + item.RuntimeType +
-            " | category " + item.CategoryName + " | owner " + item.OwnerViewId +
-            " | references " + DescribeReferences(item.ReferenceAnnotation?.References) + ".";
+            AssemblyDocumentationViewAnnotationItem item)
+        {
+            IReadOnlyList<AssemblyDocumentationReferencePlan> references =
+                item.ReferenceAnnotation?.References ??
+                Array.Empty<AssemblyDocumentationReferencePlan>();
+            string diagnostics = string.Join(" || ", references
+                .Where(reference => !string.IsNullOrWhiteSpace(reference.Diagnostics))
+                .SelectMany(reference => reference.Diagnostics
+                    .Split(new[] { Environment.NewLine }, StringSplitOptions.None)));
+            return "VIEW ANNOTATION REFERENCE MAPPING REQUIRED | view " + Id(view.Id) +
+                " '" + view.Name + "' | ElementId " + item.ElementId + " | " + item.RuntimeType +
+                " | category " + item.CategoryName + " | owner " + item.OwnerViewId +
+                " | references " + DescribeReferences(references) +
+                (diagnostics.Length == 0 ? string.Empty : " | diagnostics " + diagnostics) + ".";
+        }
 
         private static string BuildUnsupportedViewAnnotationIssue(
             View view,
@@ -575,7 +1347,8 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             "VIEW ANNOTATION UNSUPPORTED | view " + Id(view.Id) + " '" + view.Name +
             "' | ElementId " + item.ElementId + " | " + item.RuntimeType +
             " | category " + item.CategoryName + " | owner " + item.OwnerViewId +
-            " | references " + DescribeReferences(item.Tag?.References) + ".";
+            " | references " + DescribeReferences(item.Tag?.References) +
+            " | evidence " + item.ContentSignature + ".";
 
         private static string DescribeReferences(
             IEnumerable<AssemblyDocumentationReferencePlan> references) =>

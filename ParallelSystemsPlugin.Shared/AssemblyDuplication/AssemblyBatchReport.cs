@@ -121,6 +121,11 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                             "  VIEW | " + view.SourceViewId + " | " + view.SourceName +
                             " | " + view.Kind + " | orientation " +
                             (view.Orientation?.ToString() ?? "<not applicable>") +
+                            (view.Kind == AssemblyDocumentationViewKind.Orthographic3D
+                                ? " | source 3D locked " + view.Source3DOrientationLocked +
+                                  " | annotation lock required " +
+                                  view.RequiresLocked3DOrientation
+                                : string.Empty) +
                             " | template " + view.TemplateId + " | target name " +
                             (view.TargetName ?? "<Revit assembly-owned naming>"));
                         foreach (AssemblyDocumentationViewAnnotationItem annotation in
@@ -134,6 +139,12 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                                 (annotation.CopyRootId >= 0
                                     ? " | copy root " + annotation.CopyRootId
                                     : string.Empty));
+                            if (annotation.Kind ==
+                                AssemblyDocumentationViewAnnotationKind.RevitGeneratedInfrastructure)
+                            {
+                                text.AppendLine(
+                                    "      INFRASTRUCTURE EVIDENCE | " + annotation.ContentSignature);
+                            }
                             if (annotation.Tag != null)
                             {
                                 foreach (AssemblyDocumentationReferencePlan reference in
@@ -147,6 +158,14 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                             }
                             if (annotation.ReferenceAnnotation != null)
                             {
+                                if (annotation.Kind ==
+                                    AssemblyDocumentationViewAnnotationKind.SupportedDeferredDimension)
+                                {
+                                    text.AppendLine(
+                                        "      INFO | LinearDimension " + annotation.ElementId +
+                                        " | SupportedDeferredMapping | target references will be " +
+                                        "resolved after physical duplication.");
+                                }
                                 text.AppendLine(
                                     "      REFERENCE ANNOTATION | curve " +
                                     annotation.ReferenceAnnotation.CurveSignature + " | segments " +
@@ -159,6 +178,17 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                                         "        REFERENCE | source element " +
                                         reference.SourceElementId + " | " + reference.ReferenceType +
                                         " | stable " + reference.StableRepresentation);
+                                    if (reference.Semantic != null)
+                                    {
+                                        text.AppendLine(
+                                            "          SEMANTIC | " + reference.Semantic.Kind +
+                                            " | " + reference.Semantic.Signature);
+                                    }
+                                    if (!string.IsNullOrWhiteSpace(reference.Diagnostics))
+                                    {
+                                        foreach (string diagnostic in reference.Diagnostics.Split('\n'))
+                                            text.AppendLine("          " + diagnostic.TrimEnd('\r'));
+                                    }
                                 }
                             }
                         }

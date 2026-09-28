@@ -85,6 +85,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 ValidateViewGeometry(source, target, targetView, viewPlan, evidence, failures);
                 ValidateViewAnnotations(
                     document,
+                    source,
                     target,
                     targetView,
                     viewPlan,
@@ -106,6 +107,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
 
         private static void ValidateViewAnnotations(
             Document document,
+            AssemblyInstance source,
             AssemblyInstance target,
             View targetView,
             AssemblyDocumentationViewPlan sourceViewPlan,
@@ -145,6 +147,25 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                     expectedCount == actualCount,
                     "Expected " + expectedCount + ", found " + actualCount + ".");
             }
+
+            List<string> expectedInfrastructure = sourceViewPlan.Annotations.Items
+                .Where(item => item.Kind ==
+                    AssemblyDocumentationViewAnnotationKind.RevitGeneratedInfrastructure)
+                .Select(item => item.ContentSignature)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToList();
+            List<string> actualInfrastructure = targetPlan.Items
+                .Where(item => item.Kind ==
+                    AssemblyDocumentationViewAnnotationKind.RevitGeneratedInfrastructure)
+                .Select(item => item.ContentSignature)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToList();
+            Check(evidence, failures,
+                "View " + sourceViewPlan.SourceViewId +
+                " automatically generated view infrastructure",
+                expectedInfrastructure.SequenceEqual(actualInfrastructure),
+                "Expected " + expectedInfrastructure.Count +
+                " managed infrastructure elements, found " + actualInfrastructure.Count + ".");
 
             List<string> expectedIndependent = sourceViewPlan.Annotations.Items
                 .Where(item => item.Kind ==
@@ -215,6 +236,68 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 "Expected " + sourceTags.Count + " mapped tags, found " + targetTags.Count +
                 " with " + matchedTargetTagIds.Count + " exact matches.");
 
+            // Changed by Jhay: deferred is only a preflight lifecycle state. Final
+            // validation requires a unique recreated target dimension whose ordered
+            // references all point to the locked engine's mapped target members.
+            List<AssemblyDocumentationViewAnnotationItem> sourceDeferred =
+                sourceViewPlan.Annotations.Items
+                    .Where(item => item.Kind ==
+                        AssemblyDocumentationViewAnnotationKind.SupportedDeferredDimension)
+                    .ToList();
+            List<AssemblyDocumentationViewAnnotationItem> targetDeferred = targetPlan.Items
+                .Where(item => item.Kind ==
+                    AssemblyDocumentationViewAnnotationKind.SupportedDeferredDimension)
+                .ToList();
+            var matchedTargetDimensionIds = new HashSet<long>();
+            Transform mapping = target.GetTransform().Multiply(source.GetTransform().Inverse);
+            var sourceMemberIds = new HashSet<long>(source.GetMemberIds().Select(Id));
+            foreach (AssemblyDocumentationViewAnnotationItem sourceDimension in sourceDeferred)
+            {
+                var evaluations = new List<Tuple<
+                    AssemblyDocumentationViewAnnotationItem,
+                    bool,
+                    IReadOnlyList<string>>>();
+                foreach (AssemblyDocumentationViewAnnotationItem candidate in targetDeferred
+                             .Where(candidate =>
+                                 !matchedTargetDimensionIds.Contains(candidate.ElementId)))
+                {
+                    bool equivalent = IsMappedDimensionEquivalent(
+                        sourceDimension,
+                        candidate,
+                        Id(targetView.Id),
+                        sourceToTargetMemberIds,
+                        sourceMemberIds,
+                        mapping,
+                        out IReadOnlyList<string> predicateResults);
+                    evaluations.Add(Tuple.Create(candidate, equivalent, predicateResults));
+                    // Changed by Jhay: report every strict predicate independently so
+                    // a valid created dimension is never rejected by an opaque boolean.
+                    evidence.Observations.Add(
+                        "STRICT DIMENSION MATCH | source " + sourceDimension.ElementId +
+                        " | target candidate " + candidate.ElementId);
+                    foreach (string predicateResult in predicateResults)
+                        evidence.Observations.Add("  " + predicateResult);
+                }
+                List<AssemblyDocumentationViewAnnotationItem> matches = evaluations
+                    .Where(evaluation => evaluation.Item2)
+                    .Select(evaluation => evaluation.Item1)
+                    .ToList();
+                if (matches.Count == 1)
+                    matchedTargetDimensionIds.Add(matches[0].ElementId);
+                Check(evidence, failures,
+                    "View " + sourceViewPlan.SourceViewId + " deferred dimension " +
+                    sourceDimension.ElementId,
+                    matches.Count == 1,
+                    "Expected one strict mapped target dimension, found " + matches.Count + ".");
+            }
+            Check(evidence, failures,
+                "View " + sourceViewPlan.SourceViewId + " deferred dimension count",
+                sourceDeferred.Count == targetDeferred.Count &&
+                matchedTargetDimensionIds.Count == targetDeferred.Count,
+                "Expected " + sourceDeferred.Count + " mapped dimensions, found " +
+                targetDeferred.Count + " with " + matchedTargetDimensionIds.Count +
+                " strict matches.");
+
             int sourceDimensions = sourceViewPlan.Annotations.Items.Count(item =>
                 item.Kind == AssemblyDocumentationViewAnnotationKind.Dimension ||
                 item.Kind == AssemblyDocumentationViewAnnotationKind.SpotDimension ||
@@ -232,6 +315,327 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 "View " + sourceViewPlan.SourceViewId + " unclassified target annotations",
                 targetUnclassified == 0,
                 targetUnclassified + " unclassified target view-owned elements.");
+        }
+
+        private static bool IsMappedDimensionEquivalent(
+            AssemblyDocumentationViewAnnotationItem source,
+            AssemblyDocumentationViewAnnotationItem target,
+            long expectedTargetViewId,
+            IReadOnlyDictionary<long, long> sourceToTargetMemberIds,
+            ISet<long> sourceMemberIds,
+            Transform mapping,
+            out IReadOnlyList<string> predicateResults)
+        {
+            var results = new List<string>();
+            AssemblyDocumentationReferenceAnnotationPlan sourcePlan = source.ReferenceAnnotation;
+            AssemblyDocumentationReferenceAnnotationPlan targetPlan = target.ReferenceAnnotation;
+            bool equivalent = Predicate(results, "OwnerViewId",
+                target.OwnerViewId == expectedTargetViewId,
+                "expected " + expectedTargetViewId + ", found " + target.OwnerViewId);
+            equivalent &= Predicate(results, "DimensionTypeId",
+                source.TypeId == target.TypeId,
+                "expected " + source.TypeId + ", found " + target.TypeId);
+            if (sourcePlan == null || targetPlan == null)
+            {
+                equivalent &= Predicate(results, "Reference plan", false,
+                    "source=" + (sourcePlan == null ? "<null>" : "available") +
+                    ", target=" + (targetPlan == null ? "<null>" : "available"));
+                predicateResults = results;
+                return false;
+            }
+
+            equivalent &= Predicate(results, "Reference count",
+                sourcePlan.References.Count == targetPlan.References.Count,
+                "expected " + sourcePlan.References.Count + ", found " +
+                targetPlan.References.Count);
+            var expectedReferenceOwnerIds = new List<long>();
+            bool everyReferenceMapped = true;
+            foreach (AssemblyDocumentationReferencePlan reference in sourcePlan.References)
+            {
+                if (sourceToTargetMemberIds.TryGetValue(
+                        reference.SourceElementId, out long mappedTargetId))
+                    expectedReferenceOwnerIds.Add(mappedTargetId);
+                else
+                    everyReferenceMapped = false;
+            }
+            List<long> actualReferenceOwnerIds = targetPlan.References
+                .Select(reference => reference.SourceElementId)
+                .ToList();
+            bool referenceOrderMatches = everyReferenceMapped &&
+                expectedReferenceOwnerIds.SequenceEqual(actualReferenceOwnerIds);
+            equivalent &= Predicate(results, "Reference order",
+                referenceOrderMatches,
+                "expected [" + string.Join(",", expectedReferenceOwnerIds) + "], found [" +
+                string.Join(",", actualReferenceOwnerIds) + "]");
+            bool referenceOwnersMatch = everyReferenceMapped &&
+                expectedReferenceOwnerIds.OrderBy(id => id)
+                    .SequenceEqual(actualReferenceOwnerIds.OrderBy(id => id));
+            equivalent &= Predicate(results, "Referenced target ElementIds",
+                referenceOwnersMatch,
+                "expected [" + Join(expectedReferenceOwnerIds) + "], found [" +
+                Join(actualReferenceOwnerIds) + "]");
+            equivalent &= Predicate(results, "No source assembly references",
+                actualReferenceOwnerIds.All(id => !sourceMemberIds.Contains(id)),
+                "actual target reference owners [" + Join(actualReferenceOwnerIds) + "]");
+            equivalent &= Predicate(results, "Segment count",
+                sourcePlan.SegmentCount == targetPlan.SegmentCount,
+                "expected " + sourcePlan.SegmentCount + ", found " +
+                targetPlan.SegmentCount);
+            equivalent &= Predicate(results, "Dimension value",
+                string.Equals(sourcePlan.ValueText, targetPlan.ValueText,
+                    StringComparison.Ordinal),
+                "expected '" + sourcePlan.ValueText + "', found '" +
+                targetPlan.ValueText + "'");
+            equivalent &= Predicate(results, "Prefix/suffix/text and display settings",
+                DictionaryEqual(sourcePlan.Formatting, targetPlan.Formatting),
+                "expected [" + DictionarySignature(sourcePlan.Formatting) +
+                "], found [" + DictionarySignature(targetPlan.Formatting) + "]");
+            equivalent &= Predicate(results, "Dimension curve kind",
+                sourcePlan.LineIsBound == targetPlan.LineIsBound,
+                "source IsBound=" + sourcePlan.LineIsBound +
+                ", target IsBound=" + targetPlan.LineIsBound);
+
+            bool directionEquivalent = SameDimensionLineDirection(sourcePlan, targetPlan);
+            equivalent &= Predicate(results, "Dimension curve direction",
+                directionEquivalent,
+                DimensionLineDirectionDetails(sourcePlan, targetPlan));
+            bool placementEquivalent = SameDimensionLinePlacement(sourcePlan, targetPlan);
+            equivalent &= Predicate(results, "Dimension curve placement/origin",
+                placementEquivalent,
+                DimensionLinePlacementDetails(sourcePlan, targetPlan));
+            // Changed by Jhay: raw curve signatures are diagnostic only. Revit may
+            // reverse an unbounded line direction or choose another origin on that
+            // same infinite line when NewDimension canonicalizes the result.
+            results.Add("Raw curve signature ........ INFO | source [" +
+                sourcePlan.CurveSignature + "] | target [" + targetPlan.CurveSignature + "]");
+
+            int comparableReferenceCount = Math.Min(
+                sourcePlan.References.Count, targetPlan.References.Count);
+            for (int index = 0; index < comparableReferenceCount; index++)
+            {
+                AssemblyDocumentationReferencePlan sourceReference = sourcePlan.References[index];
+                AssemblyDocumentationReferencePlan targetReference = targetPlan.References[index];
+                bool hasExpectedTarget = sourceToTargetMemberIds.TryGetValue(
+                    sourceReference.SourceElementId, out long expectedTargetId);
+                bool ownerMatches = hasExpectedTarget &&
+                    targetReference.SourceElementId == expectedTargetId;
+                equivalent &= Predicate(results, "Ref[" + index + "] owner/order",
+                    ownerMatches,
+                    "source " + sourceReference.SourceElementId + " -> expected target " +
+                    (hasExpectedTarget ? expectedTargetId.ToString(CultureInfo.InvariantCulture) :
+                        "<unmapped>") + ", found " + targetReference.SourceElementId);
+                equivalent &= Predicate(results, "Ref[" + index + "] excludes source members",
+                    !sourceMemberIds.Contains(targetReference.SourceElementId),
+                    "actual owner " + targetReference.SourceElementId);
+                equivalent &= Predicate(results, "Ref[" + index + "] ReferenceType",
+                    sourceReference.ReferenceType == targetReference.ReferenceType,
+                    "expected " + sourceReference.ReferenceType + ", found " +
+                    targetReference.ReferenceType);
+                bool semanticKindMatches = sourceReference.Semantic != null &&
+                    targetReference.Semantic != null &&
+                    sourceReference.Semantic.Kind == targetReference.Semantic.Kind;
+                equivalent &= Predicate(results, "Ref[" + index + "] semantic kind",
+                    semanticKindMatches,
+                    "expected " + SemanticKind(sourceReference.Semantic) + ", found " +
+                    SemanticKind(targetReference.Semantic));
+                bool semanticMatches = SameMappedSemantic(
+                    sourceReference.Semantic, targetReference.Semantic, mapping);
+                equivalent &= Predicate(results, "Ref[" + index + "] mapped semantic geometry",
+                    semanticMatches,
+                    "source semantic [" + SemanticSignature(sourceReference.Semantic) +
+                    "] | target semantic [" + SemanticSignature(targetReference.Semantic) + "]");
+                results.Add("Ref[" + index + "] stable representation  INFO | source [" +
+                    sourceReference.StableRepresentation + "] | target [" +
+                    targetReference.StableRepresentation + "]");
+            }
+            predicateResults = results;
+            return equivalent;
+        }
+
+        private static bool Predicate(
+            ICollection<string> results,
+            string name,
+            bool passed,
+            string details)
+        {
+            results.Add(name.PadRight(34, '.') + " " + (passed ? "PASS" : "FAIL") +
+                " | " + details);
+            return passed;
+        }
+
+        private static bool SameDimensionLineDirection(
+            AssemblyDocumentationReferenceAnnotationPlan source,
+            AssemblyDocumentationReferenceAnnotationPlan target)
+        {
+            XYZ sourceDirection = DimensionLineDirection(source);
+            XYZ targetDirection = DimensionLineDirection(target);
+            if (sourceDirection == null || targetDirection == null)
+                return sourceDirection == null && targetDirection == null;
+            sourceDirection = sourceDirection.Normalize();
+            targetDirection = targetDirection.Normalize();
+            return Math.Min(
+                sourceDirection.DistanceTo(targetDirection),
+                sourceDirection.DistanceTo(targetDirection.Negate())) <= Tolerance;
+        }
+
+        private static bool SameDimensionLinePlacement(
+            AssemblyDocumentationReferenceAnnotationPlan source,
+            AssemblyDocumentationReferenceAnnotationPlan target)
+        {
+            if (source.LineIsBound != target.LineIsBound)
+                return false;
+            if (source.LineIsBound)
+            {
+                return SameUnorderedEndpoints(
+                    source.LineStartInView,
+                    source.LineEndInView,
+                    target.LineStartInView,
+                    target.LineEndInView);
+            }
+            if (source.LineOriginInView == null || target.LineOriginInView == null)
+                return source.LineOriginInView == null && target.LineOriginInView == null;
+            XYZ direction = DimensionLineDirection(source);
+            if (direction == null || direction.GetLength() <= Tolerance)
+                return false;
+            XYZ delta = target.LineOriginInView.ToXyz() - source.LineOriginInView.ToXyz();
+            XYZ normalComponent = delta - direction.Normalize() *
+                delta.DotProduct(direction.Normalize());
+            return normalComponent.GetLength() <= Tolerance;
+        }
+
+        private static XYZ DimensionLineDirection(
+            AssemblyDocumentationReferenceAnnotationPlan plan)
+        {
+            if (!plan.LineIsBound)
+                return plan.LineDirectionInView?.ToXyz();
+            if (plan.LineStartInView == null || plan.LineEndInView == null)
+                return null;
+            return plan.LineEndInView.ToXyz() - plan.LineStartInView.ToXyz();
+        }
+
+        private static bool SameUnorderedEndpoints(
+            AssemblyDocumentationXyzSnapshot sourceStart,
+            AssemblyDocumentationXyzSnapshot sourceEnd,
+            AssemblyDocumentationXyzSnapshot targetStart,
+            AssemblyDocumentationXyzSnapshot targetEnd)
+        {
+            if (sourceStart == null || sourceEnd == null || targetStart == null || targetEnd == null)
+            {
+                return sourceStart == null && sourceEnd == null &&
+                    targetStart == null && targetEnd == null;
+            }
+            return SamePoint(sourceStart, targetStart) && SamePoint(sourceEnd, targetEnd) ||
+                SamePoint(sourceStart, targetEnd) && SamePoint(sourceEnd, targetStart);
+        }
+
+        private static string DimensionLineDirectionDetails(
+            AssemblyDocumentationReferenceAnnotationPlan source,
+            AssemblyDocumentationReferenceAnnotationPlan target) =>
+            "source " + OptionalPoint(DimensionLineDirection(source)) +
+            ", target " + OptionalPoint(DimensionLineDirection(target)) +
+            " (opposite directions represent the same dimension line)";
+
+        private static string DimensionLinePlacementDetails(
+            AssemblyDocumentationReferenceAnnotationPlan source,
+            AssemblyDocumentationReferenceAnnotationPlan target) =>
+            source.LineIsBound
+                ? "source endpoints " + OptionalPoint(source.LineStartInView?.ToXyz()) + " -> " +
+                  OptionalPoint(source.LineEndInView?.ToXyz()) + ", target endpoints " +
+                  OptionalPoint(target.LineStartInView?.ToXyz()) + " -> " +
+                  OptionalPoint(target.LineEndInView?.ToXyz())
+                : "source origin " + OptionalPoint(source.LineOriginInView?.ToXyz()) +
+                  ", target origin " + OptionalPoint(target.LineOriginInView?.ToXyz()) +
+                  " (compared as the same infinite line in view coordinates)";
+
+        private static string DictionarySignature(
+            IReadOnlyDictionary<string, string> values) =>
+            string.Join(", ", values.OrderBy(item => item.Key)
+                .Select(item => item.Key + "=" + item.Value));
+
+        private static string SemanticKind(AssemblyDocumentationReferenceSemantic semantic) =>
+            semantic == null ? "<none>" : semantic.Kind.ToString();
+
+        private static string SemanticSignature(AssemblyDocumentationReferenceSemantic semantic) =>
+            semantic == null ? "<none>" : semantic.Signature;
+
+        private static string OptionalPoint(XYZ point) => point == null
+            ? "<none>"
+            : string.Join(",", new[] { point.X, point.Y, point.Z }
+                .Select(value => value.ToString("G17", CultureInfo.InvariantCulture)));
+
+        private static bool DictionaryEqual(
+            IReadOnlyDictionary<string, string> left,
+            IReadOnlyDictionary<string, string> right) =>
+            left.Count == right.Count && left.All(item =>
+                right.TryGetValue(item.Key, out string value) &&
+                string.Equals(item.Value, value, StringComparison.Ordinal));
+
+        private static bool SameMappedSemantic(
+            AssemblyDocumentationReferenceSemantic source,
+            AssemblyDocumentationReferenceSemantic target,
+            Transform mapping)
+        {
+            if (source == null || target == null || source.Kind != target.Kind)
+                return false;
+            if (source.Kind == AssemblyDocumentationReferenceSemanticKind.FamilyReference)
+            {
+                bool familyIdentity = string.Equals(
+                           source.FamilyReferenceType,
+                           target.FamilyReferenceType,
+                           StringComparison.Ordinal) &&
+                    string.Equals(
+                        source.FamilyReferenceName,
+                        target.FamilyReferenceName,
+                        StringComparison.Ordinal);
+                if (!familyIdentity || source.OriginOrPoint == null)
+                    return familyIdentity && target.OriginOrPoint == null;
+                if (target.OriginOrPoint == null || source.Normal == null || target.Normal == null)
+                    return false;
+                XYZ expectedFamilyPoint = mapping.OfPoint(source.OriginOrPoint.ToXyz());
+                XYZ expectedFamilyNormal = mapping.OfVector(source.Normal.ToXyz()).Normalize();
+                return target.OriginOrPoint.ToXyz().DistanceTo(expectedFamilyPoint) <= Tolerance &&
+                    target.Normal.ToXyz().Normalize().DistanceTo(expectedFamilyNormal) <= Tolerance &&
+                    Math.Abs(source.Area - target.Area) <= Tolerance &&
+                    string.Equals(
+                        source.TopologySignature,
+                        target.TopologySignature,
+                        StringComparison.Ordinal);
+            }
+            if (source.Kind == AssemblyDocumentationReferenceSemanticKind.LinearCurve)
+            {
+                if (source.OriginOrPoint == null || target.OriginOrPoint == null ||
+                    source.Normal == null || target.Normal == null ||
+                    !string.Equals(source.TopologySignature, target.TopologySignature,
+                        StringComparison.Ordinal) ||
+                    Math.Abs(source.Area - target.Area) > Tolerance)
+                    return false;
+                XYZ expectedStart = mapping.OfPoint(source.OriginOrPoint.ToXyz());
+                XYZ expectedDirection = mapping.OfVector(source.Normal.ToXyz()).Normalize();
+                XYZ expectedEnd = expectedStart + expectedDirection * source.Area;
+                XYZ targetStart = target.OriginOrPoint.ToXyz();
+                XYZ targetEnd = targetStart + target.Normal.ToXyz().Normalize() * target.Area;
+                return targetStart.DistanceTo(expectedStart) <= Tolerance &&
+                           targetEnd.DistanceTo(expectedEnd) <= Tolerance ||
+                       targetStart.DistanceTo(expectedEnd) <= Tolerance &&
+                           targetEnd.DistanceTo(expectedStart) <= Tolerance;
+            }
+            XYZ expectedPoint = mapping.OfPoint(source.OriginOrPoint.ToXyz());
+            if (target.OriginOrPoint == null ||
+                target.OriginOrPoint.ToXyz().DistanceTo(expectedPoint) > Tolerance)
+                return false;
+            if (source.Kind == AssemblyDocumentationReferenceSemanticKind.ElementPoint)
+                return string.Equals(
+                    source.StableSemanticPath,
+                    target.StableSemanticPath,
+                    StringComparison.Ordinal);
+            XYZ expectedNormal = mapping.OfVector(source.Normal.ToXyz()).Normalize();
+            return target.Normal != null &&
+                target.Normal.ToXyz().Normalize().DistanceTo(expectedNormal) <= Tolerance &&
+                Math.Abs(source.Area - target.Area) <= Tolerance &&
+                string.Equals(
+                    source.TopologySignature,
+                    target.TopologySignature,
+                    StringComparison.Ordinal);
         }
 
         private static bool SamePoint(
@@ -308,6 +712,14 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                     target3D.ViewDirection.Normalize().DistanceTo(expectedViewDirection) <= Tolerance &&
                     target3D.UpDirection.Normalize().DistanceTo(expectedUpDirection) <= Tolerance,
                     "Target 3D view direction/up direction differ from the transformed source orientation.");
+                // Changed by Jhay: tags and other supported 3D annotations are
+                // created only after the final orientation is saved and locked.
+                Check(evidence, failures, "View " + plan.SourceViewId + " 3D orientation lock",
+                    target3D.IsLocked == plan.Target3DOrientationShouldBeLocked,
+                    "Expected locked=" + plan.Target3DOrientationShouldBeLocked +
+                    " (source locked=" + plan.Source3DOrientationLocked +
+                    ", annotations require lock=" + plan.RequiresLocked3DOrientation +
+                    "), found locked=" + target3D.IsLocked + ".");
                 Check(evidence, failures, "View " + plan.SourceViewId + " section-box state",
                     target3D.IsSectionBoxActive == plan.SectionBoxActive,
                     "Expected active=" + plan.SectionBoxActive +
