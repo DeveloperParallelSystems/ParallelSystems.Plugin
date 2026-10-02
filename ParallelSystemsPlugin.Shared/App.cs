@@ -331,6 +331,7 @@ namespace ParallelSystemsPlugin
                 app.Idling +=
                     OnIdling;
 
+                ParallelSystems.ProductSupport.ProductLifecycle.Report("plugin", int.Parse(app.ControlledApplication.VersionNumber), typeof(App).Assembly.Location, "ready");
                 splash?.CompleteLoading();
                 return Result.Succeeded;
             }
@@ -339,6 +340,7 @@ namespace ParallelSystemsPlugin
                 if (ReferenceEquals(_current, this))
                     _current = null;
 
+                ParallelSystems.ProductSupport.ProductLifecycle.Report("plugin", int.Parse(app.ControlledApplication.VersionNumber), typeof(App).Assembly.Location, "failed");
                 splash?.CloseSafely();
 
                 AppDialog.Error(
@@ -730,6 +732,7 @@ namespace ParallelSystemsPlugin
 
             AboutPanelMenu.Build(
                 aboutPanel);
+            aboutPanel.AddItem(new PushButtonData("ParallelSystemsUpdates", "Check for\nupdates", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.OpenUpdaterCommand"));
 
             if (_developmentModeEnabled)
             {

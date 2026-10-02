@@ -10,6 +10,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)App.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProductLifecycle.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\OpenUpdaterCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ReconnectCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RunAssemblyDuplicationDiagnosticCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\DuplicateAssembliesCommand.cs" />

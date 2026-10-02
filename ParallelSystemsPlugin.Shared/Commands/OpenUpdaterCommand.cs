@@ -1,0 +1,14 @@
+using Autodesk.Revit.Attributes;
+using Autodesk.Revit.DB;
+using Autodesk.Revit.UI;
+namespace ParallelSystemsPlugin.Commands
+{
+    [Transaction(TransactionMode.Manual)]
+    public class OpenUpdaterCommand : IExternalCommand
+    {
+        public Result Execute(ExternalCommandData data, ref string message, ElementSet elements)
+        {
+            try { ParallelSystems.ProductSupport.ProductLifecycle.OpenUpdater(); return Result.Succeeded; }
+            catch (System.Exception) { TaskDialog.Show("Parallel Systems updates", "The Updater could not be opened. Install or repair the per-user Updater and try again."); return Result.Cancelled; }
+        }
+    }
