@@ -12,3 +12,4 @@ namespace ParallelSystemsPlugin.Commands
             catch (System.Exception) { TaskDialog.Show("Parallel Systems updates", "The Updater could not be opened. Install or repair the per-user Updater and try again."); return Result.Cancelled; }
         }
     }
+}

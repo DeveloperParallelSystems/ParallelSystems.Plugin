@@ -30,10 +30,7 @@ namespace ParallelSystemsPlugin
          * Keep HttpClient's global timeout disabled and enforce a timeout per
          * authorization attempt so that cancellation and retries are explicit.
          */
-        private static readonly HttpClient HttpClient = new HttpClient
-        {
-            Timeout = Timeout.InfiniteTimeSpan
-        };
+        private static readonly HttpClient HttpClient = Helpers.VersionedHttpClient.Create(Timeout.InfiniteTimeSpan);
 
         private static readonly TimeSpan AuthorizationRequestTimeout =
             TimeSpan.FromSeconds(75);
@@ -1078,6 +1075,8 @@ namespace ParallelSystemsPlugin
 
                         if (!response.IsSuccessStatusCode)
                         {
+                            if ((int)response.StatusCode == 426)
+                                throw new InvalidOperationException("Update required. This plugin version is no longer supported. Open Parallel Systems Updater and install the latest plugin.");
                             bool isTransient =
                                 response.StatusCode ==
                                     HttpStatusCode.RequestTimeout ||
