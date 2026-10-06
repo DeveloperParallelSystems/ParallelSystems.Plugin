@@ -227,7 +227,6 @@ Environment overrides:
 
 ```text
 PARALLEL_TIMESHEET_API_URL
-PARALLEL_TIMESHEET_API_KEY
 ```
 
 ## Local Outbox

@@ -138,8 +138,6 @@ namespace ParallelSystemsPlugin.Timesheets
                     using (var request = new HttpRequestMessage(HttpMethod.Post, endpoint))
                     {
                         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-                        if (!string.IsNullOrWhiteSpace(_settings.TrackerApiKey))
-                            request.Headers.TryAddWithoutValidation("X-Tracker-Key", _settings.TrackerApiKey);
 
                         HttpResponseMessage response;
                         try

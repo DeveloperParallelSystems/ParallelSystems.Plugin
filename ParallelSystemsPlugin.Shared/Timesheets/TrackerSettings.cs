@@ -8,7 +8,6 @@ namespace ParallelSystemsPlugin.Timesheets
     {
         public bool Enabled { get; set; } = true;
         public string ApiBaseUrl { get; set; } = "http://app.parallelsystems.com.au";
-        public string TrackerApiKey { get; set; } = "TzuOp6FOUBaRuRtHX8/krK3ztrxY/OmSIowsJMdnso/rcXvWtdaQEP5Ee86FQcjx";
         public int SamplingIntervalSeconds { get; set; } = 5;
         public int CheckpointIntervalSeconds { get; set; } = 60;
         public int ActiveInputThresholdSeconds { get; set; } = 90;
@@ -56,9 +55,6 @@ namespace ParallelSystemsPlugin.Timesheets
 
             var url = Environment.GetEnvironmentVariable("PARALLEL_TIMESHEET_API_URL");
             if (!string.IsNullOrWhiteSpace(url)) settings.ApiBaseUrl = url;
-
-            var key = Environment.GetEnvironmentVariable("PARALLEL_TIMESHEET_API_KEY");
-            if (!string.IsNullOrWhiteSpace(key)) settings.TrackerApiKey = key;
 
             settings.SamplingIntervalSeconds = Clamp(settings.SamplingIntervalSeconds, 2, 60);
             settings.CheckpointIntervalSeconds = Clamp(settings.CheckpointIntervalSeconds, 15, 600);
