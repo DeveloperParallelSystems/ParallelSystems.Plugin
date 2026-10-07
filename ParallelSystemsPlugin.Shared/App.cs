@@ -745,6 +745,22 @@ namespace ParallelSystemsPlugin
             AboutPanelMenu.Build(
                 aboutPanel);
             _updatesButton = aboutPanel.AddItem(new PulldownButtonData("ParallelSystemsUpdates", "Updates")) as PulldownButton;
+            var updatesIconPath = Path.Combine(Path.GetDirectoryName(typeof(App).Assembly.Location), "Icons", "Updates.png");
+            if (File.Exists(updatesIconPath))
+            {
+                foreach (var size in new[] { 16, 32 })
+                {
+                    var icon = new System.Windows.Media.Imaging.BitmapImage();
+                    icon.BeginInit();
+                    icon.UriSource = new Uri(updatesIconPath, UriKind.Absolute);
+                    icon.DecodePixelWidth = size;
+                    icon.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    icon.EndInit();
+                    icon.Freeze();
+                    if (size == 16) _updatesButton.Image = icon;
+                    else _updatesButton.LargeImage = icon;
+                }
+            }
             _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsCheckUpdates", "Check for Updates", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.CheckForUpdatesCommand"));
             _updatesButton.AddSeparator();
             _updateActionButton = _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsUpdateAction", "No update available", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.OpenUpdaterCommand"));
