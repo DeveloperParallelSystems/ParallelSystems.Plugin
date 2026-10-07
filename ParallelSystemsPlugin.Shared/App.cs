@@ -1,4 +1,4 @@
-﻿using Autodesk.Revit.DB.Events;
+using Autodesk.Revit.DB.Events;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using Newtonsoft.Json;
@@ -252,6 +252,9 @@ namespace ParallelSystemsPlugin
                 "Authorization and timesheet server startup were skipped.");
         }
 
+        private static PulldownButton _updatesButton;
+        private static PushButton _updateActionButton;
+        private DateTime _nextUpdateStatus=DateTime.MinValue;
         public Result OnStartup(UIControlledApplication app)
         {
             StartupSplashWindow splash = null;
@@ -329,6 +332,7 @@ namespace ParallelSystemsPlugin
                     OnIdling;
 
                 ParallelSystems.ProductSupport.ProductLifecycle.Report("plugin", int.Parse(app.ControlledApplication.VersionNumber), typeof(App).Assembly.Location, "ready");
+                ParallelSystems.ProductSupport.ProductLifecycle.EnsureUpdaterBackground();
                 splash?.CompleteLoading();
                 return Result.Succeeded;
             }
@@ -358,6 +362,17 @@ namespace ParallelSystemsPlugin
 
             if (uiApp == null)
                 return;
+            if (_updatesButton != null && DateTime.UtcNow >= _nextUpdateStatus)
+            {
+                _nextUpdateStatus=DateTime.UtcNow.AddSeconds(2);
+                var label=ParallelSystems.ProductSupport.ProductLifecycle.UpdateLabel("plugin",int.Parse(uiApp.Application.VersionNumber));
+                _updatesButton.ItemText="Updates";
+                var action=ParallelSystems.ProductSupport.ProductLifecycle.UpdateActionLabel("plugin",int.Parse(uiApp.Application.VersionNumber));
+                _updateActionButton.ItemText=string.IsNullOrEmpty(action)?"No update available":action;
+                _updateActionButton.Visible=!string.IsNullOrEmpty(action);
+                _updateActionButton.ToolTip=label;
+                _updatesButton.ToolTip=label+". Click to review release notes, download progress, or install with approval.";
+            }
 
             /*
              * Authorization is started and completed from Idling, but the
@@ -729,7 +744,11 @@ namespace ParallelSystemsPlugin
 
             AboutPanelMenu.Build(
                 aboutPanel);
-            aboutPanel.AddItem(new PushButtonData("ParallelSystemsUpdates", "Check for\nupdates", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.OpenUpdaterCommand"));
+            _updatesButton = aboutPanel.AddItem(new PulldownButtonData("ParallelSystemsUpdates", "Updates")) as PulldownButton;
+            _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsCheckUpdates", "Check for Updates", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.OpenUpdaterCommand"));
+            _updatesButton.AddSeparator();
+            _updateActionButton = _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsUpdateAction", "No update available", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.OpenUpdaterCommand"));
+            _updateActionButton.Visible=false;
 
             if (_developmentModeEnabled)
             {

@@ -20,12 +20,15 @@ namespace ParallelSystemsPlugin.Timesheets
         {
             get
             {
-                var root = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+                var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
                 return Path.Combine(root, "Parallel Systems", "Timesheet");
             }
         }
 
         public static string SettingsPath => Path.Combine(ProgramDataFolder, "tracker.settings.json");
+        private static string LegacySettingsPath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "Parallel Systems", "Timesheet", "tracker.settings.json");
 
         public static TrackerSettings Load()
         {
@@ -36,6 +39,15 @@ namespace ParallelSystemsPlugin.Timesheets
                 if (File.Exists(SettingsPath))
                 {
                     settings = JsonConvert.DeserializeObject<TrackerSettings>(File.ReadAllText(SettingsPath));
+                }
+                else if (File.Exists(LegacySettingsPath))
+                {
+                    settings = JsonConvert.DeserializeObject<TrackerSettings>(File.ReadAllText(LegacySettingsPath))
+                        ?? new TrackerSettings();
+                    Directory.CreateDirectory(ProgramDataFolder);
+                    File.WriteAllText(
+                        SettingsPath,
+                        JsonConvert.SerializeObject(settings, Formatting.Indented));
                 }
                 else
                 {

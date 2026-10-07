@@ -837,12 +837,19 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             if (dialog == null)
                 return;
 
-            string programData = Environment.GetFolderPath(
-                Environment.SpecialFolder.CommonApplicationData);
+            string localAppData = Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData);
             string logoDirectory = Path.Combine(
-                programData,
+                localAppData,
                 "Parallel Systems",
                 "Images");
+
+            if (!Directory.Exists(logoDirectory))
+            {
+                string programData = Environment.GetFolderPath(
+                    Environment.SpecialFolder.CommonApplicationData);
+                logoDirectory = Path.Combine(programData, "Parallel Systems", "Images");
+            }
 
             if (Directory.Exists(logoDirectory))
                 dialog.InitialDirectory = logoDirectory;
