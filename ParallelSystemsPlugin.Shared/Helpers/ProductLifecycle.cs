@@ -32,6 +32,12 @@ namespace ParallelSystems.ProductSupport
         {
             try { StartUpdater("--background"); } catch { /* Offline/product startup is independent of the updater. */ }
         }
+        internal static void CheckForUpdates(string product = "desktop-notifier", int? year = null)
+        {
+            if(product != "desktop-notifier" && product != "plugin") throw new ArgumentException("Unknown product");
+            if(product == "plugin" && (!year.HasValue || year<2021 || year>2026)) throw new ArgumentException("Invalid Revit year");
+            StartUpdater("--check "+product+(year.HasValue?" "+year.Value:"")+" --background");
+        }
         internal static void OpenUpdater(string product = "desktop-notifier", int? year = null)
         {
             if(product != "desktop-notifier" && product != "updater" && product != "plugin") throw new ArgumentException("Unknown product");

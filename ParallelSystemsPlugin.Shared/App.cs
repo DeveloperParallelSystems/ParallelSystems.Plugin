@@ -745,7 +745,7 @@ namespace ParallelSystemsPlugin
             AboutPanelMenu.Build(
                 aboutPanel);
             _updatesButton = aboutPanel.AddItem(new PulldownButtonData("ParallelSystemsUpdates", "Updates")) as PulldownButton;
-            _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsCheckUpdates", "Check for Updates", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.OpenUpdaterCommand"));
+            _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsCheckUpdates", "Check for Updates", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.CheckForUpdatesCommand"));
             _updatesButton.AddSeparator();
             _updateActionButton = _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsUpdateAction", "No update available", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.OpenUpdaterCommand"));
             _updateActionButton.Visible=false;
