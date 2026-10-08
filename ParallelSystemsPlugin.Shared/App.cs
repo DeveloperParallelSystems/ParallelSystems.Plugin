@@ -258,6 +258,69 @@ namespace ParallelSystemsPlugin
         private DateTime _startupUpdateRequested;
         private bool _startupUpdatePrompted;
         private Task _startupUpdateHandoff;
+        private UpdateExitHandler _updateExitHandler;
+
+        private sealed class UpdateExitHandler : IExternalEventHandler, IDisposable
+        {
+            private readonly object _gate = new object();
+            private ExternalEvent _externalEvent;
+            private readonly EventWaitHandle _request;
+            private readonly RegisteredWaitHandle _registration;
+            private int _exitRequested;
+
+            public UpdateExitHandler()
+            {
+                _externalEvent = ExternalEvent.Create(this);
+                using (var process = System.Diagnostics.Process.GetCurrentProcess())
+                    _request = new EventWaitHandle(false, EventResetMode.AutoReset,
+                        @"Local\ParallelSystems.Plugin.Exit." + process.Id + "." + process.StartTime.ToUniversalTime().Ticks);
+                _registration = ThreadPool.RegisterWaitForSingleObject(_request, (_, timedOut) =>
+                {
+                    lock (_gate)
+                    {
+                        if (_externalEvent == null) return;
+                        Interlocked.Exchange(ref _exitRequested, 1);
+                        try { _externalEvent.Raise(); }
+                        catch (Exception) { /* Idling will service the pending request. */ }
+                    }
+                }, null, Timeout.Infinite, false);
+            }
+
+            public void Execute(UIApplication app)
+            {
+                if (Interlocked.Exchange(ref _exitRequested, 0) == 0) return;
+                try
+                {
+                    var exit = RevitCommandId.LookupPostableCommandId(PostableCommand.ExitRevit);
+                    if (!app.CanPostCommand(exit))
+                        throw new InvalidOperationException("Finish the active Revit command and close Revit to continue the update.");
+                    app.PostCommand(exit);
+                }
+                catch (Exception ex)
+                {
+                    TaskDialog.Show("Parallel Systems update", "Revit could not close automatically. " + ex.Message);
+                }
+            }
+
+            public string GetName() { return "Close Revit for an approved Parallel Systems update"; }
+
+            // An Idling callback also services a request if Raise was denied during startup.
+            public void OnIdling(UIApplication app)
+            {
+                if (Volatile.Read(ref _exitRequested) != 0) Execute(app);
+            }
+
+            public void Dispose()
+            {
+                lock (_gate)
+                {
+                    _registration.Unregister(null);
+                    _externalEvent?.Dispose();
+                    _externalEvent = null;
+                    _request.Dispose();
+                }
+            }
+        }
         public Result OnStartup(UIControlledApplication app)
         {
             StartupSplashWindow splash = null;
@@ -336,6 +399,7 @@ namespace ParallelSystemsPlugin
 
                 ParallelSystems.ProductSupport.ProductLifecycle.Report("plugin", int.Parse(app.ControlledApplication.VersionNumber), typeof(App).Assembly.Location, "ready");
                 ParallelSystems.ProductSupport.ProductLifecycle.EnsureUpdaterBackground();
+                _updateExitHandler = new UpdateExitHandler();
                 _startupUpdateRequested = DateTime.UtcNow;
                 _startupUpdatePrompted = false;
                 try { ParallelSystems.ProductSupport.ProductLifecycle.CheckForUpdates("plugin", int.Parse(app.ControlledApplication.VersionNumber)); }
@@ -379,7 +443,7 @@ namespace ParallelSystemsPlugin
             var dialog = new TaskDialog("Parallel Systems update")
             {
                 MainInstruction = "Parallel Systems " + version + " is available. Install it now?",
-                MainContent = "The Updater will show download and verification progress, then ask Revit to close and install the update. Save any open work when prompted. All Revit sessions must be closed before installation.",
+                MainContent = "Revit will close now and the Updater will show download and installation progress, then restart Revit automatically. Save any open work when prompted. All Revit sessions must be closed before installation.",
                 CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
                 DefaultButton = TaskDialogResult.No
             };
@@ -396,6 +460,7 @@ namespace ParallelSystemsPlugin
 
             if (uiApp == null)
                 return;
+            _updateExitHandler?.OnIdling(uiApp);
             if (_updatesButton != null && DateTime.UtcNow >= _nextUpdateStatus)
             {
                 _nextUpdateStatus=DateTime.UtcNow.AddSeconds(2);
@@ -967,6 +1032,8 @@ namespace ParallelSystemsPlugin
         public Result OnShutdown(
             UIControlledApplication app)
         {
+            _updateExitHandler?.Dispose();
+            _updateExitHandler = null;
             try
             {
                 app.ControlledApplication.DocumentOpened -=
