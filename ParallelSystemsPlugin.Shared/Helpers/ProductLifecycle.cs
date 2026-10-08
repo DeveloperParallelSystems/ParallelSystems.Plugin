@@ -64,7 +64,8 @@ namespace ParallelSystems.ProductSupport
                         {
                             if(string.IsNullOrWhiteSpace(version)) return "";
                             if(state=="Ready"||state=="Approved"||state=="Postponed") return "Install v"+version;
-                            if(state=="Available"||state=="Failed"||state=="Downloading"||state=="Verifying") return "Download v"+version;
+                            if(state=="Downloading") return "Downloading v"+version;
+                            if(state=="Available"||state=="Failed"||state=="Verifying") return "Download v"+version;
                             if(state=="Applying") return "Installing v"+version;
                             if(state=="NeedsReview") return "Review v"+version;
                             if(state=="UpdaterRequired") return "Update Updater first";
@@ -82,6 +83,50 @@ namespace ParallelSystems.ProductSupport
             catch { }
             return action ? "" : "Updates";
         }
+        internal static string StartupUpdateVersion(int year, DateTime requestedAt, string statusFile = "")
+        {
+            try
+            {
+                var file = string.IsNullOrEmpty(statusFile) ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Parallel Systems", "Updater", "product-updates.xml") : statusFile;
+                if (!File.Exists(file) || new FileInfo(file).Length > 128 * 1024) return null;
+                using (var reader = System.Xml.XmlReader.Create(file, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 128 * 1024 }))
+                {
+                    var doc = XDocument.Load(reader);
+                    if (doc.Root == null || Attribute(doc.Root, "schema") != "1") return null;
+                    foreach (var item in doc.Root.Elements("update"))
+                    {
+                        long checkedAt;
+                        var state = Attribute(item, "state");
+                        if (Attribute(item, "product") == "plugin" && Attribute(item, "year") == year.ToString() &&
+                            long.TryParse(Attribute(item, "checked"), out checkedAt) && checkedAt >= requestedAt.Ticks && checkedAt <= DateTime.UtcNow.Ticks &&
+                            (state == "Available" || state == "Ready" || state == "Downloading" || state == "Verifying"))
+                            return Attribute(item, "version");
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        internal static void InstallStartupUpdate(int year, string version)
+        {
+            using (var process = Process.GetCurrentProcess())
+            using (var identity = System.Security.Principal.WindowsIdentity.GetCurrent())
+            using (var pipe = new System.IO.Pipes.NamedPipeClientStream(".", "ParallelSystems.Updater.Startup." + identity.User.Value, System.IO.Pipes.PipeDirection.InOut))
+            {
+                pipe.Connect(5000);
+                var request = System.Text.Encoding.UTF8.GetBytes(year + "|" + process.Id + "|" + process.StartTime.ToUniversalTime().Ticks + "|" + version);
+                if (request.Length > 256) throw new InvalidOperationException("Invalid startup update request.");
+                var buffer = new byte[256];
+                Array.Copy(request, buffer, request.Length);
+                using (var timeout = new System.Threading.Timer(_ => pipe.Dispose(), null, 10000, System.Threading.Timeout.Infinite))
+                {
+                    pipe.Write(buffer, 0, buffer.Length);
+                    if (pipe.ReadByte() != 1) throw new IOException("The Updater did not accept the request.");
+                }
+            }
+        }
+
         private static string Attribute(XElement element,string name) { var value=element.Attribute(name); return value==null?"":value.Value; }
         private static void StartUpdater(string arguments)
         {

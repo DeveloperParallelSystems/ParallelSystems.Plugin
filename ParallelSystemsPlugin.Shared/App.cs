@@ -255,6 +255,9 @@ namespace ParallelSystemsPlugin
         private static PulldownButton _updatesButton;
         private static PushButton _updateActionButton;
         private DateTime _nextUpdateStatus=DateTime.MinValue;
+        private DateTime _startupUpdateRequested;
+        private bool _startupUpdatePrompted;
+        private Task _startupUpdateHandoff;
         public Result OnStartup(UIControlledApplication app)
         {
             StartupSplashWindow splash = null;
@@ -333,6 +336,10 @@ namespace ParallelSystemsPlugin
 
                 ParallelSystems.ProductSupport.ProductLifecycle.Report("plugin", int.Parse(app.ControlledApplication.VersionNumber), typeof(App).Assembly.Location, "ready");
                 ParallelSystems.ProductSupport.ProductLifecycle.EnsureUpdaterBackground();
+                _startupUpdateRequested = DateTime.UtcNow;
+                _startupUpdatePrompted = false;
+                try { ParallelSystems.ProductSupport.ProductLifecycle.CheckForUpdates("plugin", int.Parse(app.ControlledApplication.VersionNumber)); }
+                catch { /* Updates must not prevent Revit startup. */ }
                 splash?.CompleteLoading();
                 return Result.Succeeded;
             }
@@ -353,6 +360,33 @@ namespace ParallelSystemsPlugin
             }
         }
 
+        private void CheckStartupUpdate(UIApplication uiApp)
+        {
+            if (_startupUpdateHandoff != null && _startupUpdateHandoff.IsCompleted)
+            {
+                if (_startupUpdateHandoff.IsFaulted)
+                {
+                    var error = _startupUpdateHandoff.Exception;
+                    TaskDialog.Show("Parallel Systems updates", "The update window could not be opened. Install or repair the latest Updater and try again. Revit will remain open.");
+                }
+                _startupUpdateHandoff = null;
+            }
+            if (_startupUpdatePrompted || DateTime.UtcNow - _startupUpdateRequested > TimeSpan.FromMinutes(2)) return;
+            var year = int.Parse(uiApp.Application.VersionNumber);
+            var version = ParallelSystems.ProductSupport.ProductLifecycle.StartupUpdateVersion(year, _startupUpdateRequested);
+            if (string.IsNullOrWhiteSpace(version)) return;
+            _startupUpdatePrompted = true;
+            var dialog = new TaskDialog("Parallel Systems update")
+            {
+                MainInstruction = "Parallel Systems " + version + " is available. Install it now?",
+                MainContent = "The Updater will show download and verification progress, then ask Revit to close and install the update. Save any open work when prompted. All Revit sessions must be closed before installation.",
+                CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
+                DefaultButton = TaskDialogResult.No
+            };
+            if (dialog.Show() == TaskDialogResult.Yes)
+                _startupUpdateHandoff = Task.Run(() => ParallelSystems.ProductSupport.ProductLifecycle.InstallStartupUpdate(year, version));
+        }
+
         private void OnIdling(
             object sender,
             IdlingEventArgs e)
@@ -365,6 +399,7 @@ namespace ParallelSystemsPlugin
             if (_updatesButton != null && DateTime.UtcNow >= _nextUpdateStatus)
             {
                 _nextUpdateStatus=DateTime.UtcNow.AddSeconds(2);
+                CheckStartupUpdate(uiApp);
                 var label=ParallelSystems.ProductSupport.ProductLifecycle.UpdateLabel("plugin",int.Parse(uiApp.Application.VersionNumber));
                 _updatesButton.ItemText="Updates";
                 var action=ParallelSystems.ProductSupport.ProductLifecycle.UpdateActionLabel("plugin",int.Parse(uiApp.Application.VersionNumber));
@@ -762,6 +797,18 @@ namespace ParallelSystemsPlugin
                 }
             }
             _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsCheckUpdates", "Check for Updates", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.CheckForUpdatesCommand"));
+            var pluginAssembly = typeof(App).Assembly;
+            var informationalVersion = Attribute.GetCustomAttribute(pluginAssembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute))
+                as System.Reflection.AssemblyInformationalVersionAttribute;
+            var currentVersion = (informationalVersion?.InformationalVersion ?? pluginAssembly.GetName().Version?.ToString() ?? "0.0.0")
+                .Split('+')[0].Trim();
+            if (currentVersion.EndsWith(".0", StringComparison.Ordinal))
+                currentVersion = currentVersion.Substring(0, currentVersion.Length - 2);
+            _updatesButton.AddPushButton(new PushButtonData(
+                "ParallelSystemsCurrentVersion",
+                "Current: v" + currentVersion,
+                pluginAssembly.Location,
+                "ParallelSystemsPlugin.Commands.ShowAboutCommand"));
             _updatesButton.AddSeparator();
             _updateActionButton = _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsUpdateAction", "No update available", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.OpenUpdaterCommand"));
             _updateActionButton.Visible=false;
