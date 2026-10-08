@@ -797,6 +797,10 @@ namespace ParallelSystemsPlugin
                 }
             }
             _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsCheckUpdates", "Check for Updates", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.CheckForUpdatesCommand"));
+            _updatesButton.AddSeparator();
+            _updateActionButton = _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsUpdateAction", "No update available", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.OpenUpdaterCommand"));
+            _updateActionButton.Visible=false;
+
             var pluginAssembly = typeof(App).Assembly;
             var informationalVersion = Attribute.GetCustomAttribute(pluginAssembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute))
                 as System.Reflection.AssemblyInformationalVersionAttribute;
@@ -804,14 +808,12 @@ namespace ParallelSystemsPlugin
                 .Split('+')[0].Trim();
             if (currentVersion.EndsWith(".0", StringComparison.Ordinal))
                 currentVersion = currentVersion.Substring(0, currentVersion.Length - 2);
-            _updatesButton.AddPushButton(new PushButtonData(
+            var currentVersionButton = _updatesButton.AddPushButton(new PushButtonData(
                 "ParallelSystemsCurrentVersion",
-                "Current: v" + currentVersion,
+                "Current v" + currentVersion,
                 pluginAssembly.Location,
                 "ParallelSystemsPlugin.Commands.ShowAboutCommand"));
-            _updatesButton.AddSeparator();
-            _updateActionButton = _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsUpdateAction", "No update available", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.OpenUpdaterCommand"));
-            _updateActionButton.Visible=false;
+            currentVersionButton.Enabled = false;
 
             if (_developmentModeEnabled)
             {

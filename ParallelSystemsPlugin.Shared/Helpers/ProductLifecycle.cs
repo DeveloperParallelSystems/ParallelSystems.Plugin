@@ -108,14 +108,14 @@ namespace ParallelSystems.ProductSupport
             return null;
         }
 
-        internal static void InstallStartupUpdate(int year, string version)
+        internal static void InstallStartupUpdate(int year, string version, bool unattended = false)
         {
             using (var process = Process.GetCurrentProcess())
             using (var identity = System.Security.Principal.WindowsIdentity.GetCurrent())
             using (var pipe = new System.IO.Pipes.NamedPipeClientStream(".", "ParallelSystems.Updater.Startup." + identity.User.Value, System.IO.Pipes.PipeDirection.InOut))
             {
                 pipe.Connect(5000);
-                var request = System.Text.Encoding.UTF8.GetBytes(year + "|" + process.Id + "|" + process.StartTime.ToUniversalTime().Ticks + "|" + version);
+                var request = System.Text.Encoding.UTF8.GetBytes(year + "|" + process.Id + "|" + process.StartTime.ToUniversalTime().Ticks + "|" + version + (unattended ? "|unattended" : ""));
                 if (request.Length > 256) throw new InvalidOperationException("Invalid startup update request.");
                 var buffer = new byte[256];
                 Array.Copy(request, buffer, request.Length);
