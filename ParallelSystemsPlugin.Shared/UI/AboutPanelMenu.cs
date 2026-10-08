@@ -19,16 +19,6 @@ namespace ParallelSystemsPlugin.UI
 
             Helpers.PushButton.Add(
                 panel,
-                "PS_ShowTimesheet",
-                "Show Timesheet",
-                "ParallelSystemsPlugin.Commands.ShowTimesheetCommand",
-                "Open your timesheet in Desktop Notifier.",
-                Path.Combine(assemblyDirectory, "Icons", "Timesheet.ico"),
-                Path.Combine(assemblyDirectory, "Icons", "Timesheet.ico")
-            );
-
-            Helpers.PushButton.Add(
-                panel,
                 "PS_About",
                 "About & Manual",
                 "ParallelSystemPlugin.Commands.ShowAboutCommand",
