@@ -24,11 +24,14 @@ namespace ParallelSystemPlugin.Commands
 
             var uiapp = data.Application;
             UIDocument uidoc = uiapp.ActiveUIDocument;
-            Document doc = uidoc.Document;
-            var dlg = new Configurations(doc);
+            Document doc = uidoc?.Document;
+            var dlg = new Configurations(doc, int.Parse(uiapp.Application.VersionNumber));
 
             dlg.ShowModal(uiapp.MainWindowHandle);
-            
+            // Run the existing Revit command after the modal window has closed so
+            // it can show its confirmation and allow the updater to close Revit.
+            if (dlg.UpdateRequested)
+                return new ParallelSystemsPlugin.Commands.OpenUpdaterCommand().Execute(data, ref message, elements);
 
             return Result.Succeeded;
         }

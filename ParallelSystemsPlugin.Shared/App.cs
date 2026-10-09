@@ -252,8 +252,6 @@ namespace ParallelSystemsPlugin
                 "Authorization and timesheet server startup were skipped.");
         }
 
-        private static PulldownButton _updatesButton;
-        private static PushButton _updateActionButton;
         private DateTime _nextUpdateStatus=DateTime.MinValue;
         private DateTime _startupUpdateRequested;
         private bool _startupUpdatePrompted;
@@ -488,17 +486,10 @@ namespace ParallelSystemsPlugin
             if (uiApp == null)
                 return;
             _updateExitHandler?.OnIdling(uiApp);
-            if (_updatesButton != null && DateTime.UtcNow >= _nextUpdateStatus)
+            if (DateTime.UtcNow >= _nextUpdateStatus)
             {
                 _nextUpdateStatus=DateTime.UtcNow.AddSeconds(2);
                 CheckStartupUpdate(uiApp);
-                var label=ParallelSystems.ProductSupport.ProductLifecycle.UpdateLabel("plugin",int.Parse(uiApp.Application.VersionNumber));
-                _updatesButton.ItemText="Updates";
-                var action=ParallelSystems.ProductSupport.ProductLifecycle.UpdateActionLabel("plugin",int.Parse(uiApp.Application.VersionNumber));
-                _updateActionButton.ItemText=string.IsNullOrEmpty(action)?"No update available":action;
-                _updateActionButton.Visible=!string.IsNullOrEmpty(action);
-                _updateActionButton.ToolTip=label;
-                _updatesButton.ToolTip=label+". Click to review release notes, download progress, or install with approval.";
             }
 
             /*
@@ -871,42 +862,6 @@ namespace ParallelSystemsPlugin
 
             AboutPanelMenu.Build(
                 aboutPanel);
-            _updatesButton = aboutPanel.AddItem(new PulldownButtonData("ParallelSystemsUpdates", "Updates")) as PulldownButton;
-            var updatesIconPath = Path.Combine(Path.GetDirectoryName(typeof(App).Assembly.Location), "Icons", "Updates.png");
-            if (File.Exists(updatesIconPath))
-            {
-                foreach (var size in new[] { 16, 32 })
-                {
-                    var icon = new System.Windows.Media.Imaging.BitmapImage();
-                    icon.BeginInit();
-                    icon.UriSource = new Uri(updatesIconPath, UriKind.Absolute);
-                    icon.DecodePixelWidth = size;
-                    icon.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                    icon.EndInit();
-                    icon.Freeze();
-                    if (size == 16) _updatesButton.Image = icon;
-                    else _updatesButton.LargeImage = icon;
-                }
-            }
-            _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsCheckUpdates", "Check for Updates", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.CheckForUpdatesCommand"));
-            _updatesButton.AddSeparator();
-            _updateActionButton = _updatesButton.AddPushButton(new PushButtonData("ParallelSystemsUpdateAction", "No update available", typeof(App).Assembly.Location, "ParallelSystemsPlugin.Commands.OpenUpdaterCommand"));
-            _updateActionButton.Visible=false;
-
-            var pluginAssembly = typeof(App).Assembly;
-            var informationalVersion = Attribute.GetCustomAttribute(pluginAssembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute))
-                as System.Reflection.AssemblyInformationalVersionAttribute;
-            var currentVersion = (informationalVersion?.InformationalVersion ?? pluginAssembly.GetName().Version?.ToString() ?? "0.0.0")
-                .Split('+')[0].Trim();
-            if (currentVersion.EndsWith(".0", StringComparison.Ordinal))
-                currentVersion = currentVersion.Substring(0, currentVersion.Length - 2);
-            var currentVersionButton = _updatesButton.AddPushButton(new PushButtonData(
-                "ParallelSystemsCurrentVersion",
-                "Current v" + currentVersion,
-                pluginAssembly.Location,
-                "ParallelSystemsPlugin.Commands.ShowAboutCommand"));
-            currentVersionButton.Enabled = false;
-
             if (_developmentModeEnabled)
             {
                 AddDevelopmentModeIndicator(app);
