@@ -1236,6 +1236,17 @@
                 </Grid>
             </TabItem>
 
+            <TabItem Header="Updates" x:Name="UpdatesTab">
+                <StackPanel Margin="24" MaxWidth="720" HorizontalAlignment="Left">
+                    <TextBlock Text="Parallel Systems updates" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,16"/>
+                    <TextBlock x:Name="CurrentPluginVersion" FontSize="15" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="PluginUpdateStatus" FontSize="15" TextWrapping="Wrap" Margin="0,0,0,20"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Check for Updates" Padding="16,8" Margin="0,0,12,0" Click="CheckUpdates_Click"/>
+                        <Button x:Name="PluginUpdateAction" Content="No update available" Padding="16,8" Click="UpdateAction_Click" IsEnabled="False"/>
+                    </StackPanel>
+                </StackPanel>
+            </TabItem>
         </TabControl>
 
         <!-- Buttons -->

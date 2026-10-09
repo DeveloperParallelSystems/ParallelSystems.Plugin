@@ -8,7 +8,6 @@ namespace ParallelSystemsPlugin.Timesheets
     {
         public bool Enabled { get; set; } = true;
         public string ApiBaseUrl { get; set; } = "http://app.parallelsystems.com.au";
-        public string TrackerApiKey { get; set; } = "TzuOp6FOUBaRuRtHX8/krK3ztrxY/OmSIowsJMdnso/rcXvWtdaQEP5Ee86FQcjx";
         public int SamplingIntervalSeconds { get; set; } = 5;
         public int CheckpointIntervalSeconds { get; set; } = 60;
         public int ActiveInputThresholdSeconds { get; set; } = 90;
@@ -21,12 +20,15 @@ namespace ParallelSystemsPlugin.Timesheets
         {
             get
             {
-                var root = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+                var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
                 return Path.Combine(root, "Parallel Systems", "Timesheet");
             }
         }
 
         public static string SettingsPath => Path.Combine(ProgramDataFolder, "tracker.settings.json");
+        private static string LegacySettingsPath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "Parallel Systems", "Timesheet", "tracker.settings.json");
 
         public static TrackerSettings Load()
         {
@@ -37,6 +39,15 @@ namespace ParallelSystemsPlugin.Timesheets
                 if (File.Exists(SettingsPath))
                 {
                     settings = JsonConvert.DeserializeObject<TrackerSettings>(File.ReadAllText(SettingsPath));
+                }
+                else if (File.Exists(LegacySettingsPath))
+                {
+                    settings = JsonConvert.DeserializeObject<TrackerSettings>(File.ReadAllText(LegacySettingsPath))
+                        ?? new TrackerSettings();
+                    Directory.CreateDirectory(ProgramDataFolder);
+                    File.WriteAllText(
+                        SettingsPath,
+                        JsonConvert.SerializeObject(settings, Formatting.Indented));
                 }
                 else
                 {
@@ -56,9 +67,6 @@ namespace ParallelSystemsPlugin.Timesheets
 
             var url = Environment.GetEnvironmentVariable("PARALLEL_TIMESHEET_API_URL");
             if (!string.IsNullOrWhiteSpace(url)) settings.ApiBaseUrl = url;
-
-            var key = Environment.GetEnvironmentVariable("PARALLEL_TIMESHEET_API_KEY");
-            if (!string.IsNullOrWhiteSpace(key)) settings.TrackerApiKey = key;
 
             settings.SamplingIntervalSeconds = Clamp(settings.SamplingIntervalSeconds, 2, 60);
             settings.CheckpointIntervalSeconds = Clamp(settings.CheckpointIntervalSeconds, 15, 600);

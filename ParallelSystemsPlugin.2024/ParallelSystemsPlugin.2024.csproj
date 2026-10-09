@@ -4,6 +4,7 @@
     <TargetFramework>net48</TargetFramework>
     <AssemblyName>ParallelSystemsPlugin.2024</AssemblyName>
     <DefineConstants>$(DefineConstants);REVIT2024;REVIT2022_OR_GREATER;REVIT2024_OR_GREATER;REVIT2024_OR_EARLIER;REVIT_LEGACY_DOTNET</DefineConstants>
+    <Version>1.18.0</Version>
   </PropertyGroup>
 
   <Import Project="..\Build\RevitAdapter.Common.props" />

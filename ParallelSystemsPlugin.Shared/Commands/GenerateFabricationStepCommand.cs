@@ -211,6 +211,8 @@ namespace ParallelSystemsPlugin.Commands
                             configurations.FocusSlipOnFlangeFitUp();
                             configurations.ShowModal(
                                 uiApp.MainWindowHandle);
+                            if (configurations.UpdateRequested)
+                                return new OpenUpdaterCommand().Execute(commandData, ref message, elements);
 
                             if (Configs.AppConfig.CurrentConfig
                                     ?.Fabrication

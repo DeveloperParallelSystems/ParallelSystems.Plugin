@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
@@ -10,6 +10,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)App.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProductLifecycle.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\UpdateDiscardCloseScope.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\UpdateDiscardDialogPolicy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\VersionedHttpClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\OpenUpdaterCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ShowTimesheetCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ReconnectCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RunAssemblyDuplicationDiagnosticCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\DuplicateAssembliesCommand.cs" />

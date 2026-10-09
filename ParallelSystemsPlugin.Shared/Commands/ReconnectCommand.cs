@@ -18,7 +18,7 @@ namespace ParallelSystemPlugin.Commands
             TimeSpan.FromSeconds(15);
 
         private static readonly HttpClient HttpClient =
-            new HttpClient();
+            ParallelSystemsPlugin.Helpers.VersionedHttpClient.Create(TimeSpan.FromSeconds(100));
 
         public Result Execute(
             ExternalCommandData data,
@@ -238,6 +238,8 @@ namespace ParallelSystemPlugin.Commands
 
                         if (!response.IsSuccessStatusCode)
                         {
+                            if ((int)response.StatusCode == 426)
+                                throw new InvalidOperationException("Update required. This plugin version is no longer supported. Open Parallel Systems Updater and install the latest plugin.");
                             bool isTransient =
                                 response.StatusCode ==
                                     HttpStatusCode.RequestTimeout ||

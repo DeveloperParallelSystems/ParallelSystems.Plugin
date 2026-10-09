@@ -1,4 +1,4 @@
-﻿using Autodesk.Revit.DB.Events;
+using Autodesk.Revit.DB.Events;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using Newtonsoft.Json;
@@ -30,10 +30,7 @@ namespace ParallelSystemsPlugin
          * Keep HttpClient's global timeout disabled and enforce a timeout per
          * authorization attempt so that cancellation and retries are explicit.
          */
-        private static readonly HttpClient HttpClient = new HttpClient
-        {
-            Timeout = Timeout.InfiniteTimeSpan
-        };
+        private static readonly HttpClient HttpClient = Helpers.VersionedHttpClient.Create(Timeout.InfiniteTimeSpan);
 
         private static readonly TimeSpan AuthorizationRequestTimeout =
             TimeSpan.FromSeconds(75);
@@ -255,6 +252,100 @@ namespace ParallelSystemsPlugin
                 "Authorization and timesheet server startup were skipped.");
         }
 
+        private DateTime _nextUpdateStatus=DateTime.MinValue;
+        private DateTime _startupUpdateRequested;
+        private bool _startupUpdatePrompted;
+        private Task _startupUpdateHandoff;
+        private UpdateExitHandler _updateExitHandler;
+
+        internal static void SetDiscardChangesForUpdate(bool enabled)
+        {
+            if (_current?._updateExitHandler == null)
+            {
+                if (enabled) throw new InvalidOperationException("The update shutdown handler is unavailable.");
+                return;
+            }
+            _current._updateExitHandler._discardUntil = enabled ? DateTime.UtcNow.AddSeconds(30) : DateTime.MinValue;
+        }
+
+        private sealed class UpdateExitHandler : IExternalEventHandler, IDisposable
+        {
+            private readonly object _gate = new object();
+            private ExternalEvent _externalEvent;
+            private readonly EventWaitHandle _request;
+            private readonly RegisteredWaitHandle _registration;
+            private int _exitRequested;
+            internal DateTime _discardUntil;
+            private Helpers.UpdateDiscardCloseScope _discardScope;
+
+            public UpdateExitHandler()
+            {
+                _externalEvent = ExternalEvent.Create(this);
+                using (var process = System.Diagnostics.Process.GetCurrentProcess())
+                    _request = new EventWaitHandle(false, EventResetMode.AutoReset,
+                        @"Local\ParallelSystems.Plugin.Exit." + process.Id + "." + process.StartTime.ToUniversalTime().Ticks);
+                _registration = ThreadPool.RegisterWaitForSingleObject(_request, (_, timedOut) =>
+                {
+                    lock (_gate)
+                    {
+                        if (_externalEvent == null) return;
+                        Interlocked.Exchange(ref _exitRequested, 1);
+                        try { _externalEvent.Raise(); }
+                        catch (Exception) { /* Idling will service the pending request. */ }
+                    }
+                }, null, Timeout.Infinite, false);
+            }
+
+            public void Execute(UIApplication app)
+            {
+                if (Interlocked.Exchange(ref _exitRequested, 0) == 0) return;
+                try
+                {
+                    var exit = RevitCommandId.LookupPostableCommandId(PostableCommand.ExitRevit);
+                    if (!app.CanPostCommand(exit))
+                        throw new InvalidOperationException("Finish the active Revit command and close Revit to continue the update.");
+                    if (_discardUntil > DateTime.UtcNow)
+                    {
+                        _discardScope = new Helpers.UpdateDiscardCloseScope(app);
+                        _discardScope.RelinquishUnmodifiedItems();
+                    }
+                    _discardUntil = DateTime.MinValue;
+                    app.PostCommand(exit);
+                }
+                catch (Exception ex)
+                {
+                    _discardUntil = DateTime.MinValue;
+                    _discardScope?.Dispose();
+                    _discardScope = null;
+                    TaskDialog.Show("Parallel Systems update", "Revit could not close automatically. " + ex.Message);
+                }
+            }
+
+            public string GetName() { return "Close Revit for an approved Parallel Systems update"; }
+
+            // An Idling callback also services a request if Raise was denied during startup.
+            public void OnIdling(UIApplication app)
+            {
+                // Native ExitRevit has returned/cancelled. Never carry destructive answers
+                // into a later manual close or an unrelated Revit command.
+                _discardScope?.Dispose();
+                _discardScope = null;
+                if (Volatile.Read(ref _exitRequested) != 0) Execute(app);
+            }
+
+            public void Dispose()
+            {
+                _discardScope?.Dispose();
+                _discardScope = null;
+                lock (_gate)
+                {
+                    _registration.Unregister(null);
+                    _externalEvent?.Dispose();
+                    _externalEvent = null;
+                    _request.Dispose();
+                }
+            }
+        }
         public Result OnStartup(UIControlledApplication app)
         {
             StartupSplashWindow splash = null;
@@ -331,6 +422,13 @@ namespace ParallelSystemsPlugin
                 app.Idling +=
                     OnIdling;
 
+                ParallelSystems.ProductSupport.ProductLifecycle.Report("plugin", int.Parse(app.ControlledApplication.VersionNumber), typeof(App).Assembly.Location, "ready");
+                ParallelSystems.ProductSupport.ProductLifecycle.EnsureUpdaterBackground();
+                _updateExitHandler = new UpdateExitHandler();
+                _startupUpdateRequested = DateTime.UtcNow;
+                _startupUpdatePrompted = false;
+                try { ParallelSystems.ProductSupport.ProductLifecycle.CheckForUpdates("plugin", int.Parse(app.ControlledApplication.VersionNumber)); }
+                catch { /* Updates must not prevent Revit startup. */ }
                 splash?.CompleteLoading();
                 return Result.Succeeded;
             }
@@ -339,6 +437,7 @@ namespace ParallelSystemsPlugin
                 if (ReferenceEquals(_current, this))
                     _current = null;
 
+                ParallelSystems.ProductSupport.ProductLifecycle.Report("plugin", int.Parse(app.ControlledApplication.VersionNumber), typeof(App).Assembly.Location, "failed");
                 splash?.CloseSafely();
 
                 AppDialog.Error(
@@ -350,6 +449,33 @@ namespace ParallelSystemsPlugin
             }
         }
 
+        private void CheckStartupUpdate(UIApplication uiApp)
+        {
+            if (_startupUpdateHandoff != null && _startupUpdateHandoff.IsCompleted)
+            {
+                if (_startupUpdateHandoff.IsFaulted)
+                {
+                    var error = _startupUpdateHandoff.Exception;
+                    TaskDialog.Show("Parallel Systems updates", "The update window could not be opened. Install or repair the latest Updater and try again. Revit will remain open.");
+                }
+                _startupUpdateHandoff = null;
+            }
+            if (_startupUpdatePrompted || DateTime.UtcNow - _startupUpdateRequested > TimeSpan.FromMinutes(2)) return;
+            var year = int.Parse(uiApp.Application.VersionNumber);
+            var version = ParallelSystems.ProductSupport.ProductLifecycle.StartupUpdateVersion(year, _startupUpdateRequested);
+            if (string.IsNullOrWhiteSpace(version)) return;
+            _startupUpdatePrompted = true;
+            var dialog = new TaskDialog("Parallel Systems update")
+            {
+                MainInstruction = "Parallel Systems " + version + " is available. Install it now?",
+                MainContent = "Revit will close now and the Updater will show download and installation progress, then restart Revit automatically. Save any open work when prompted. All Revit sessions must be closed before installation.",
+                CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
+                DefaultButton = TaskDialogResult.No
+            };
+            if (dialog.Show() == TaskDialogResult.Yes)
+                _startupUpdateHandoff = Task.Run(() => ParallelSystems.ProductSupport.ProductLifecycle.InstallStartupUpdate(year, version));
+        }
+
         private void OnIdling(
             object sender,
             IdlingEventArgs e)
@@ -359,6 +485,12 @@ namespace ParallelSystemsPlugin
 
             if (uiApp == null)
                 return;
+            _updateExitHandler?.OnIdling(uiApp);
+            if (DateTime.UtcNow >= _nextUpdateStatus)
+            {
+                _nextUpdateStatus=DateTime.UtcNow.AddSeconds(2);
+                CheckStartupUpdate(uiApp);
+            }
 
             /*
              * Authorization is started and completed from Idling, but the
@@ -730,7 +862,6 @@ namespace ParallelSystemsPlugin
 
             AboutPanelMenu.Build(
                 aboutPanel);
-
             if (_developmentModeEnabled)
             {
                 AddDevelopmentModeIndicator(app);
@@ -883,6 +1014,8 @@ namespace ParallelSystemsPlugin
         public Result OnShutdown(
             UIControlledApplication app)
         {
+            _updateExitHandler?.Dispose();
+            _updateExitHandler = null;
             try
             {
                 app.ControlledApplication.DocumentOpened -=
@@ -1075,6 +1208,8 @@ namespace ParallelSystemsPlugin
 
                         if (!response.IsSuccessStatusCode)
                         {
+                            if ((int)response.StatusCode == 426)
+                                throw new InvalidOperationException("Update required. This plugin version is no longer supported. Open Parallel Systems Updater and install the latest plugin.");
                             bool isTransient =
                                 response.StatusCode ==
                                     HttpStatusCode.RequestTimeout ||

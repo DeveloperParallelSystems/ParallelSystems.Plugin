@@ -465,7 +465,6 @@ Supported environment overrides:
 
 ```text
 PARALLEL_TIMESHEET_API_URL
-PARALLEL_TIMESHEET_API_KEY
 ```
 
 ## Administrator Web Functions
@@ -536,14 +535,13 @@ No MSMQ, old Activity Queue Service, or central workstation SQLite database is p
 - Keep Revit in the foreground during part of the test.
 - Change view or save the document to trigger meaningful session activity.
 - Confirm the API health endpoint is available.
-- Confirm the Tracker API key matches the backend.
 - Check tracker.log, Outbox, Failed, and Overflow.
 - Confirm the backend accepts schema version 3.
 
 ### Outbox Keeps Growing
 
 - Test API health and workstation internet access.
-- Verify ApiBaseUrl and TrackerApiKey.
+- Verify ApiBaseUrl.
 - Check tracker.log for the response status.
 - Do not delete Outbox files until the corresponding data is confirmed in PostgreSQL.
 - Review Failed and Overflow separately.

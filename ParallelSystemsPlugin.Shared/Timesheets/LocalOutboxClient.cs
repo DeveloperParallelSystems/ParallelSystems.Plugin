@@ -39,10 +39,7 @@ namespace ParallelSystemsPlugin.Timesheets
             }
             catch { }
 
-            _httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(90)
-            };
+            _httpClient = Helpers.VersionedHttpClient.Create(TimeSpan.FromSeconds(90));
         }
 
         public string InstallationId
@@ -138,8 +135,6 @@ namespace ParallelSystemsPlugin.Timesheets
                     using (var request = new HttpRequestMessage(HttpMethod.Post, endpoint))
                     {
                         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-                        if (!string.IsNullOrWhiteSpace(_settings.TrackerApiKey))
-                            request.Headers.TryAddWithoutValidation("X-Tracker-Key", _settings.TrackerApiKey);
 
                         HttpResponseMessage response;
                         try
@@ -158,6 +153,13 @@ namespace ParallelSystemsPlugin.Timesheets
                             {
                                 TryDelete(file);
                                 continue;
+                            }
+
+                            if ((int)response.StatusCode == 426)
+                            {
+                                WriteDiagnostic("Update required; checkpoint remains queued. " +
+                                    await SafeReadBody(response).ConfigureAwait(false));
+                                return;
                             }
 
                             // Authentication and malformed payloads will not fix themselves by retrying forever.

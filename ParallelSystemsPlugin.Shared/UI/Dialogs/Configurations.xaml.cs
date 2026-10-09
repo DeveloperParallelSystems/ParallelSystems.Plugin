@@ -58,16 +58,22 @@ namespace ParallelSystemsPlugin.UI.Dialogs
         // Remember owner handle so AppDialog can be modal to Revit
         private IntPtr _ownerHwnd = default(IntPtr);
         private RevitDoc _doc;
+        private int? _updateYear;
+        private readonly System.Windows.Threading.DispatcherTimer _updateTimer =
+            new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        public bool UpdateRequested { get; private set; }
 
         #endregion
 
         #region Constructors
 
-        public Configurations(RevitDoc doc)
+        public Configurations(RevitDoc doc, int? revitYear = null)
         {
             InitializeComponent();
             Icon = AppDialog.LoadWindowIcon();
             _doc = doc;
+            _updateYear = revitYear ?? (doc == null ? (int?)null : int.Parse(doc.Application.VersionNumber));
+            InitializeUpdates();
             LoadConfigurationData(Configs.AppConfig.CurrentConfig);
 
             if (string.IsNullOrWhiteSpace(ProcJobNumberTextBox.Text) &&
@@ -80,6 +86,49 @@ namespace ParallelSystemsPlugin.UI.Dialogs
         }
 
         #endregion
+
+        private void InitializeUpdates()
+        {
+            var assembly = typeof(App).Assembly;
+            var info = Attribute.GetCustomAttribute(assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute))
+                as System.Reflection.AssemblyInformationalVersionAttribute;
+            var version = (info?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "0.0.0").Split('+')[0];
+            if (version.Split('.').Length == 4 && version.EndsWith(".0", StringComparison.Ordinal))
+                version = version.Substring(0, version.Length - 2);
+            CurrentPluginVersion.Text = "Current v" + version;
+            UpdatesTab.IsEnabled = _updateYear.HasValue;
+            _updateTimer.Tick += (sender, args) => RefreshUpdates();
+            Loaded += (sender, args) => { RefreshUpdates(); _updateTimer.Start(); };
+            Closed += (sender, args) => _updateTimer.Stop();
+        }
+
+        private void RefreshUpdates()
+        {
+            if (!_updateYear.HasValue) return;
+            PluginUpdateStatus.Text = ParallelSystems.ProductSupport.ProductLifecycle.UpdateLabel("plugin", _updateYear);
+            var action = ParallelSystems.ProductSupport.ProductLifecycle.UpdateActionLabel("plugin", _updateYear);
+            PluginUpdateAction.Content = string.IsNullOrEmpty(action) ? "No update available" : action;
+            PluginUpdateAction.IsEnabled = !string.IsNullOrEmpty(action);
+        }
+
+        private void CheckUpdates_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ParallelSystems.ProductSupport.ProductLifecycle.CheckForUpdates("plugin", _updateYear);
+                PluginUpdateStatus.Text = "Checking for updates…";
+            }
+            catch (Exception ex)
+            {
+                PluginUpdateStatus.Text = "The update check could not start. " + ex.Message;
+            }
+        }
+
+        private void UpdateAction_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateRequested = true;
+            Close();
+        }
 
         private static string GetProjectInfoValue(RevitDoc doc, RevitBuiltInParameter builtInParameter, params string[] fallbackParamNames)
         {
@@ -837,12 +886,19 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             if (dialog == null)
                 return;
 
-            string programData = Environment.GetFolderPath(
-                Environment.SpecialFolder.CommonApplicationData);
+            string localAppData = Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData);
             string logoDirectory = Path.Combine(
-                programData,
+                localAppData,
                 "Parallel Systems",
                 "Images");
+
+            if (!Directory.Exists(logoDirectory))
+            {
+                string programData = Environment.GetFolderPath(
+                    Environment.SpecialFolder.CommonApplicationData);
+                logoDirectory = Path.Combine(programData, "Parallel Systems", "Images");
+            }
 
             if (Directory.Exists(logoDirectory))
                 dialog.InitialDirectory = logoDirectory;
