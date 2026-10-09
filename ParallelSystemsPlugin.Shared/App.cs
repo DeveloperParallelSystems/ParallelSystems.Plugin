@@ -260,6 +260,16 @@ namespace ParallelSystemsPlugin
         private Task _startupUpdateHandoff;
         private UpdateExitHandler _updateExitHandler;
 
+        internal static void SetDiscardChangesForUpdate(bool enabled)
+        {
+            if (_current?._updateExitHandler == null)
+            {
+                if (enabled) throw new InvalidOperationException("The update shutdown handler is unavailable.");
+                return;
+            }
+            _current._updateExitHandler._discardUntil = enabled ? DateTime.UtcNow.AddSeconds(30) : DateTime.MinValue;
+        }
+
         private sealed class UpdateExitHandler : IExternalEventHandler, IDisposable
         {
             private readonly object _gate = new object();
@@ -267,6 +277,8 @@ namespace ParallelSystemsPlugin
             private readonly EventWaitHandle _request;
             private readonly RegisteredWaitHandle _registration;
             private int _exitRequested;
+            internal DateTime _discardUntil;
+            private Helpers.UpdateDiscardCloseScope _discardScope;
 
             public UpdateExitHandler()
             {
@@ -294,10 +306,19 @@ namespace ParallelSystemsPlugin
                     var exit = RevitCommandId.LookupPostableCommandId(PostableCommand.ExitRevit);
                     if (!app.CanPostCommand(exit))
                         throw new InvalidOperationException("Finish the active Revit command and close Revit to continue the update.");
+                    if (_discardUntil > DateTime.UtcNow)
+                    {
+                        _discardScope = new Helpers.UpdateDiscardCloseScope(app);
+                        _discardScope.RelinquishUnmodifiedItems();
+                    }
+                    _discardUntil = DateTime.MinValue;
                     app.PostCommand(exit);
                 }
                 catch (Exception ex)
                 {
+                    _discardUntil = DateTime.MinValue;
+                    _discardScope?.Dispose();
+                    _discardScope = null;
                     TaskDialog.Show("Parallel Systems update", "Revit could not close automatically. " + ex.Message);
                 }
             }
@@ -307,11 +328,17 @@ namespace ParallelSystemsPlugin
             // An Idling callback also services a request if Raise was denied during startup.
             public void OnIdling(UIApplication app)
             {
+                // Native ExitRevit has returned/cancelled. Never carry destructive answers
+                // into a later manual close or an unrelated Revit command.
+                _discardScope?.Dispose();
+                _discardScope = null;
                 if (Volatile.Read(ref _exitRequested) != 0) Execute(app);
             }
 
             public void Dispose()
             {
+                _discardScope?.Dispose();
+                _discardScope = null;
                 lock (_gate)
                 {
                     _registration.Unregister(null);

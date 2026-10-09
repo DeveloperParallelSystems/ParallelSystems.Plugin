@@ -1,6 +1,7 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using System.Linq;
 namespace ParallelSystemsPlugin.Commands
 {
     [Transaction(TransactionMode.Manual)]
@@ -26,47 +27,58 @@ namespace ParallelSystemsPlugin.Commands
                     ParallelSystems.ProductSupport.ProductLifecycle.OpenUpdater("plugin", year);
                     return Result.Succeeded;
                 }
-                var dialog = new TaskDialog("Parallel Systems update")
+                var documents = data.Application.Application.Documents.Cast<Document>()
+                    .Where(document => !document.IsLinked).ToList();
+                var checkedOut = documents.Where(HasCheckedOutItems).ToList();
+                if (checkedOut.Count > 0)
                 {
-                    MainInstruction = action + "?",
-                    MainContent = "This will synchronize open workshared models with central, save other open documents, close Revit, install the update automatically, and start Revit again. Continue?",
-                    CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
-                    DefaultButton = TaskDialogResult.No
-                };
-                if (dialog.Show() != TaskDialogResult.Yes) return Result.Cancelled;
-
-                // Preflight every document before saving any of them. Never discard work.
-                foreach (Document document in data.Application.Application.Documents)
-                {
-                    if (document.IsLinked) continue;
-                    if (document.IsReadOnly || document.IsModifiable || string.IsNullOrEmpty(document.PathName))
-                        throw new System.InvalidOperationException("Save and finish editing all open documents before updating: " + document.Title);
-                }
-                foreach (Document document in data.Application.Application.Documents)
-                {
-                    if (document.IsLinked) continue;
-                    if (document.IsWorkshared)
+                    var dialog = new TaskDialog("Parallel Systems update")
                     {
-                        using (var transact = new TransactWithCentralOptions())
-                        using (var sync = new SynchronizeWithCentralOptions())
-                        using (var relinquish = new RelinquishOptions(true))
-                        {
-                            sync.SetRelinquishOptions(relinquish);
-                            sync.SaveLocalBefore = true;
-                            sync.SaveLocalAfter = true;
-                            document.SynchronizeWithCentral(transact, sync);
-                        }
-                    }
-                    else if (document.IsModified) document.Save();
+                        MainInstruction = "You have checked-out elements or worksets. " + action + "?",
+                        MainContent = "You own checked-out items in:\n" +
+                            string.Join("\n", checkedOut.Select(document => document.Title)) +
+                            "\n\nYes will relinquish your checked-out items (Relinquish All Mine), then close ALL open documents without saving and discard their unsaved changes. " +
+                            "Revit will close, the update will install automatically, and Revit will restart. " +
+                            "Nothing will be saved or synchronized with central. Discarded changes cannot be recovered. " +
+                            "Choose No to leave everything unchanged.",
+                        CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
+                        DefaultButton = TaskDialogResult.No
+                    };
+                    if (dialog.Show() != TaskDialogResult.Yes) return Result.Cancelled;
+                }
+
+                // Untitled and modified documents are intentionally closed without saving.
+                foreach (Document document in documents)
+                {
+                    if (document.IsModifiable)
+                        throw new System.InvalidOperationException("Finish editing before updating: " + document.Title);
                 }
                 ParallelSystems.ProductSupport.ProductLifecycle.EnsureUpdaterBackground();
+                App.SetDiscardChangesForUpdate(true);
                 ParallelSystems.ProductSupport.ProductLifecycle.InstallStartupUpdate(year, action.Substring("Install v".Length), unattended: true);
                 return Result.Succeeded;
             }
             catch (System.Exception ex)
             {
+                App.SetDiscardChangesForUpdate(false);
                 TaskDialog.Show("Parallel Systems updates", "The update could not proceed. Revit will remain open.\n\n" + ex.Message);
                 return Result.Cancelled;
+            }
+        }
+
+        private static bool HasCheckedOutItems(Document document)
+        {
+            if (!document.IsWorkshared) return false;
+            using (var worksets = new FilteredWorksetCollector(document))
+            {
+                if (worksets.Any(workset => workset.IsEditable)) return true;
+            }
+            // Include element types as well as instances: both can be borrowed.
+            using (var elements = new FilteredElementCollector(document))
+            {
+                elements.WherePasses(new LogicalOrFilter(
+                    new ElementIsElementTypeFilter(), new ElementIsElementTypeFilter(true)));
+                return elements.Any(element => WorksharingUtils.GetCheckoutStatus(document, element.Id) == CheckoutStatus.OwnedByCurrentUser);
             }
         }
     }

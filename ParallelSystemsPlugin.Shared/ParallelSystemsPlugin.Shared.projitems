@@ -11,6 +11,8 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)App.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProductLifecycle.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\UpdateDiscardCloseScope.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\UpdateDiscardDialogPolicy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\VersionedHttpClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\OpenUpdaterCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ShowTimesheetCommand.cs" />
