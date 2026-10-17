@@ -31,6 +31,7 @@ namespace ParallelSystems.ProductSupport
         internal static void EnsureUpdaterBackground()
         {
             try { StartUpdater("--background"); } catch { /* Offline/product startup is independent of the updater. */ }
+            LegacyUpdaterBootstrap.Start();
         }
         internal static void CheckForUpdates(string product = "desktop-notifier", int? year = null)
         {

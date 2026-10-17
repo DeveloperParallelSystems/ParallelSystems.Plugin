@@ -8,9 +8,13 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>ParallelSystemsPlugin</Import_RootNamespace>
   </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Reference Include="System.Runtime.Serialization" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)App.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProductLifecycle.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\LegacyUpdaterBootstrap.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\UpdateDiscardCloseScope.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\UpdateDiscardDialogPolicy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\VersionedHttpClient.cs" />
