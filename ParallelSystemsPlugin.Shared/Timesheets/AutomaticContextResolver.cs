@@ -74,6 +74,11 @@ namespace ParallelSystemsPlugin.Timesheets
         {
             if (view == null) return new ViewContext();
 
+            // Assembly views also capture review work without model edits.
+            try { evidence?.AddAssemblyPath(ResolveAssemblyPath(document,
+                document?.GetElement(view.AssociatedAssemblyInstanceId))); }
+            catch { }
+            evidence?.AddProjectItemPath(ResolveProjectItemPath(document, view));
             var viewName = Safe(() => view.Name);
             var level = FirstNotBlank(
                 ResolveGeneratedLevel(view),
@@ -143,8 +148,79 @@ namespace ParallelSystemsPlugin.Timesheets
                 Area = area,
                 Zone = zone,
                 System = system,
+                AssemblyPath = ResolveAssemblyPath(document, element),
+                ProjectItemPath = ResolveProjectItemPath(document, element),
                 Workset = workset
             };
+        }
+
+        internal static string ResolveProjectItemPath(Document document, Element element)
+        {
+            if (element == null) return null;
+            if (element is ViewSheet sheet)
+                return "Sheets:" + FirstNotBlank(Safe(() => sheet.SheetNumber), "Unnumbered")
+                    + ":" + FirstNotBlank(Safe(() => sheet.Name), "Unnamed sheet");
+            if (element is View view)
+                return "Views:" + Safe(() => view.ViewType.ToString()) + ":"
+                    + FirstNotBlank(Safe(() => view.Name), "Unnamed view");
+
+            var assemblyPath = ResolveAssemblyPath(document, element);
+            if (!string.IsNullOrWhiteSpace(assemblyPath)) return "Assemblies:" + assemblyPath;
+
+            var category = FirstNotBlank(Safe(() => element.Category?.Name), element.GetType().Name);
+            var name = FirstNotBlank(Safe(() => element.Name), category);
+            var itemPath = category + ":" + name;
+            // Annotations/detail items belong to a specific view or sheet.
+            try
+            {
+                var owner = document?.GetElement(element.OwnerViewId) as View;
+                if (owner != null) return ResolveProjectItemPath(document, owner) + ":" + itemPath;
+            }
+            catch { }
+            return itemPath;
+        }
+
+        internal static string ResolveAssemblyPath(Document document, Element element)
+        {
+            if (document == null || element == null) return null;
+            var names = new List<string>();
+            var visited = new HashSet<long>();
+            ElementId containingAssemblyId = null;
+            try
+            {
+                while (element != null && visited.Add(RevitApiCompatibility.GetElementIdValue(element.Id)))
+                {
+                    if (element is AssemblyInstance assembly)
+                    {
+                        var assemblyName = assembly.AssemblyTypeName;
+                        if (string.IsNullOrWhiteSpace(assemblyName)) return null;
+                        names.Add(assemblyName.Trim());
+                        names.Reverse();
+                        return string.Join(":", names);
+                    }
+
+                    // Shared nested families expose their containing instance through
+                    // SuperComponent. Follow it before assembly membership so intermediate
+                    // items are retained even when the nested item is itself a member.
+                    var name = element.Name;
+                    if (!string.IsNullOrWhiteSpace(name)) names.Add(name.Trim());
+                    var membership = element.AssemblyInstanceId;
+                    if (membership != null && membership != ElementId.InvalidElementId)
+                        containingAssemblyId = membership;
+                    var parent = (element as FamilyInstance)?.SuperComponent;
+                    if (parent != null)
+                    {
+                        element = parent;
+                        continue;
+                    }
+                    var assemblyId = containingAssemblyId;
+                    if (assemblyId == null || assemblyId == ElementId.InvalidElementId) return null;
+                    element = document.GetElement(assemblyId);
+                }
+            }
+            catch { /* Invalid/deleted elements must never interrupt tracking. */ }
+            // Do not report ordinary element/family names as assemblies.
+            return null;
         }
 
         private static string ResolveViewTemplateName(Document document, View view)
@@ -371,6 +447,8 @@ namespace ParallelSystemsPlugin.Timesheets
         public string Area { get; set; }
         public string Zone { get; set; }
         public string System { get; set; }
+        public string AssemblyPath { get; set; }
+        public string ProjectItemPath { get; set; }
         public string Workset { get; set; }
     }
 }

@@ -55,6 +55,8 @@ namespace ParallelSystemsPlugin.Timesheets
         public string DetectedZone { get; set; }
         public string DetectedSystem { get; set; }
         public string DetectedActivity { get; set; }
+        public List<string> ProjectItemPaths { get; set; } = new List<string>();
+        public List<string> AssemblyPaths { get; set; } = new List<string>();
         public string DetectedScope { get; set; }
         public string DetectedStatus { get; set; }
 

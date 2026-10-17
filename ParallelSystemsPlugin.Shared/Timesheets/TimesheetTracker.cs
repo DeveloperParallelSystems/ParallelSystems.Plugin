@@ -1,4 +1,4 @@
-﻿using Autodesk.Revit.DB;
+using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Events;
 using Autodesk.Revit.UI;
 using System;
@@ -167,6 +167,8 @@ namespace ParallelSystemsPlugin.Timesheets
                     try { element = document.GetElement(id); }
                     catch { }
                     var item = _resolver.ResolveElement(document, element);
+                    _evidence.AddAssemblyPath(item.AssemblyPath);
+                    _evidence.AddProjectItemPath(item.ProjectItemPath);
                     _evidence.AddCategory(item.Category);
                     _evidence.AddLevel(item.Level);
                     _evidence.AddSystem(item.System);
@@ -368,6 +370,8 @@ namespace ParallelSystemsPlugin.Timesheets
                     DetectedActivity = _viewContext.Activity,
                     DetectedScope = _viewContext.Scope,
                     DetectedStatus = _viewContext.Status,
+                    ProjectItemPaths = evidence.ProjectItemPaths.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList(),
+                    AssemblyPaths = evidence.AssemblyPaths.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList(),
                     CategoryCounts = TopCounts(evidence.CategoryCounts),
                     LevelCounts = TopCounts(evidence.LevelCounts),
                     SystemCounts = TopCounts(evidence.SystemCounts),

@@ -14,6 +14,20 @@ namespace ParallelSystemsPlugin.Timesheets
         public Dictionary<string, int> WorksetCounts { get; } = NewDictionary();
         public Dictionary<string, int> TransactionNameCounts { get; } = NewDictionary();
 
+        public HashSet<string> ProjectItemPaths { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        public void AddProjectItemPath(string path)
+        {
+            if (!string.IsNullOrWhiteSpace(path)) ProjectItemPaths.Add(path.Trim());
+        }
+
+        public HashSet<string> AssemblyPaths { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        public void AddAssemblyPath(string path)
+        {
+            if (!string.IsNullOrWhiteSpace(path)) AssemblyPaths.Add(path.Trim());
+        }
+
         public int CreatedElementCount { get; private set; }
         public int ModifiedElementCount { get; private set; }
         public int DeletedElementCount { get; private set; }
@@ -45,6 +59,8 @@ namespace ParallelSystemsPlugin.Timesheets
         public EvidenceAccumulator Clone()
         {
             var clone = new EvidenceAccumulator();
+            clone.AssemblyPaths.UnionWith(AssemblyPaths);
+            clone.ProjectItemPaths.UnionWith(ProjectItemPaths);
             Copy(CategoryCounts, clone.CategoryCounts);
             Copy(LevelCounts, clone.LevelCounts);
             Copy(SystemCounts, clone.SystemCounts);
