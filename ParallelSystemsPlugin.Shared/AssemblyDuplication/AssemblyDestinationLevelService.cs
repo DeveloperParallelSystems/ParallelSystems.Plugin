@@ -111,6 +111,10 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                     throw new InvalidOperationException("Source production member " + Id(id) + " is unavailable.");
 
                 EnsureSupported(member);
+#if REVIT2025
+                if (IsFrameCandidate(member))
+                    AppendLevelParameterDiagnostics(document, member, "Source frame", plan.Observations);
+#endif
                 // Changed by Jhay: capture the source fitting API/parameter evidence before behavior changes.
                 if (IsPipeFitting(member))
                     AppendLevelParameterDiagnostics(document, member, "Source", plan.Observations);
@@ -218,6 +222,19 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 if (target is PipeInsulation)
                     continue;
 
+#if REVIT2025
+                if (IsFrameCandidate(target))
+                {
+                    MoveLevelBasedFrame(
+                        document,
+                        document.GetElement(sourceIds[index]) as FamilyInstance,
+                        target as FamilyInstance,
+                        plan,
+                        observations);
+                    continue;
+                }
+#endif
+
                 bool referenceLevelWasSet = TrySetReferenceLevel(
                     target,
                     plan.DestinationLevel,
@@ -259,7 +276,18 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 insulationEvidenceByTarget,
                 "before common network translation",
                 observations);
+#if REVIT2025
+            List<ElementId> translationIds = targetIds.ToList();
+            // Frames are already at their verified destination after level/offset
+            // reassociation. Never apply the common pipe-network delta twice.
+            translationIds = translationIds
+                .Where(id => !IsFrameCandidate(document.GetElement(id)))
+                .ToList();
+            if (translationIds.Count > 0)
+                ElementTransformUtils.MoveElements(document, translationIds, translation);
+#else
             ElementTransformUtils.MoveElements(document, targetIds.ToList(), translation);
+#endif
             LogAllPipeFittingStages(
                 document,
                 targetIds,
@@ -512,6 +540,13 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
             if (element is Pipe || element is PipeInsulation)
                 return;
 
+#if REVIT2025
+            if (IsFrameCandidate(element))
+            {
+                EnsureFrameSupported(element as FamilyInstance);
+                return;
+            }
+#endif
             var family = element as FamilyInstance;
             if (family != null && element.Category != null &&
                 Id(element.Category.Id) == (long)BuiltInCategory.OST_PipeFitting &&
@@ -523,6 +558,125 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
                 ", " + element.GetType().Name +
                 ") is outside the safely supported destination-level categories for this test.");
         }
+
+#if REVIT2025
+        // The Dynamo script checks this capability before attempting a frame copy.
+        public static bool SupportsLevelBasedFrames()
+        {
+            return true;
+        }
+
+        private static bool IsFrameCandidate(Element element)
+        {
+            return element is FamilyInstance && element.Category != null &&
+                Id(element.Category.Id) == (long)BuiltInCategory.OST_SpecialityEquipment;
+        }
+
+        private static Parameter FindFrameLevelParameter(FamilyInstance frame)
+        {
+            foreach (BuiltInParameter id in new[]
+            {
+                BuiltInParameter.FAMILY_LEVEL_PARAM,
+                BuiltInParameter.INSTANCE_REFERENCE_LEVEL_PARAM
+            })
+            {
+                Parameter parameter = frame.get_Parameter(id);
+                if (parameter != null && parameter.StorageType == StorageType.ElementId &&
+                    Id(parameter.AsElementId()) >= 0)
+                    return parameter;
+            }
+            // Schedule Level is contextual, not a substitute for the actual host level.
+            return null;
+        }
+
+        private static void EnsureFrameSupported(FamilyInstance frame)
+        {
+            if (frame == null || frame.Symbol == null || frame.Symbol.Family == null)
+                throw new InvalidOperationException("Frame family information is unavailable.");
+            Family family = frame.Symbol.Family;
+            string context = "Specialty Equipment frame " + Id(frame.Id) + " ('" + family.Name +
+                "', placement " + family.FamilyPlacementType + "): ";
+            if (family.IsInPlace || family.FamilyPlacementType != FamilyPlacementType.OneLevelBased)
+                throw new InvalidOperationException(context + "only loadable, one-level-based frames are supported.");
+            if (frame.Host != null || frame.SuperComponent != null)
+                throw new InvalidOperationException(context + "hosted or nested frames need separate host handling.");
+            if (frame.Pinned)
+                throw new InvalidOperationException(context + "pinned frames are not automatically unpinned.");
+            if (!(frame.Location is LocationPoint))
+                throw new InvalidOperationException(context + "a reliable point location is required.");
+            Parameter level = FindFrameLevelParameter(frame);
+            if (level == null || level.IsReadOnly)
+                throw new InvalidOperationException(context + "no writable actual level parameter is available.");
+            Parameter offset = FindOffsetParameter(frame);
+            if (offset == null || offset.IsReadOnly)
+                throw new InvalidOperationException(context + "no writable elevation/offset parameter is available.");
+        }
+
+        private static void MoveLevelBasedFrame(
+            Document document,
+            FamilyInstance source,
+            FamilyInstance target,
+            AssemblyDestinationLevelPlan plan,
+            IList<string> observations)
+        {
+            EnsureFrameSupported(source);
+            EnsureFrameSupported(target);
+            WorldEvidence sourceBefore = WorldEvidence.Capture(source);
+            WorldEvidence targetBefore = WorldEvidence.Capture(target);
+            XYZ sourcePoint = ((LocationPoint)source.Location).Point;
+            XYZ expectedPoint = sourcePoint + new XYZ(0, 0, plan.DeltaZ);
+            double sourceOffset = FindOffsetParameter(source).AsDouble();
+            if (Id(FindFrameLevelParameter(source).AsElementId()) != Id(plan.SourceLevel.Id) ||
+                Math.Abs(sourcePoint.Z - plan.SourceLevel.ProjectElevation - sourceOffset) > Tolerance)
+                throw new InvalidOperationException("Frame " + Id(source.Id) +
+                    " has inconsistent source level, world elevation, or offset; it was not moved.");
+            if (!sourceBefore.Matches(targetBefore) || source.Mirrored != target.Mirrored)
+                throw new InvalidOperationException("Frame " + Id(source.Id) + " -> " + Id(target.Id) +
+                    " differs before destination movement.");
+
+            observations.Add("FRAME DESTINATION | " + Id(source.Id) + " -> " + Id(target.Id) +
+                " | family '" + source.Symbol.Family.Name + "' | placement " +
+                source.Symbol.Family.FamilyPlacementType + " | unhosted, top-level" +
+                " | source level '" + plan.SourceLevel.Name + "' | destination '" +
+                plan.DestinationLevel.Name + "' | preserved offset " + Format(sourceOffset) +
+                " | deltaZ " + Format(plan.DeltaZ));
+            observations.Add("FRAME WORLD BEFORE | " + targetBefore.Describe());
+
+            if (!FindFrameLevelParameter(target).Set(plan.DestinationLevel.Id))
+                throw new InvalidOperationException("Frame " + Id(target.Id) + " rejected its destination level.");
+            document.Regenerate();
+            if (!FindOffsetParameter(target).Set(sourceOffset))
+                throw new InvalidOperationException("Frame " + Id(target.Id) + " rejected its preserved offset.");
+            document.Regenerate();
+
+            XYZ actualPoint = ((LocationPoint)target.Location).Point;
+            if (Math.Abs(actualPoint.X - expectedPoint.X) > Tolerance ||
+                Math.Abs(actualPoint.Y - expectedPoint.Y) > Tolerance)
+                throw new InvalidOperationException("Frame " + Id(target.Id) +
+                    " changed X/Y during level reassociation; no automatic XY correction was applied.");
+            double remainingZ = expectedPoint.Z - actualPoint.Z;
+            observations.Add("FRAME REMAINING PHYSICAL Z MOVE | " + Format(remainingZ));
+            if (Math.Abs(remainingZ) > Tolerance)
+            {
+                // Some families reassociate without moving their location. Only
+                // the still-required Z delta is applied, never the full delta twice.
+                ElementTransformUtils.MoveElement(document, target.Id, new XYZ(0, 0, remainingZ));
+                document.Regenerate();
+            }
+
+            WorldEvidence targetAfter = WorldEvidence.Capture(target);
+            observations.Add("FRAME WORLD AFTER | " + targetAfter.Describe());
+            if (!sourceBefore.Translated(new XYZ(0, 0, plan.DeltaZ)).Matches(targetAfter) ||
+                source.Mirrored != target.Mirrored ||
+                Id(FindFrameLevelParameter(target).AsElementId()) != Id(plan.DestinationLevel.Id) ||
+                Math.Abs(FindOffsetParameter(target).AsDouble() - sourceOffset) > Tolerance)
+                throw new InvalidOperationException("Frame " + Id(source.Id) + " -> " + Id(target.Id) +
+                    " failed exact world geometry/orientation, destination level, or preserved offset validation.");
+            if (!sourceBefore.Matches(WorldEvidence.Capture(source)))
+                throw new InvalidOperationException("The source frame changed during destination movement.");
+            observations.Add("FRAME DESTINATION VALIDATION | PASS | source unchanged | target moved exactly once");
+        }
+#endif
 
         private static Level ResolveReferenceLevel(
             Document document,
@@ -586,6 +740,14 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
         {
             if (element == null || element is PipeInsulation)
                 return null;
+
+#if REVIT2025
+            if (IsFrameCandidate(element))
+            {
+                Parameter parameter = FindFrameLevelParameter(element as FamilyInstance);
+                return parameter == null ? null : document.GetElement(parameter.AsElementId()) as Level;
+            }
+#endif
 
             var curve = element as MEPCurve;
             if (curve != null)

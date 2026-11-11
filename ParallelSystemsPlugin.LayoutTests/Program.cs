@@ -24,14 +24,22 @@ internal static class Program
     {
         try
         {
+            PdfConflictTests.ExcelCutListEntryDoesNotInitializePdf();
+            CutListReportTests.Run();
             LabelReportExcelSheetStartsWithSimpleHeaderAndRepeatsProjectDetails();
             ModuleStepAllowsPipingWithoutSupports();
             SlipOnSetbackUsesDynamicNominalDiameterDefaults();
             SlipOnSetbackUsesConfiguredBandValues();
+            SlipOnSetbackRejectsNonPositiveBandValues();
+            SlipOnFitUpSupportsDirectShapedBranchConnections();
+            SmoothBranchBRepUsesHighPrecisionDeviationBudget();
             AssemblyIdentityMarkerNamesAreSafeAndUnique();
+            PdfConflictTests.PdfExportStillChecksConflicts();
             Console.WriteLine("PASS: Label report Excel sheet uses the simple row-based layout.");
             Console.WriteLine("PASS: Module STEP allows piping without support components.");
             Console.WriteLine("PASS: Slip-on setback resolves dynamically from nominal diameter.");
+            Console.WriteLine("PASS: Slip-on fit-up supports direct shaped-branch outlets.");
+            Console.WriteLine("PASS: Shaped-branch BRep uses the high-precision deviation budget.");
             Console.WriteLine("PASS: Assembly identity marker names are safe and unique.");
             return 0;
         }
@@ -91,6 +99,60 @@ internal static class Program
             11d,
             configuration.ResolveSlipOnPipeFaceSetbackMillimetres(200),
             "configured DN150-and-above setback");
+    }
+
+    private static void SlipOnSetbackRejectsNonPositiveBandValues()
+    {
+        var configuration = new FabricationConfig
+        {
+            SlipOnPipeFaceSetbackDn125AndBelowMillimetres = 0d
+        };
+
+        AssertThrows<InvalidOperationException>(
+            () => configuration.ResolveSlipOnPipeFaceSetbackMillimetres(125),
+            "non-positive DN-band setback");
+    }
+
+    private static void SlipOnFitUpSupportsDirectShapedBranchConnections()
+    {
+        Type serviceType = typeof(LabelReport).Assembly.GetType(
+            "ParallelSystemsPlugin.Fabrication.FabricationStepService")
+            ?? throw new InvalidOperationException("FabricationStepService was not found.");
+
+        MethodInfo method = serviceType.GetMethod(
+            "IsSupportedSlipOnFitUpConnectedElement",
+            BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException(
+                "IsSupportedSlipOnFitUpConnectedElement was not found.");
+
+        AssertEqual(
+            true,
+            (bool)method.Invoke(null, new object[] { true, false }),
+            "pipe slip-on fit-up support");
+        AssertEqual(
+            true,
+            (bool)method.Invoke(null, new object[] { false, true }),
+            "direct shaped-branch slip-on fit-up support");
+        AssertEqual(
+            false,
+            (bool)method.Invoke(null, new object[] { false, false }),
+            "unclassified fitting slip-on fit-up support");
+    }
+
+    private static void SmoothBranchBRepUsesHighPrecisionDeviationBudget()
+    {
+        Type serviceType = typeof(LabelReport).Assembly.GetType(
+            "ParallelSystemsPlugin.Fabrication.FabricationStepService")
+            ?? throw new InvalidOperationException("FabricationStepService was not found.");
+
+        FieldInfo field = serviceType.GetField(
+            "SmoothBRepMaximumDeviationMillimetres",
+            BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException(
+                "SmoothBRepMaximumDeviationMillimetres was not found.");
+
+        double deviation = (double)field.GetRawConstantValue();
+        AssertEqual(0.01d, deviation, "smooth branch BRep deviation budget");
     }
 
     private static void ModuleStepAllowsPipingWithoutSupports()
@@ -195,5 +257,21 @@ internal static class Program
     {
         if (!EqualityComparer<T>.Default.Equals(expected, actual))
             throw new InvalidOperationException($"Unexpected {label}. Expected '{expected}', actual '{actual}'.");
+    }
+
+    private static void AssertThrows<TException>(Action action, string label)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Expected {typeof(TException).Name} for {label}.");
     }
 }

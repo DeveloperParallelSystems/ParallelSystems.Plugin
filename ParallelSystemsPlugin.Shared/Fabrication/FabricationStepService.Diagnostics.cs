@@ -393,6 +393,7 @@ namespace ParallelSystemsPlugin.Fabrication
                             connection,
                             null,
                             FabricationFlangeGeometryMode.OriginalModel,
+                            null,
                             geometryIssues);
 
                     branchProbe.GeometrySucceeded = geometry != null &&

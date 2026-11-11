@@ -49,7 +49,7 @@ namespace ParallelSystemsPlugin.Fabrication
         // saddle samples and the compact multi-span NURBS representation.
         // This controls approximation quality only; it does not change the
         // 30 degree bevel or the 1 mm fabrication land.
-        private const double SmoothBRepMaximumDeviationMillimetres = 0.10;
+        private const double SmoothBRepMaximumDeviationMillimetres = 0.01;
 
         // Shaped branches are currently generated as SET-ON / STUB-ON.
         // The opening in the large header pipe follows the actual inside

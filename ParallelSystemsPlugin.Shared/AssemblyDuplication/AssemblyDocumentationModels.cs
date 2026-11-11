@@ -568,7 +568,7 @@ namespace ParallelSystemsPlugin.AssemblyDuplication
     internal sealed class AssemblyDocumentationViewportPlan
     {
         public AssemblyDocumentationViewportPlan(
-            long sourceViewportId,
+            long sourceViewportId, 
             long sourceViewId,
             bool isReusableLegend,
             string viewName,

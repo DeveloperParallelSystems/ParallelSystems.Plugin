@@ -134,11 +134,11 @@ namespace ParallelSystemsPlugin.Helpers
                     new EndPrep { NameContains = "branch",   Value = "SC" }
                 };
 
-                // Created by Jhay: intentionally blank until an approved
-                // project fabrication/WPS setback is supplied by the user.
+                // Changed by Jhay: populated DN-based flange fit-up defaults.
                 defaultConfig.Fabrication = new FabricationConfig
                 {
-                    SlipOnPipeFaceSetbackMillimetres = null
+                    SlipOnPipeFaceSetbackDn125AndBelowMillimetres = 6.0,
+                    SlipOnPipeFaceSetbackDn150AndAboveMillimetres = 10.0
                 };
 
                 //Fittings End Prep

@@ -2473,8 +2473,8 @@ namespace ParallelSystemsPlugin.Fabrication
 
             const int minimumTopologicalPatchCount = 2;
             const int fallbackTopologicalPatchCount = 4;
-            const int preferredSplineSpanCount = 8;
-            const int fallbackSplineSpanCount = 16;
+            const int preferredSplineSpanCount = 16;
+            const int fallbackSplineSpanCount = 8;
 
             if ((sampleCount % fallbackSplineSpanCount) != 0)
             {
@@ -7153,7 +7153,7 @@ namespace ParallelSystemsPlugin.Fabrication
 
             layouts =
                 layouts
-                    .OrderBy(x =>
+                    .OrderByDescending(x =>
                         x.SplineSpanCount)
                     .ThenByDescending(x =>
                         x.MinimumClearance)

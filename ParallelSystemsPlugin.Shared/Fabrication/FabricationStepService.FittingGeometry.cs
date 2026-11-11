@@ -27,6 +27,8 @@ namespace ParallelSystemsPlugin.Fabrication
             ShapedBranchConnection shapedBranchConnection,
             SideCouplingConnection sideCouplingConnection,
             FabricationFlangeGeometryMode flangeGeometryMode,
+            IDictionary<ElementId, List<SlipOnFlangeFitUp>>
+                slipOnFlangeFitUpsByConnectedElement,
             IList<FabricationIssue> issues)
         {
             // Weld-gap and non-connector helper families are connection
@@ -170,6 +172,55 @@ namespace ParallelSystemsPlugin.Fabrication
                 ConnectorBore outletBore =
                     bores.FirstOrDefault(x =>
                         x.IsShapedBranchOutletSide);
+
+                List<SlipOnFlangeFitUp> shapedBranchFitUps;
+                if (outletBore != null &&
+                    slipOnFlangeFitUpsByConnectedElement != null &&
+                    slipOnFlangeFitUpsByConnectedElement.TryGetValue(
+                        element.Id,
+                        out shapedBranchFitUps))
+                {
+                    SlipOnFlangeFitUp outletFitUp = shapedBranchFitUps
+                        .Where(x =>
+                            x != null &&
+                            x.ConnectedElementIsShapedBranch &&
+                            outletBore.OriginalConnectorOrigin != null &&
+                            ConnectorOriginsMatch(
+                                x.DesignConnectionOrigin,
+                                outletBore.OriginalConnectorOrigin))
+                        .FirstOrDefault();
+
+                    if (outletFitUp == null &&
+                        shapedBranchFitUps.Any(x =>
+                            x != null &&
+                            x.ConnectedElementIsShapedBranch))
+                    {
+                        issues.Add(new FabricationIssue
+                        {
+                            Severity = FabricationIssueSeverity.Blocking,
+                            ElementId = element.Id,
+                            ElementName = GetElementDisplayName(element),
+                            Message =
+                                "The shaped-branch outlet could not be " +
+                                "matched to its resolved slip-on flange " +
+                                "fabrication endpoint."
+                        });
+
+                        return null;
+                    }
+
+                    if (outletFitUp != null)
+                    {
+                        // Keep the Revit connector as the design datum, but
+                        // extend the generated branch outlet into the plate
+                        // flange so its physical end is the configured
+                        // distance behind the mating face.
+                        outletBore.Origin =
+                            outletFitUp.FabricationPipeEnd;
+                        shapedBranchConnection.OutletConnectorOrigin =
+                            outletFitUp.FabricationPipeEnd;
+                    }
+                }
 
                 Solid proceduralStandaloneBranch = null;
                 List<GeometryObject> proceduralGeometry =

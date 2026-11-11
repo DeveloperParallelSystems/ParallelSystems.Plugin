@@ -2,6 +2,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Plumbing;
 using ParallelSystemsPlugin.Configs;
 using ParallelSystemsPlugin.Models;
+using ParallelSystemsPlugin.Models.Configs;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -11,43 +12,11 @@ namespace ParallelSystemsPlugin.Fabrication
 {
     internal static partial class FabricationStepService
     {
-        // Created by Jhay: preflight query used by the command to open the
-        // exact configuration field only when a selected Atlas table/plate
-        // slip-on flange actually requires this fabrication rule.
-        internal static bool RequiresSlipOnPipeFaceSetback(
-            Document doc,
-            FabricationSelection selection)
+        internal static bool IsSupportedSlipOnFitUpConnectedElement(
+            bool isPipe,
+            bool isShapedBranch)
         {
-            if (doc == null || selection?.SourceElementIds == null)
-                return false;
-
-            foreach (ElementId elementId in selection.SourceElementIds)
-            {
-                Element flange = doc.GetElement(elementId);
-                if (!IsFlangeLike(doc, flange))
-                    continue;
-
-                AtlasFlangeReferenceRow configuration;
-                int nominalDiameter;
-                string error;
-
-                if (TryResolveFlangeConfiguration(
-                        doc,
-                        flange,
-                        GetPhysicalConnectorNominalSizesMillimetres(flange),
-                        out configuration,
-                        out nominalDiameter,
-                        out error) &&
-                    IsConfirmedAtlasTablePlateSlipOnFlange(
-                        doc,
-                        flange,
-                        configuration))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return isPipe || isShapedBranch;
         }
 
         // Created by Jhay: resolve design-connector versus physical pipe-end
@@ -58,6 +27,8 @@ namespace ParallelSystemsPlugin.Fabrication
                 Document doc,
                 IList<Element> sourceElements,
                 IDictionary<ElementId, PipeDimensions> pipeDimensions,
+                IDictionary<ElementId, PipeDimensions>
+                    componentDimensionOverrides,
                 ISet<ElementId> selectedSourceIds,
                 FabricationFlangeGeometryMode flangeGeometryMode,
                 IList<FabricationIssue> issues)
@@ -73,9 +44,9 @@ namespace ParallelSystemsPlugin.Fabrication
                 return result;
             }
 
-            double? configuredSetbackMillimetres =
-                AppConfig.CurrentConfig?.Fabrication
-                    ?.SlipOnPipeFaceSetbackMillimetres;
+            FabricationConfig fabricationConfiguration =
+                AppConfig.CurrentConfig?.Fabrication ??
+                new FabricationConfig();
 
             foreach (Element flange in sourceElements.Where(x =>
                          IsFlangeLike(doc, x)))
@@ -103,50 +74,70 @@ namespace ParallelSystemsPlugin.Fabrication
                 if (manager == null)
                     continue;
 
-                List<Tuple<Connector, Pipe>> selectedPipeConnections =
-                    new List<Tuple<Connector, Pipe>>();
+                List<Tuple<Connector, Element>> selectedConnections =
+                    new List<Tuple<Connector, Element>>();
 
                 foreach (Connector connector in manager.Connectors)
                 {
                     if (!IsRoundEndConnector(connector))
                         continue;
 
-                    Pipe pipe = GetConnectedElement(
+                    Element connectedElement = GetConnectedElement(
                         flange,
                         connector,
-                        selectedSourceIds) as Pipe;
+                        selectedSourceIds);
 
-                    if (pipe == null ||
-                        !selectedSourceIds.Contains(pipe.Id) ||
-                        selectedPipeConnections.Any(x =>
-                            x.Item2.Id.Equals(pipe.Id)))
+                    bool isPipe = connectedElement is Pipe;
+                    bool isShapedBranch =
+                        connectedElement != null &&
+                        IsShapedBranchLike(doc, connectedElement);
+
+                    if (!IsSupportedSlipOnFitUpConnectedElement(
+                            isPipe,
+                            isShapedBranch) ||
+                        !selectedSourceIds.Contains(connectedElement.Id) ||
+                        selectedConnections.Any(x =>
+                            x.Item2.Id.Equals(connectedElement.Id)))
                     {
                         continue;
                     }
 
-                    selectedPipeConnections.Add(
-                        Tuple.Create(connector, pipe));
+                    selectedConnections.Add(
+                        Tuple.Create(connector, connectedElement));
                 }
 
-                // A selected flange without its connected pipe does not alter
-                // an unselected component at the spool boundary.
-                foreach (Tuple<Connector, Pipe> connection in
-                         selectedPipeConnections)
+                // A selected flange without its connected pipe or shaped
+                // branch does not alter an unselected component at the spool
+                // boundary.
+                foreach (Tuple<Connector, Element> connection in
+                         selectedConnections)
                 {
                     Connector flangeConnector = connection.Item1;
-                    Pipe pipe = connection.Item2;
-                    PipeDimensions dimensions;
+                    Element connectedElement = connection.Item2;
+                    Pipe pipe = connectedElement as Pipe;
+                    bool isShapedBranch =
+                        pipe == null &&
+                        IsShapedBranchLike(doc, connectedElement);
+                    PipeDimensions dimensions = null;
 
-                    if (!pipeDimensions.TryGetValue(
-                            pipe.Id,
-                            out dimensions) ||
+                    bool dimensionsResolved = pipe != null
+                        ? pipeDimensions.TryGetValue(
+                            connectedElement.Id,
+                            out dimensions)
+                        : componentDimensionOverrides != null &&
+                          componentDimensionOverrides.TryGetValue(
+                              connectedElement.Id,
+                              out dimensions);
+
+                    if (!dimensionsResolved ||
                         dimensions == null)
                     {
                         AddSlipOnFitUpBlockingIssue(
                             issues,
                             flange,
-                            "The connected pipe dimensions could not be " +
-                            "resolved for slip-on flange fabrication fit-up.");
+                            "The connected pipe or shaped-branch outlet " +
+                            "dimensions could not be resolved for slip-on " +
+                            "flange fabrication fit-up.");
                         continue;
                     }
 
@@ -214,23 +205,24 @@ namespace ParallelSystemsPlugin.Fabrication
                         continue;
                     }
 
-                    if (!configuredSetbackMillimetres.HasValue)
+                    // Changed by Jhay: resolve the populated setback band for
+                    // this flange's own DN so mixed-size spools stay dynamic.
+                    double setbackMillimetres;
+
+                    try
+                    {
+                        setbackMillimetres = fabricationConfiguration
+                            .ResolveSlipOnPipeFaceSetbackMillimetres(
+                                nominalDiameter);
+                    }
+                    catch (InvalidOperationException ex)
                     {
                         AddSlipOnFitUpBlockingIssue(
                             issues,
                             flange,
-                            "Slip-on flange fabrication fit-up could not be " +
-                            "resolved. The flange dimensions and pipe " +
-                            "clearance are known, but the required axial " +
-                            "pipe-end setback must be supplied in " +
-                            "Configurations > Fabrication from the applicable " +
-                            "fabrication/WPS configuration before the STEP " +
-                            "can be generated.");
+                            ex.Message);
                         continue;
                     }
-
-                    double setbackMillimetres =
-                        configuredSetbackMillimetres.Value;
                     double insertionMillimetres =
                         flangeThicknessMillimetres -
                         setbackMillimetres;
@@ -256,7 +248,7 @@ namespace ParallelSystemsPlugin.Fabrication
                             doc,
                             flange,
                             flangeConnector,
-                            pipe);
+                            connectedElement);
                     XYZ flangePipeSideFace;
                     XYZ flangeAxis;
                     string placementError;
@@ -276,40 +268,57 @@ namespace ParallelSystemsPlugin.Fabrication
                         continue;
                     }
 
-                    XYZ pipeStart;
-                    XYZ pipeEnd;
-                    XYZ pipeDirection;
-                    double pipeLength;
+                    bool isPipeStart = false;
+                    XYZ designConnectedEnd = flangeConnector.Origin;
+                    XYZ connectedAxis = GetConnectorOutwardDirection(
+                        flange,
+                        flangeConnector,
+                        connectedElement);
+                    double connectorDistance =
+                        designConnectedEnd.DistanceTo(flangePipeSideFace);
 
-                    if (!TryGetStraightPipeAxis(
-                            pipe,
-                            out pipeStart,
-                            out pipeEnd,
-                            out pipeDirection,
-                            out pipeLength))
+                    if (pipe != null)
                     {
-                        AddSlipOnFitUpBlockingIssue(
-                            issues,
-                            flange,
-                            "Slip-on fit-up requires a straight rigid pipe.");
-                        continue;
+                        XYZ pipeStart;
+                        XYZ pipeEnd;
+                        XYZ pipeDirection;
+                        double pipeLength;
+
+                        if (!TryGetStraightPipeAxis(
+                                pipe,
+                                out pipeStart,
+                                out pipeEnd,
+                                out pipeDirection,
+                                out pipeLength))
+                        {
+                            AddSlipOnFitUpBlockingIssue(
+                                issues,
+                                flange,
+                                "Slip-on fit-up requires a straight rigid pipe.");
+                            continue;
+                        }
+
+                        double startDistance =
+                            pipeStart.DistanceTo(flangePipeSideFace);
+                        double endDistance =
+                            pipeEnd.DistanceTo(flangePipeSideFace);
+                        isPipeStart = startDistance <= endDistance;
+                        connectorDistance = Math.Min(
+                            startDistance,
+                            endDistance);
+                        designConnectedEnd = isPipeStart
+                            ? pipeStart
+                            : pipeEnd;
+                        connectedAxis = pipeDirection.Normalize();
                     }
 
-                    double startDistance =
-                        pipeStart.DistanceTo(flangePipeSideFace);
-                    double endDistance =
-                        pipeEnd.DistanceTo(flangePipeSideFace);
-                    bool isPipeStart = startDistance <= endDistance;
-                    double connectorDistance = Math.Min(
-                        startDistance,
-                        endDistance);
                     double connectionTolerance = Math.Max(
                         1.0 / FeetToMillimetres,
                         dimensions.OutsideDiameter * 0.01);
 
                     if (connectorDistance > connectionTolerance ||
                         Math.Abs(
-                            pipeDirection.Normalize().DotProduct(
+                            connectedAxis.Normalize().DotProduct(
                                 flangeAxis.Normalize())) <
                             ConnectorDirectionTolerance)
                     {
@@ -332,36 +341,44 @@ namespace ParallelSystemsPlugin.Fabrication
                     XYZ matingFace =
                         flangePipeSideFace +
                         (flangeAxis.Normalize() * thicknessFeet);
-                    XYZ designPipeEnd = isPipeStart
-                        ? pipeStart
-                        : pipeEnd;
-                    double extensionDirection =
-                        (fabricationPipeEnd - designPipeEnd)
-                            .DotProduct(pipeDirection.Normalize());
-
-                    if ((isPipeStart &&
-                         extensionDirection >= -GeometryTolerance) ||
-                        (!isPipeStart &&
-                         extensionDirection <= GeometryTolerance))
+                    if (pipe != null)
                     {
-                        AddSlipOnFitUpBlockingIssue(
-                            issues,
-                            flange,
-                            "The resolved flange axis does not extend away " +
-                            "from the selected pipe end. Verify the flange " +
-                            "connector orientation.");
-                        continue;
+                        double extensionDirection =
+                            (fabricationPipeEnd - designConnectedEnd)
+                                .DotProduct(connectedAxis.Normalize());
+
+                        if ((isPipeStart &&
+                             extensionDirection >= -GeometryTolerance) ||
+                            (!isPipeStart &&
+                             extensionDirection <= GeometryTolerance))
+                        {
+                            AddSlipOnFitUpBlockingIssue(
+                                issues,
+                                flange,
+                                "The resolved flange axis does not extend " +
+                                "away from the selected pipe end. Verify " +
+                                "the flange connector orientation.");
+                            continue;
+                        }
                     }
 
-                    List<SlipOnFlangeFitUp> pipeFitUps;
-                    if (!result.TryGetValue(pipe.Id, out pipeFitUps))
+                    List<SlipOnFlangeFitUp> connectedElementFitUps;
+                    if (!result.TryGetValue(
+                            connectedElement.Id,
+                            out connectedElementFitUps))
                     {
-                        pipeFitUps = new List<SlipOnFlangeFitUp>();
-                        result[pipe.Id] = pipeFitUps;
+                        connectedElementFitUps =
+                            new List<SlipOnFlangeFitUp>();
+                        result[connectedElement.Id] =
+                            connectedElementFitUps;
                     }
 
-                    if (pipeFitUps.Any(x =>
-                            x.IsPipeStart == isPipeStart))
+                    if (connectedElementFitUps.Any(x =>
+                            pipe != null
+                                ? x.IsPipeStart == isPipeStart
+                                : ConnectorOriginsMatch(
+                                    x.DesignConnectionOrigin,
+                                    designConnectedEnd)))
                     {
                         AddSlipOnFitUpBlockingIssue(
                             issues,
@@ -374,13 +391,14 @@ namespace ParallelSystemsPlugin.Fabrication
                     SlipOnFlangeFitUp fitUp =
                         new SlipOnFlangeFitUp
                         {
-                            PipeId = pipe.Id,
+                            ConnectedElementId = connectedElement.Id,
+                            ConnectedElementIsShapedBranch = isShapedBranch,
                             FlangeId = flange.Id,
                             FlangeName = GetElementDisplayName(flange),
                             StandardSection = configuration.Section,
                             NominalDiameterMillimetres = nominalDiameter,
                             IsPipeStart = isPipeStart,
-                            DesignConnectionOrigin = flangePipeSideFace,
+                            DesignConnectionOrigin = designConnectedEnd,
                             FabricationPipeEnd = fabricationPipeEnd,
                             FlangeMatingFace = matingFace,
                             FlangeAxis = flangeAxis.Normalize(),
@@ -392,11 +410,14 @@ namespace ParallelSystemsPlugin.Fabrication
                                 flangeThicknessMillimetres,
                             PipeFaceSetbackMillimetres =
                                 setbackMillimetres,
+                            PipeFaceSetbackSource = nominalDiameter <= 125
+                                ? "DN125-and-below configuration"
+                                : "DN150-and-above configuration",
                             PipeInsertionDepthMillimetres =
                                 insertionMillimetres
                         };
 
-                    pipeFitUps.Add(fitUp);
+                    connectedElementFitUps.Add(fitUp);
 
                     issues.Add(new FabricationIssue
                     {
@@ -433,7 +454,7 @@ namespace ParallelSystemsPlugin.Fabrication
                 Document doc,
                 Element flange,
                 Connector attachedConnector,
-                Pipe attachedPipe)
+                Element attachedElement)
         {
             List<ConnectorBore> result = new List<ConnectorBore>();
             ConnectorManager manager = GetConnectorManager(flange);
@@ -460,10 +481,10 @@ namespace ParallelSystemsPlugin.Fabrication
                     OutwardDirection = GetConnectorOutwardDirection(
                         flange,
                         connector,
-                        isAttached ? attachedPipe : null),
+                        isAttached ? attachedElement : null),
                     NominalDiameter = connector.Radius * 2.0,
                     ConnectedElementId = isAttached
-                        ? attachedPipe.Id
+                        ? attachedElement.Id
                         : ElementId.InvalidElementId,
                     IsSynthetic = false
                 });
@@ -524,18 +545,23 @@ namespace ParallelSystemsPlugin.Fabrication
                 "; Pipe-face setback " +
                 FormatCatalogMillimetres(
                     fitUp.PipeFaceSetbackMillimetres) +
+                " (" + fitUp.PipeFaceSetbackSource + ")" +
                 "; Pipe insertion depth " +
                 FormatCatalogMillimetres(
                     fitUp.PipeInsertionDepthMillimetres) +
                 "; Connector role: design connection datum; " +
-                "pipe physical end extended into flange: Yes; flange " +
-                "mating face retained: Yes; pipe/flange solids remain " +
+                (fitUp.ConnectedElementIsShapedBranch
+                    ? "shaped-branch outlet"
+                    : "pipe physical end") +
+                " extended into flange: Yes; flange " +
+                "mating face retained: Yes; connected/flange solids remain " +
                 "separate: Yes.";
         }
 
         private sealed class SlipOnFlangeFitUp
         {
-            public ElementId PipeId { get; set; }
+            public ElementId ConnectedElementId { get; set; }
+            public bool ConnectedElementIsShapedBranch { get; set; }
             public ElementId FlangeId { get; set; }
             public string FlangeName { get; set; }
             public string StandardSection { get; set; }
@@ -549,6 +575,7 @@ namespace ParallelSystemsPlugin.Fabrication
             public double FlangeBoreMillimetres { get; set; }
             public double FlangeThicknessMillimetres { get; set; }
             public double PipeFaceSetbackMillimetres { get; set; }
+            public string PipeFaceSetbackSource { get; set; }
             public double PipeInsertionDepthMillimetres { get; set; }
         }
     }

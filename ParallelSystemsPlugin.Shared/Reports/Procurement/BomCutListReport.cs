@@ -40,23 +40,14 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         public static void Generate(RvtDoc doc, ProcurementConfig p)
         {
-            ParallelSystemsPlugin.Classes.PdfRuntime.EnsureInitialized();
             if (doc == null) throw new ArgumentNullException(nameof(doc));
             if (p == null) throw new ArgumentNullException(nameof(p));
 
             string reportName = $"BOM-CUT LIST REPORT ({AppConfig.CurrentConfig.Procurement.CutListMaximumLength/1000}m)";
-            // Output path
-            string outPath = Path.Combine(p.TargetFolder, $"{reportName}.pdf");
-
             // Config inputs
             double maxLen = (p.CutListMaximumLength <= 0) ? 6000 : p.CutListMaximumLength;
             double blade = (p.CutListBladeThickness < 0) ? 0 : p.CutListBladeThickness;
             double negAllow = (p.CutListNegativeAllowance < 0) ? 0 : p.CutListNegativeAllowance;
-
-            // Date
-            var culture = new CultureInfo("en-US");
-            DateTime dt = (p.Date == default(DateTime)) ? DateTime.Today : p.Date;
-            string dateText = dt.ToString("dddd, dd MMMM yyyy", culture);
 
             // Collect pipes from active view
             List<PipePiece> pieces = CollectPipePiecesFromActiveView(doc, negAllow);
@@ -79,7 +70,91 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (pieces.Count == 0)
                 throw new InvalidOperationException("No valid pipes found in the active view for BOM-CUT LIST.");
 
-            // Grouping (package + material + size) similar to sample
+            string note = p.IncludeSiteMeasure
+                ? ""
+                : "NOTE: This report does not include site-measured spools and branches";
+            ExportReport(p, pieces, maxLen, blade, negAllow, note, reportName);
+        }
+
+        private static void ExportReport(
+            ProcurementConfig p,
+            List<PipePiece> pieces,
+            double maxLen,
+            double blade,
+            double negAllow,
+            string note,
+            string reportName)
+        {
+            bool groupByPackage = !p.ExportReportsToExcel || p.GroupByPackage;
+            string totalWasteText = BuildTotalWasteText(pieces, maxLen, blade, groupByPackage);
+
+            if (p.ExportReportsToExcel)
+            {
+                var worksheets = new List<ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet>
+                {
+                    BuildCutListExcelSheet(
+                        p,
+                        pieces,
+                        maxLen,
+                        blade,
+                        negAllow,
+                        note,
+                        totalWasteText,
+                        null)
+                };
+
+                var packageGroups = pieces
+                    .GroupBy(piece => piece.Package ?? "", StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(group => string.IsNullOrWhiteSpace(group.Key) ? 1 : 0)
+                    .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (p.CreatePackageWorksheets && packageGroups.Count > 1)
+                {
+                    foreach (var packageGroup in packageGroups)
+                    {
+                        List<PipePiece> packagePieces = packageGroup.ToList();
+                        worksheets.Add(BuildCutListExcelSheet(
+                            p,
+                            packagePieces,
+                            maxLen,
+                            blade,
+                            negAllow,
+                            note,
+                            BuildTotalWasteText(packagePieces, maxLen, blade, true),
+                            ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(packageGroup.Key)));
+                    }
+                }
+
+                ParallelSystemsPlugin.Helpers.ExcelReportExporter.SaveWorkbook(
+                    ParallelSystemsPlugin.Helpers.ExcelReportExporter.BuildOutputPath(p, reportName),
+                    worksheets);
+            }
+            else
+            {
+                // Excel uses only the XLSX writer and must not initialize PDF
+                // dependencies or interfere with another add-in's PDF runtime.
+                ParallelSystemsPlugin.Classes.PdfRuntime.EnsureInitialized();
+                ExportPdfReport(p, pieces, maxLen, blade, negAllow, note, totalWasteText, reportName);
+            }
+        }
+
+        // Keep PDF types out of the Excel call path, including JIT inlining.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static void ExportPdfReport(
+            ProcurementConfig p,
+            List<PipePiece> pieces,
+            double maxLen,
+            double blade,
+            double negAllow,
+            string note,
+            string totalWasteText,
+            string reportName)
+        {
+            string outPath = Path.Combine(p.TargetFolder, $"{reportName}.pdf");
+            var culture = new CultureInfo("en-US");
+            DateTime dt = (p.Date == default(DateTime)) ? DateTime.Today : p.Date;
+            string dateText = dt.ToString("dddd, dd MMMM yyyy", culture);
             var groups = pieces
                 .GroupBy(x => new { x.Package, x.Material, x.SizeText, x.SizeSort })
                 .OrderBy(g => g.Key.Package)
@@ -87,66 +162,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .ThenByDescending(g => g.Key.SizeSort)
                 .ToList();
 
-            string debugText = string.Join(
-                Environment.NewLine,
-                pieces.Select(p =>
-
-                    $"Assembly: {p.AssemblyName}, " +
-                    $"Package: {p.Package}, " +
-                    $"Material: {p.Material}, " +
-                    $"Description: {p.Description}, " +
-                    $"Size: {p.SizeText}, " +
-                    $"RawLength: {p.RawLengthMm:F2}, " +
-                    $"AdjustedLength: {p.AdjustedLengthMm:F2}")
-            );
-
-
-            var summary = pieces
-            .GroupBy(x => new { x.Material, x.SizeText, x.SizeSort })
-            .OrderBy(g => g.Key.Material)
-            .ThenByDescending(g => g.Key.SizeSort)
-            .Select(g =>
-            {
-                var bins = PackPieces(
-                    g.ToList(),
-                    maxLen,
-                    blade,
-                    OptimizationMode.BestFitDecreasing);
-
-                return new
-                {
-                    Material = g.Key.Material,
-                    Size = g.Key.SizeText,
-                    Quantity = bins.Count,   // <-- Number of stock pipes
-                    Items = g.ToList(),
-                    Bins = bins
-                };
-            })
-            .ToList();
-
-            string note = p.IncludeSiteMeasure
-                ? ""
-                : "NOTE: This report does not include site-measured spools and branches";
-
-            List<PackedBin> allPackedBins = groups
-                .SelectMany(g => PackPieces(
-                    g.ToList(),
-                    maxLen,
-                    blade,
-                    OptimizationMode.BestFitDecreasing))
-                .ToList();
-
-            double grandTotalWaste = allPackedBins
-                .Sum(bin => Math.Round(Math.Max(0, maxLen - bin.UsedMm)));
-            double grandTotalStock = allPackedBins.Count * maxLen;
-            double grandWastePct = grandTotalStock > 0
-                ? (grandTotalWaste / grandTotalStock) * 100.0
-                : 0;
-            string totalWasteText =
-                $"TOTAL WASTE: {Math.Round(grandTotalWaste)} mm ({grandWastePct:F1}%)";
-
-            if (!p.ExportReportsToExcel)
-            {
             // Build PDF
             PdfDoc pdf = new PdfDoc();
             DefineStyles(pdf);
@@ -242,50 +257,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             var renderer = new PdfDocumentRenderer() { Document = pdf };
             renderer.RenderDocument();
             renderer.PdfDocument.Save(outPath);
-            }
-
-            if (p.ExportReportsToExcel)
-            {
-                var worksheets = new List<ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet>
-                {
-                    BuildCutListExcelSheet(
-                        p,
-                        pieces,
-                        maxLen,
-                        blade,
-                        negAllow,
-                        note,
-                        totalWasteText,
-                        null)
-                };
-
-                var packageGroups = pieces
-                    .GroupBy(piece => piece.Package ?? "", StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(group => string.IsNullOrWhiteSpace(group.Key) ? 1 : 0)
-                    .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-                if (p.CreatePackageWorksheets && packageGroups.Count > 1)
-                {
-                    foreach (var packageGroup in packageGroups)
-                    {
-                        List<PipePiece> packagePieces = packageGroup.ToList();
-                        worksheets.Add(BuildCutListExcelSheet(
-                            p,
-                            packagePieces,
-                            maxLen,
-                            blade,
-                            negAllow,
-                            note,
-                            BuildTotalWasteText(packagePieces, maxLen, blade),
-                            ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(packageGroup.Key)));
-                    }
-                }
-
-                ParallelSystemsPlugin.Helpers.ExcelReportExporter.SaveWorkbook(
-                    ParallelSystemsPlugin.Helpers.ExcelReportExporter.BuildOutputPath(p, reportName),
-                    worksheets);
-            }
         }
 
         private static ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet BuildCutListExcelSheet(
@@ -298,12 +269,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             string totalWasteText,
             string worksheetName)
         {
-            bool isMasterList = string.IsNullOrWhiteSpace(worksheetName) && pieces
-                .Select(x => x.Package ?? "")
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Skip(1)
-                .Any();
-
             var cutSheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
                 config,
                 "BOM-CUT LIST Details",
@@ -312,41 +277,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (!string.IsNullOrWhiteSpace(worksheetName))
                 cutSheet.Name = worksheetName;
 
-            if (isMasterList)
-            {
-                bool masterAlt = false;
-                foreach (PipePiece item in pieces
-                    .OrderBy(x => x.AssemblyName ?? "", StringComparer.OrdinalIgnoreCase)
-                    .ThenByDescending(x => x.SizeSort)
-                    .ThenBy(x => x.Material ?? "", StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(x => x.Package ?? "", StringComparer.OrdinalIgnoreCase))
-                {
-                    cutSheet.Add(
-                        masterAlt
-                            ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData
-                            : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                        item.Package ?? "",
-                        item.AssemblyName ?? "",
-                        item.SizeText ?? "",
-                        item.Material ?? "",
-                        item.PipeEndPrep ?? "",
-                        Math.Round(item.AdjustedLengthMm));
-                    masterAlt = !masterAlt;
-                }
-
-                cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Total, totalWasteText);
-
-                if (!string.IsNullOrWhiteSpace(note))
-                {
-                    cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Blank);
-                    cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.RedNote, note);
-                }
-
-                return cutSheet;
-            }
-
+            // Every cut list needs the stock-pipe cutting plan, including the main
+            // worksheet when it contains several packages and no package tabs.
+            bool groupByPackage = config.GroupByPackage || !string.IsNullOrWhiteSpace(worksheetName);
             var groups = pieces
-                .GroupBy(x => new { x.Package, x.Material, x.SizeText, x.SizeSort })
+                .GroupBy(x => new { Package = groupByPackage ? x.Package ?? "" : "", x.Material, x.SizeText, x.SizeSort })
                 .OrderBy(g => g.Key.Package)
                 .ThenBy(g => g.Key.Material)
                 .ThenByDescending(g => g.Key.SizeSort)
@@ -362,7 +297,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 cutSheet.Add(
                     ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Group,
                     string.Format(CultureInfo.InvariantCulture, "Package: {0} | Material: {1} | Size: {2} | Stock Length: {3} | Blade: {4} | Negative Allowance: {5}",
-                        g.Key.Package ?? "",
+                        GetCutListPackageLabel(g),
                         g.Key.Material ?? "",
                         g.Key.SizeText ?? "",
                         maxLen,
@@ -387,7 +322,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     {
                         cutSheet.Add(
                             cutAlt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                            g.Key.Package ?? "",
+                            item.Package ?? "",
                             item.AssemblyName ?? "",
                             g.Key.SizeText ?? "",
                             g.Key.Material ?? "",
@@ -419,10 +354,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         private static string BuildTotalWasteText(
             IList<PipePiece> pieces,
             double maxLen,
-            double blade)
+            double blade,
+            bool groupByPackage)
         {
             List<PackedBin> bins = pieces
-                .GroupBy(x => new { x.Package, x.Material, x.SizeText, x.SizeSort })
+                .GroupBy(x => new { Package = groupByPackage ? x.Package ?? "" : "", x.Material, x.SizeText, x.SizeSort })
                 .SelectMany(group => PackPieces(
                     group.ToList(),
                     maxLen,
@@ -434,6 +370,16 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             double totalStock = bins.Count * maxLen;
             double totalWastePct = totalStock > 0 ? (totalWaste / totalStock) * 100.0 : 0;
             return $"TOTAL WASTE: {Math.Round(totalWaste)} mm ({totalWastePct:F1}%)";
+        }
+
+        private static string GetCutListPackageLabel(IEnumerable<PipePiece> pieces)
+        {
+            string[] packages = pieces
+                .Select(piece => piece.Package ?? "")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(2)
+                .ToArray();
+            return packages.Length > 1 ? "ALL PACKAGES" : packages.FirstOrDefault() ?? "";
         }
 
         // =========================

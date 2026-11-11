@@ -185,20 +185,6 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             ShowDialog();
         }
 
-        // Created by Jhay: allow fabrication generation to take the user
-        // directly to the unresolved WPS value instead of ending with a
-        // repeated blocking report and no correction path.
-        public void FocusSlipOnFlangeFitUp()
-        {
-            ConfigurationTabs.SelectedItem = FabricationTab;
-            Loaded += (sender, args) =>
-            {
-                SlipOnPipeFaceSetbackTextBox.Focus();
-                SlipOnPipeFaceSetbackTextBox.SelectAll();
-                Keyboard.Focus(SlipOnPipeFaceSetbackTextBox);
-            };
-        }
-
         #endregion
 
         #region Load/Refresh UI
@@ -219,12 +205,18 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             PipeUnconnectedTextBox.Text = config.PipeMapParameters?.Unconnected ?? "";
             PipeEnableUnconnectedMappingCheckbox.IsChecked = config.PipeMapParameters?.EnableMapping ?? false;
 
-            // Created by Jhay: a blank value is meaningful and remains
-            // unresolved until an approved fabrication/WPS value is entered.
-            SlipOnPipeFaceSetbackTextBox.Text =
-                config.Fabrication?.SlipOnPipeFaceSetbackMillimetres
-                    ?.ToString("0.###", CultureInfo.InvariantCulture) ??
-                string.Empty;
+            // Changed by Jhay: both DN bands are always populated, including
+            // when an older configuration file has no band properties.
+            FabricationConfig fabrication =
+                config.Fabrication ?? new FabricationConfig();
+            SlipOnSetbackDn125AndBelowTextBox.Text =
+                fabrication
+                    .SlipOnPipeFaceSetbackDn125AndBelowMillimetres
+                    .ToString("0.###", CultureInfo.InvariantCulture);
+            SlipOnSetbackDn150AndAboveTextBox.Text =
+                fabrication
+                    .SlipOnPipeFaceSetbackDn150AndAboveMillimetres
+                    .ToString("0.###", CultureInfo.InvariantCulture);
 
             // ===== Fittings End Prep =====
             FittingsEndPreps = new ObservableCollection<EndPrep>(config.FittingsEndPreps ?? new List<EndPrep>());
@@ -1208,32 +1200,37 @@ namespace ParallelSystemsPlugin.UI.Dialogs
                     .Where(x => !string.IsNullOrWhiteSpace(x.NameContains))
                     .ToList();
 
-                // Created by Jhay: persist one central, explicit fit-up value.
-                // No default is substituted because AS 2129 does not define it.
-                double? slipOnSetback = null;
-                string slipOnSetbackText =
-                    (SlipOnPipeFaceSetbackTextBox.Text ?? string.Empty).Trim();
+                // Changed by Jhay: both dynamic DN-band values are required;
+                // the configuration never returns to an unresolved blank.
+                double setbackDn125AndBelow;
+                double setbackDn150AndAbove;
 
-                if (!string.IsNullOrWhiteSpace(slipOnSetbackText))
+                if (!TryParseUserDouble(
+                        SlipOnSetbackDn125AndBelowTextBox.Text,
+                        out setbackDn125AndBelow) ||
+                    setbackDn125AndBelow <= 0.0)
                 {
-                    double parsedSetback;
+                    throw new InvalidOperationException(
+                        "The DN125-and-below slip-on pipe-face setback must " +
+                        "be greater than zero millimetres.");
+                }
 
-                    if (!TryParseUserDouble(
-                            slipOnSetbackText,
-                            out parsedSetback) ||
-                        parsedSetback < 0)
-                    {
-                        throw new InvalidOperationException(
-                            "Slip-on pipe-face setback must be blank or a " +
-                            "non-negative value in millimetres.");
-                    }
-
-                    slipOnSetback = parsedSetback;
+                if (!TryParseUserDouble(
+                        SlipOnSetbackDn150AndAboveTextBox.Text,
+                        out setbackDn150AndAbove) ||
+                    setbackDn150AndAbove <= 0.0)
+                {
+                    throw new InvalidOperationException(
+                        "The DN150-and-above slip-on pipe-face setback must " +
+                        "be greater than zero millimetres.");
                 }
 
                 newConfig.Fabrication = new FabricationConfig
                 {
-                    SlipOnPipeFaceSetbackMillimetres = slipOnSetback
+                    SlipOnPipeFaceSetbackDn125AndBelowMillimetres =
+                        setbackDn125AndBelow,
+                    SlipOnPipeFaceSetbackDn150AndAboveMillimetres =
+                        setbackDn150AndAbove
                 };
 
                 // ===== Pipe Weight =====

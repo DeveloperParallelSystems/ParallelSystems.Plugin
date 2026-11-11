@@ -5,9 +5,11 @@
     <PlatformTarget>x64</PlatformTarget>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
+    <RevitInstallDir Condition="'$(RevitInstallDir)' == ''">$(ProgramW6432)\Autodesk\Revit 2026</RevitInstallDir>
   </PropertyGroup>
 
   <ItemGroup>
+    <AssemblyMetadata Include="RevitInstallDir" Value="$(RevitInstallDir)" />
     <ProjectReference Include="..\ParallelSystemsPlugin.2026\ParallelSystemsPlugin.2026.csproj" />
   </ItemGroup>
 </Project>

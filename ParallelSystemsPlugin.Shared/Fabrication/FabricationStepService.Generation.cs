@@ -221,19 +221,6 @@ namespace ParallelSystemsPlugin.Fabrication
                             x => x.Key,
                             x => x.ToList());
 
-            // Changed by Jhay: resolve explicit slip-on fabrication fit-up
-            // before building pipe solids so the Revit connector remains a
-            // design datum while the physical pipe end can enter the flange.
-            Dictionary<ElementId, List<SlipOnFlangeFitUp>>
-                slipOnFlangeFitUpsByPipe =
-                    ResolveSelectedAtlasSlipOnFlangeFitUps(
-                        doc,
-                        sourceElements,
-                        pipeDimensions,
-                        selectedSourceIds,
-                        selection.FlangeGeometryMode,
-                        result.Issues);
-
             // Special side-outlet fittings can provide the authoritative
             // branch/outlet dimensions to adjacent flanges and fittings even
             // when no physical branch pipe exists in the selected assembly.
@@ -263,6 +250,20 @@ namespace ParallelSystemsPlugin.Fabrication
                 }
             }
 
+            // Resolve slip-on fit-up after component dimensions are known.
+            // A flange may connect directly to either a pipe or a shaped-
+            // branch outlet; both physical ends must use the same DN rule.
+            Dictionary<ElementId, List<SlipOnFlangeFitUp>>
+                slipOnFlangeFitUpsByConnectedElement =
+                    ResolveSelectedAtlasSlipOnFlangeFitUps(
+                        doc,
+                        sourceElements,
+                        pipeDimensions,
+                        componentDimensionOverrides,
+                        selectedSourceIds,
+                        selection.FlangeGeometryMode,
+                        result.Issues);
+
             List<FabricationElementGeometry> generated =
                 new List<FabricationElementGeometry>();
 
@@ -280,7 +281,7 @@ namespace ParallelSystemsPlugin.Fabrication
                             shapedBranchConnections,
                             sideCouplingsByHeaderPipe,
                             sideCouplingConnections,
-                            slipOnFlangeFitUpsByPipe,
+                            slipOnFlangeFitUpsByConnectedElement,
                             result.Issues);
 
                     if (pipeGeometry != null)
@@ -340,6 +341,7 @@ namespace ParallelSystemsPlugin.Fabrication
                         shapedBranchConnection,
                         sideCouplingConnection,
                         selection.FlangeGeometryMode,
+                        slipOnFlangeFitUpsByConnectedElement,
                         result.Issues);
 
                 if (fittingGeometry != null)

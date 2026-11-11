@@ -810,6 +810,7 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
@@ -837,18 +838,27 @@
                                           Width="140"
                                           SelectionChanged="FabricationFilter_SelectionChanged"/>
                             </StackPanel>
-                            <!-- Created by Jhay: explicit project/WPS input;
-                                 blank intentionally blocks slip-on STEP fit-up. -->
+                            <!-- Changed by Jhay: populated DN-band defaults
+                                 resolve independently for every flange. -->
                             <StackPanel Grid.Column="3" Margin="0,0,12,0">
-                                <TextBlock Text="Pipe-face setback (mm)"
+                                <TextBlock Text="Setback DN125 and below (mm)"
                                            Margin="0,0,0,4"
                                            FontWeight="SemiBold"/>
-                                <TextBox x:Name="SlipOnPipeFaceSetbackTextBox"
-                                         Width="165"
+                                <TextBox x:Name="SlipOnSetbackDn125AndBelowTextBox"
+                                         Width="150"
                                          PreviewTextInput="NumericOnly"
-                                         ToolTip="Distance from the finished slip-on flange mating face back to the physical pipe end. Leave blank until approved by the project fabrication specification or WPS."/>
+                                         ToolTip="Pipe-face setback in millimetres for slip-on flanges DN125 and below. Default: 6 mm."/>
                             </StackPanel>
-                            <TextBlock Grid.Column="4"
+                            <StackPanel Grid.Column="4" Margin="0,0,12,0">
+                                <TextBlock Text="Setback DN150 and above (mm)"
+                                           Margin="0,0,0,4"
+                                           FontWeight="SemiBold"/>
+                                <TextBox x:Name="SlipOnSetbackDn150AndAboveTextBox"
+                                         Width="150"
+                                         PreviewTextInput="NumericOnly"
+                                         ToolTip="Pipe-face setback in millimetres for slip-on flanges DN150 and above. Default: 10 mm."/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="5"
                                        Margin="20,0,0,0"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
