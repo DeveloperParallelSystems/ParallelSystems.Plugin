@@ -159,7 +159,7 @@ Header ND and Detailing command classes remain in source but are not built onto 
 - Fabrication
 - Tools
 
-The Procurement tab provides an Excel/PDF radio choice plus stock length, blade thickness, negative allowance, and offcut-threshold inputs. New configuration defaults select Excel, exclude site-measured work, and use a 2500 mm reusable-offcut threshold.
+The Procurement tab provides an Excel/PDF radio choice plus stock length, blade thickness, negative allowance, and offcut-threshold inputs. New configuration defaults select Excel, exclude site-measured work, and use a 3500 mm reusable-offcut threshold.
 
 The Fabrication tab and Atlas STEP lookup both load the packaged `Atlas-Flange-Dimensions.psv` through `AtlasFlangeReferenceCatalog`. The read-only view covers six ASME B16.5 classes, AS 2129 Tables D/E/F/H, PN16 AS 4087, and PN16 EN 1092. Its component type, reference-table, and nominal-size selectors filter the in-memory view only; version 1.17.10 does not persist user edits or overrides. During STEP generation, `FabricationStepService.FlangeGeometry.cs` matches the same immutable data by a supported table token in the flange family/type name plus the nominal diameter of its round physical connectors.
 

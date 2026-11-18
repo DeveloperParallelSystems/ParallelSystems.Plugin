@@ -32,16 +32,16 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (string.IsNullOrWhiteSpace(cfg.TargetFolder) || !Directory.Exists(cfg.TargetFolder))
                 throw new InvalidOperationException("TargetFolder is empty or does not exist.");
 
-            var siteMeasureNames = Helpers.Elements.GetSiteMeasureAssemblies(doc)
-                .Select(x => x.AssemblyName ?? "")
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var includeElement = Helpers.Elements.ProcurementSiteMeasureFilter(doc, cfg.IncludeSiteMeasure);
 
-            List<AccessoryRow> rows = new FilteredElementCollector(doc, doc.ActiveView.Id)
+            List<AccessoryRow> items = new FilteredElementCollector(doc, doc.ActiveView.Id)
                 .OfCategory(BuiltInCategory.OST_PipeAccessory)
                 .WhereElementIsNotElementType()
                 .OfType<FamilyInstance>()
+                .Where(x => includeElement(x))
                 .Where(x => !Helpers.Elements.IsDoNotSchedule(doc, x))
+                .Where(x => cfg.IncludeSiteMeasure || x.AssemblyInstanceId != ElementId.InvalidElementId ||
+                    BomFieldMaterialReport.GetLooseItemConnections(x).All(includeElement))
                 .Select(x => new AccessoryRow
                 {
                     PackageName = GetPackageName(doc, x),
@@ -51,34 +51,54 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     Symbol = x.Symbol,
                     DimensionLabel = GetDisplayedParameter(x, "L")
                 })
-                .Where(x => cfg.IncludeSiteMeasure || !siteMeasureNames.Contains(x.AssemblyName ?? ""))
-                .GroupBy(x => new { x.PackageName, x.Size, x.Description })
-                .Select(x => new AccessoryRow
-                {
-                    PackageName = x.Key.PackageName,
-                    Size = x.Key.Size,
-                    Description = x.Key.Description,
-                    Symbol = x.Select(item => item.Symbol).FirstOrDefault(symbol => symbol != null),
-                    DimensionLabel = x.Select(item => item.DimensionLabel)
-                        .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "",
-                    Quantity = x.Count()
-                })
+                .ToList();
+
+            if (items.Count == 0)
+                throw new InvalidOperationException("No accessories found in the active view.");
+
+            var master = Summarize(items, cfg.GroupByPackage);
+            if (cfg.ExportReportsToExcel)
+                ExportExcel(cfg, master, items);
+            else
+                ExportPdf(cfg, master);
+        }
+
+        private static List<AccessoryRow> Summarize(IEnumerable<AccessoryRow> items, bool groupByPackage)
+        {
+            // Use the same case-insensitive package boundaries for master and package sheets.
+            // With grouping OFF, matching accessories are counted across all packages.
+            return items
+                .GroupBy(x => groupByPackage
+                    ? ExcelReportExporter.GetPackageWorksheetName(x.PackageName)
+                    : "", StringComparer.OrdinalIgnoreCase)
+                .SelectMany(package => package
+                    .GroupBy(x => new { x.Size, x.Description })
+                    .Select(x => new AccessoryRow
+                        {
+                            PackageName = package.Key,
+                            Size = x.Key.Size,
+                            Description = x.Key.Description,
+                            Symbol = x.Select(item => item.Symbol).FirstOrDefault(symbol => symbol != null),
+                            DimensionLabel = x.Select(item => item.DimensionLabel)
+                                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "",
+                            Quantity = x.Count()
+                        }))
                 .OrderBy(x => string.Equals(
                     x.PackageName,
                     NoPackageAssigned,
                     StringComparison.OrdinalIgnoreCase) ? 1 : 0)
                 .ThenBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(x => ParseSize(x.Size))
                 .ThenBy(x => x.Description, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => ParseSize(x.Size))
                 .ToList();
+        }
 
-            if (rows.Count == 0)
-                throw new InvalidOperationException("No accessories found in the active view.");
-
-            if (cfg.ExportReportsToExcel)
-                ExportExcel(doc, cfg, rows);
-            else
-                ExportPdf(cfg, rows);
+        private static IEnumerable<IGrouping<string, AccessoryRow>> GetAccessoryGroups(
+            IEnumerable<AccessoryRow> rows, bool groupByPackage)
+        {
+            return rows.GroupBy(x => groupByPackage
+                ? ExcelReportExporter.GetPackageWorksheetName(x.PackageName)
+                : "", StringComparer.OrdinalIgnoreCase);
         }
 
         private static void ExportPdf(ProcurementConfig cfg, IList<AccessoryRow> rows)
@@ -102,9 +122,10 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             PdfLayoutHelpers.DrawHeader(section, cfg, "ACCESSORY REPORT", dateText);
             PdfLayoutHelpers.AddFooter(section, "", !cfg.IncludeSiteMeasure);
 
-            foreach (var package in rows.GroupBy(x => x.PackageName))
+            foreach (var package in GetAccessoryGroups(rows, cfg.GroupByPackage))
             {
-                AddPackageBand(section, package.Key);
+                if (cfg.GroupByPackage)
+                    AddPackageBand(section, package.Key);
                 Table table = section.AddTable();
                 table.Borders.Width = 0.25;
                 table.Borders.Color = Colors.Gray;
@@ -138,7 +159,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             builder.Save(Path.Combine(cfg.TargetFolder, "BOM-ACCESSORY REPORT.pdf"));
         }
 
-        private static void ExportExcel(RvtDoc doc, ProcurementConfig cfg, IList<AccessoryRow> rows)
+        private static void ExportExcel(ProcurementConfig cfg, IList<AccessoryRow> master, IList<AccessoryRow> items)
         {
             string previewFolder = Path.Combine(
                 Path.GetTempPath(),
@@ -150,11 +171,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                 var worksheets = new List<ExcelReportExporter.ExcelWorksheet>
                 {
-                    BuildAccessoryExcelSheet(cfg, rows, previewFolder, null)
+                    BuildAccessoryExcelSheet(cfg, master, previewFolder, null)
                 };
 
-                var packageGroups = rows
-                    .GroupBy(x => x.PackageName ?? "", StringComparer.OrdinalIgnoreCase)
+                var packageGroups = items
+                    .GroupBy(x => ExcelReportExporter.GetPackageWorksheetName(x.PackageName), StringComparer.OrdinalIgnoreCase)
                     .OrderBy(g => string.Equals(g.Key, NoPackageAssigned, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
                     .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                     .ToList();
@@ -165,7 +186,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     {
                         worksheets.Add(BuildAccessoryExcelSheet(
                             cfg,
-                            package.ToList(),
+                            Summarize(package, true),
                             previewFolder,
                             ExcelReportExporter.GetPackageWorksheetName(package.Key)));
                     }
@@ -195,12 +216,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             string previewFolder,
             string worksheetName)
         {
-            bool isMasterList = string.IsNullOrWhiteSpace(worksheetName) && rows
-                .Select(x => x.PackageName ?? "")
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Skip(1)
-                .Any();
-            bool groupMasterByPackage = isMasterList && cfg.GroupByPackage;
+            bool groupMasterByPackage = worksheetName == null && cfg.GroupByPackage;
 
             var sheet = ExcelReportExporter.CreateReportSheet(
                 cfg,
@@ -229,86 +245,18 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (!string.IsNullOrWhiteSpace(worksheetName))
                 sheet.Name = worksheetName;
 
-            if (isMasterList)
+            foreach (var package in GetAccessoryGroups(rows, groupMasterByPackage || worksheetName != null))
             {
-                bool alternate = false;
-                var masterRows = cfg.GroupByPackage
-                    ? rows.Select(item => new
-                    {
-                        Item = item,
-                        Package = item.PackageName ?? NoPackageAssigned,
-                        Quantity = item.Quantity
-                    })
-                    : rows
-                        .GroupBy(item => new
-                        {
-                            Size = item.Size ?? "",
-                            Description = item.Description ?? ""
-                        })
-                        .Select(group => new
-                        {
-                            Item = group.First(),
-                            Package = "",
-                            Quantity = group.Sum(item => item.Quantity)
-                        });
-
-                foreach (var masterRow in masterRows
-                    .OrderBy(x => ParseSize(x.Item.Size))
-                    .ThenBy(x => x.Item.Description, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(x => x.Package, StringComparer.OrdinalIgnoreCase))
-                {
-                    AccessoryRow item = masterRow.Item;
-                    if (cfg.GroupByPackage)
-                    {
-                        sheet.Add(
-                            alternate ? ExcelReportExporter.RowKind.AlternateData : ExcelReportExporter.RowKind.Data,
-                            masterRow.Package,
-                            item.Size ?? "",
-                            item.Description ?? "",
-                            masterRow.Quantity,
-                            "");
-                    }
-                    else
-                    {
-                        sheet.Add(
-                            alternate ? ExcelReportExporter.RowKind.AlternateData : ExcelReportExporter.RowKind.Data,
-                            item.Size ?? "",
-                            item.Description ?? "",
-                            masterRow.Quantity,
-                            "");
-                    }
-
-                    int rowNumber = sheet.RowCount;
-                    string previewPath = CreateAccessoryPreviewImage(item, previewFolder, rowNumber);
-                    if (!string.IsNullOrWhiteSpace(previewPath))
-                    {
-                        sheet.SetRowHeight(rowNumber, 150);
-                        sheet.AddImage(
-                            previewPath,
-                            rowNumber,
-                            cfg.GroupByPackage ? 5 : 4,
-                            210,
-                            190);
-                    }
-
-                    alternate = !alternate;
-                }
-
-                return sheet;
-            }
-
-            foreach (var package in rows.GroupBy(x => x.PackageName))
-            {
-                sheet.Add(ExcelReportExporter.RowKind.Group, "Package: " + package.Key);
+                if (worksheetName != null)
+                    sheet.Add(ExcelReportExporter.RowKind.Group, "Package: " + package.Key);
                 bool alternate = false;
                 foreach (AccessoryRow item in package)
                 {
-                    sheet.Add(
-                        alternate ? ExcelReportExporter.RowKind.AlternateData : ExcelReportExporter.RowKind.Data,
-                        item.Size ?? "",
-                        item.Description ?? "",
-                        item.Quantity,
-                        "");
+                    var kind = alternate ? ExcelReportExporter.RowKind.AlternateData : ExcelReportExporter.RowKind.Data;
+                    if (groupMasterByPackage)
+                        sheet.Add(kind, package.Key, item.Size ?? "", item.Description ?? "", item.Quantity, "");
+                    else
+                        sheet.Add(kind, item.Size ?? "", item.Description ?? "", item.Quantity, "");
 
                     int rowNumber = sheet.RowCount;
                     string previewPath = CreateAccessoryPreviewImage(
@@ -318,7 +266,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     if (!string.IsNullOrWhiteSpace(previewPath))
                     {
                         sheet.SetRowHeight(rowNumber, 150);
-                        sheet.AddImage(previewPath, rowNumber, 4, 210, 190);
+                        sheet.AddImage(previewPath, rowNumber, groupMasterByPackage ? 5 : 4, 210, 190);
                     }
 
                     alternate = !alternate;
@@ -451,18 +399,44 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private static string GetDescription(FamilyInstance item)
         {
-            string description = GetParameter(item.Symbol, "Description")
-                ?? GetParameter(item, "Description")
-                ?? GetParameter(item.Symbol, "BOM Description")
-                ?? GetParameter(item, "BOM Description")
-                ?? GetParameter(item.Symbol, "Procurement Description")
-                ?? GetParameter(item, "Procurement Description");
+            // Match Filter Items: use family/type identity and prefer the dedicated
+            // BOM/procurement description, reading the instance before its type.
+            string description = "";
+            foreach (string name in new[] { "BOM Description", "Procurement Description", "Description" })
+            {
+                description = GetParameter(item, name);
+                if (string.IsNullOrWhiteSpace(description))
+                    description = GetParameter(item.Symbol, name);
+                if (!string.IsNullOrWhiteSpace(description))
+                    break;
+            }
 
-            if (!string.IsNullOrWhiteSpace(description)) return description.Trim();
-            if (!string.IsNullOrWhiteSpace(item.Symbol?.Name) &&
-                !string.Equals(item.Symbol.Name, "Standard", StringComparison.OrdinalIgnoreCase))
-                return item.Symbol.Name.Trim();
-            return item.Symbol?.Family?.Name?.Trim() ?? item.Name ?? "";
+            return BuildDescription(
+                item.Symbol?.FamilyName ?? item.Symbol?.Family?.Name,
+                item.Symbol?.Name ?? item.Name,
+                description);
+        }
+
+        private static string BuildDescription(string familyName, string typeName, string description)
+        {
+            string identity = (familyName ?? "").Trim();
+            string type = (typeName ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(type) &&
+                !string.Equals(identity, type, StringComparison.OrdinalIgnoreCase))
+            {
+                identity = string.IsNullOrWhiteSpace(identity) ? type : identity + " - " + type;
+            }
+
+            string detail = (description ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(identity))
+                return string.IsNullOrWhiteSpace(detail) ? "Component" : detail;
+            if (!string.IsNullOrWhiteSpace(detail) &&
+                identity.IndexOf(detail, StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return identity + " | " + detail;
+            }
+
+            return identity;
         }
 
         private static string GetSize(FamilyInstance item)

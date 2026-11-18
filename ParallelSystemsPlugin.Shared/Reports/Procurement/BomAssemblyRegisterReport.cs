@@ -43,13 +43,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             string outPath = Path.Combine(cfg.TargetFolder, "BOM-ASSEMBLY REGISTER.pdf");
 
-            var siteMeasureAssemblies = Helpers.Elements.GetSiteMeasureAssemblies(revitDoc);
-
-            var siteMeasureNames = siteMeasureAssemblies
-            .Select(x => x.AssemblyName)
-            .ToHashSet();
-
-            bool includeSiteMeasureAssemblies = cfg.IncludeSiteMeasure;
+            var includeElement = Helpers.Elements.ProcurementSiteMeasureFilter(revitDoc, cfg.IncludeSiteMeasure);
 
             // Active view scope
             ElementId viewId = revitDoc.ActiveView.Id;
@@ -58,6 +52,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             var assembliesInView = new FilteredElementCollector(revitDoc, viewId)
                 .OfClass(typeof(AssemblyInstance))
                 .Cast<AssemblyInstance>()
+                .Where(a => includeElement(a))
                 .Where(a => !Helpers.Elements.IsDoNotSchedule(revitDoc, a))
                 .ToList();
 
@@ -95,13 +90,10 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                         MaterialGrade = materialGrade ?? ""
                     };
                 })
-                .Where(r => !string.IsNullOrWhiteSpace(
-                    r.AssemblyNumber) 
-                    && (includeSiteMeasureAssemblies || !siteMeasureNames.Contains(r.AssemblyNumber))
-                )
+                .Where(r => !string.IsNullOrWhiteSpace(r.AssemblyNumber))
                 .ToList();
 
-            // Qty per (Package + AssemblyNumber + MaterialGrade)
+            // Keep package and frame identities when counting matching drawings.
             var grouped = raw
                 .GroupBy(r => new GroupKey(r.Package, r.FrameNumber, r.AssemblyNumber, r.MaterialGrade), new GroupKeyComparer())
                 .Select(g => new ReportRow
@@ -116,12 +108,10 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .ThenBy(r => r.AssemblyNumber)
                 .ToList();
 
-            PdfDoc pdf = BuildPdf(cfg, grouped);
-            if (!cfg.ExportReportsToExcel)
-                SavePdf(pdf, outPath);
-
             if (cfg.ExportReportsToExcel)
                 ExportExcel(cfg, grouped);
+            else
+                SavePdf(BuildPdf(cfg, grouped), outPath);
         }
 
         private static string GetPackageName(RvtDoc doc, AssemblyInstance a)
@@ -409,8 +399,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             };
 
             var packageGroups = rows
-                .GroupBy(r => r.Package ?? "", StringComparer.OrdinalIgnoreCase)
-                .OrderBy(g => string.IsNullOrWhiteSpace(g.Key) ? 1 : 0)
+                .GroupBy(r => ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(r.Package), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => string.Equals(g.Key, "NO PACKAGE ASSIGNED", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
                 .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
@@ -421,7 +411,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     worksheets.Add(BuildAssemblyRegisterExcelSheet(
                         cfg,
                         packageGroup.ToList(),
-                        false,
+                        groupByFrame,
                         note,
                         ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(packageGroup.Key)));
                 }
@@ -439,23 +429,18 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             string note,
             string worksheetName)
         {
-            bool isMasterList = string.IsNullOrWhiteSpace(worksheetName) &&
-                !groupByFrame &&
-                rows.Select(r => r.Package ?? "")
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Skip(1)
-                    .Any();
+            bool groupByPackage = cfg.GroupByPackage || !string.IsNullOrWhiteSpace(worksheetName);
 
             var sheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
                 cfg,
                 "Assembly Register",
                 new[]
                 {
-            groupByFrame ? "Frame-No" : "Package Name",
-            "Drawing Number",
-            "Qty",
-            "Material Grade",
-            "Comment/Approval"
+                    GetRegisterColumnTitle(groupByFrame, groupByPackage),
+                    "Drawing Number",
+                    "Qty",
+                    "Material Grade",
+                    "Comment/Approval"
                 },
                 note);
 
@@ -465,71 +450,25 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             bool alt = false;
 
-            if (isMasterList)
+            foreach (var package in GetRegisterGroups(rows, groupByPackage, groupByFrame))
             {
-                foreach (var r in rows
-                    .OrderBy(x => x.AssemblyNumber ?? "", StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(x => x.Package ?? "", StringComparer.OrdinalIgnoreCase))
+                if (groupByPackage)
+                {
+                    sheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Group,
+                        ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(package.Key));
+                }
+
+                foreach (var r in package)
                 {
                     sheet.Add(
                         alt
                             ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData
                             : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                        GetDisplayGroup(r, false),
+                        GetRegisterRowLabel(r, groupByPackage, groupByFrame),
                         r.AssemblyNumber ?? "",
                         r.Qty,
                         r.MaterialGrade ?? "",
                         "");
-
-                    alt = !alt;
-                }
-
-                if (!string.IsNullOrWhiteSpace(note))
-                {
-                    sheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Blank);
-                    sheet.Add(
-                        ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Note,
-                        note,
-                        "",
-                        "",
-                        "",
-                        "");
-                }
-
-                return sheet;
-            }
-
-            var groupedByPackage = rows
-                .GroupBy(r => GetDisplayGroup(r, groupByFrame))
-                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var pkgGroup in groupedByPackage)
-            {
-                string packageName = pkgGroup.Key ?? "";
-
-                // Match PDF package group row:
-                // Package name only in first column, rest blank.
-                sheet.Add(
-                    ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Group,
-                    packageName,
-                    "",
-                    "",
-                    "",
-                    "");
-
-                foreach (var r in pkgGroup.OrderBy(x => x.AssemblyNumber ?? "", StringComparer.OrdinalIgnoreCase))
-                {
-                    sheet.Add(
-                        alt
-                            ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData
-                            : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                        "",                         // Package Name blank; package is shown in group row
-                        r.AssemblyNumber ?? "",     // Drawing Number
-                        r.Qty,                       // Qty
-                        r.MaterialGrade ?? "",      // Material Grade
-                        ""                          // Comment/Approval
-                    );
-
                     alt = !alt;
                 }
             }
@@ -803,7 +742,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 colHead.Cells[i].Borders.Top.Visible = false;
             }
 
-            colHead.Cells[0].AddParagraph(groupByFrame ? "Frame-No" : "Package Name");
+            colHead.Cells[0].AddParagraph(GetRegisterColumnTitle(groupByFrame, cfg.GroupByPackage));
             colHead.Cells[1].AddParagraph("Drawing Number");
             colHead.Cells[2].AddParagraph("Qty");
             colHead.Cells[3].AddParagraph("Material Grade");
@@ -815,48 +754,45 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             colHead.Cells[3].Format.Alignment = ParagraphAlignment.Left;
             colHead.Cells[4].Format.Alignment = ParagraphAlignment.Left;
 
-            // ---------- Rows: group by Package, insert package header row ----------
-            var groupedByPackage = rows
-                .GroupBy(r => GetDisplayGroup(r, groupByFrame))
-                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
-
             bool alt = false;
 
-            foreach (var pkgGroup in groupedByPackage)
+            foreach (var package in GetRegisterGroups(rows, cfg.GroupByPackage, groupByFrame))
             {
-                string pkg = pkgGroup.Key ?? "";
-
-                // Package group header row
-                var pkgRow = table.AddRow();
-                pkgRow.TopPadding = Unit.FromPoint(6);
-                pkgRow.BottomPadding = Unit.FromPoint(4);
-
-                // subtle separation line under package header (only first cell)
-                pkgRow.Cells[0].Borders.Bottom.Visible = true;
-                pkgRow.Cells[0].Borders.Bottom.Width = 0.5;
-                pkgRow.Cells[0].Borders.Bottom.Color = Colors.LightGray;
-
-                for (int i = 0; i < 5; i++)
+                if (cfg.GroupByPackage)
                 {
-                    pkgRow.Cells[i].Borders.Left.Visible = false;
-                    pkgRow.Cells[i].Borders.Right.Visible = false;
-                    pkgRow.Cells[i].Borders.Top.Visible = false;
+                    string pkg = ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(package.Key);
 
-                    if (i != 0)
-                        pkgRow.Cells[i].Borders.Bottom.Visible = false;
+                    // Package group header row
+                    var pkgRow = table.AddRow();
+                    pkgRow.TopPadding = Unit.FromPoint(6);
+                    pkgRow.BottomPadding = Unit.FromPoint(4);
+
+                    // subtle separation line under package header (only first cell)
+                    pkgRow.Cells[0].Borders.Bottom.Visible = true;
+                    pkgRow.Cells[0].Borders.Bottom.Width = 0.5;
+                    pkgRow.Cells[0].Borders.Bottom.Color = Colors.LightGray;
+
+                    for (int i = 0; i < 5; i++)
+                    {
+                        pkgRow.Cells[i].Borders.Left.Visible = false;
+                        pkgRow.Cells[i].Borders.Right.Visible = false;
+                        pkgRow.Cells[i].Borders.Top.Visible = false;
+
+                        if (i != 0)
+                            pkgRow.Cells[i].Borders.Bottom.Visible = false;
+                    }
+
+                    var pkgP = pkgRow.Cells[0].AddParagraph(pkg);
+                    pkgP.Format.Font.Bold = false;
+                    pkgP.Format.Font.Color = Colors.Black;
+
+                    pkgRow.Cells[1].AddParagraph("");
+                    pkgRow.Cells[2].AddParagraph("");
+                    pkgRow.Cells[3].AddParagraph("");
+                    pkgRow.Cells[4].AddParagraph("");
                 }
 
-                var pkgP = pkgRow.Cells[0].AddParagraph(pkg);
-                pkgP.Format.Font.Bold = false;
-                pkgP.Format.Font.Color = Colors.Black;
-
-                pkgRow.Cells[1].AddParagraph("");
-                pkgRow.Cells[2].AddParagraph("");
-                pkgRow.Cells[3].AddParagraph("");
-                pkgRow.Cells[4].AddParagraph("");
-
-                // data rows for this package
-                foreach (var r in pkgGroup.OrderBy(x => x.AssemblyNumber ?? "", StringComparer.OrdinalIgnoreCase))
+                foreach (var r in package)
                 {
                     var row = table.AddRow();
                     row.TopPadding = Unit.FromPoint(3);
@@ -877,8 +813,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                         row.Cells[i].Borders.Bottom.Color = Colors.LightGray;
                     }
 
-                    // Package column blank for items (package displayed above)
-                    row.Cells[0].AddParagraph("");
+                    row.Cells[0].AddParagraph(GetRegisterRowLabel(r, cfg.GroupByPackage, groupByFrame));
 
                     row.Cells[1].AddParagraph(r.AssemblyNumber ?? "");
 
@@ -1077,11 +1012,43 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             public string MaterialGrade { get; set; }
         }
 
-        private static string GetDisplayGroup(ReportRow row, bool groupByFrame)
+        private static IEnumerable<IGrouping<string, ReportRow>> GetRegisterGroups(
+            IEnumerable<ReportRow> rows, bool groupByPackage, bool groupByFrame)
+        {
+            return rows
+                .OrderBy(r => groupByPackage ? r.Package : "", StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => groupByPackage && groupByFrame ? GetDisplayFrame(r) : "", StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.AssemblyNumber, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.Package, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(r => groupByPackage
+                    ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(r.Package)
+                    : "", StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static string GetRegisterColumnTitle(bool groupByFrame, bool groupByPackage)
+        {
+            if (!groupByFrame)
+                return "Package Name";
+
+            return groupByPackage ? "Frame-No" : "Package / Frame-No";
+        }
+
+        private static string GetRegisterRowLabel(ReportRow row, bool groupByPackage, bool groupByFrame)
+        {
+            if (groupByFrame)
+            {
+                string frame = GetDisplayFrame(row);
+                return groupByPackage
+                    ? frame
+                    : ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(row.Package) + " / " + frame;
+            }
+
+            return groupByPackage ? "" : ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(row.Package);
+        }
+
+        private static string GetDisplayFrame(ReportRow row)
         {
             string package = row?.Package ?? "";
-            if (!groupByFrame)
-                return package;
 
             if (!string.IsNullOrWhiteSpace(row?.FrameNumber))
                 return row.FrameNumber;

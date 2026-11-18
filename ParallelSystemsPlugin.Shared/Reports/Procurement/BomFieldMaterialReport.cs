@@ -45,71 +45,43 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (ExportDebugCsv)
                 ExportFieldMaterialDebugCsv(doc, cfg);
 
-            bool includeSiteMeasureAssemblies = cfg.IncludeSiteMeasure;
-
-            var siteMeasureAssemblies = Helpers.Elements.GetSiteMeasureAssemblies(doc);
-            var siteMeasureNames = siteMeasureAssemblies
-                .Select(x => x.AssemblyName ?? "")
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
+            var includeElement = Helpers.Elements.ProcurementSiteMeasureFilter(doc, cfg.IncludeSiteMeasure);
             var fieldMaterials = CollectFieldMaterialElements(doc)
-                .Select(fi => new
-                {
-                    Instance = fi,
-                    AssemblyName = Helpers.Elements.GetAssemblyName(doc, fi)
-                })
-                .Where(x =>
-                    includeSiteMeasureAssemblies ||
-                    !siteMeasureNames.Contains(x.AssemblyName ?? ""))
-                .Select(x => x.Instance)
+                .Where(fi => includeElement(fi))
                 .Where(fi => !Helpers.Elements.IsDoNotSchedule(doc, fi))
                 .Where(IsFieldMaterial)
                 .ToList();
 
-            var grouped = fieldMaterials
+            var eligibleRows = fieldMaterials
                 .Select(fi =>
                 {
+                    if (!TryResolveFieldMaterialPackage(doc, fi, includeElement, out string packageName))
+                        return null;
+
                     string description = GetReportDescription(fi);
 
                     return new Data
                     {
-                        PackageName = ResolveFieldMaterialPackageName(doc, fi),
+                        PackageName = packageName,
                         Category = GetCategory(fi, description),
                         Description = description,
                         Size = GetDN(fi),
                         Quantity = 1
                     };
                 })
-                .Where(x => cfg.IncludeWeld ||
-                    cfg.IncludeWeldInFieldMaterialReport ||
-                    !string.Equals(x.Category, "WELD", StringComparison.OrdinalIgnoreCase))
-                .GroupBy(x => new
-                {
-                    x.PackageName,
-                    x.Category,
-                    x.Description,
-                    x.Size
-                })
-                .Select(g => new Data
-                {
-                    PackageName = g.Key.PackageName,
-                    Category = g.Key.Category,
-                    Description = g.Key.Description,
-                    Size = g.Key.Size,
-                    Quantity = g.Sum(x => x.Quantity)
-                })
-                .OrderBy(x => string.IsNullOrWhiteSpace(x.PackageName) ? 1 : 0)
-                .ThenBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(x => GetCategorySortOrder(x.Category))
-                .ThenBy(x => TryParseSizeNumber(x.Size))
-                .ThenBy(x => x.Description)
+                .Where(x => x != null && (cfg.IncludeWeld ||
+                    !string.Equals(x.Category, "WELD", StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
+            var summaryRows = Summarize(eligibleRows, cfg.GroupByPackage);
             string note = "";
 
-            if (!cfg.ExportReportsToExcel)
+            if (cfg.ExportReportsToExcel)
             {
+                ExportExcel(cfg, summaryRows, eligibleRows, note);
+                return;
+            }
+
             // ==============================
             // PDF BUILDER
             // ==============================
@@ -135,7 +107,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             string currentGroup = "";
             Table table = null;
 
-            foreach (var r in grouped)
+            foreach (var r in summaryRows)
             {
                 string groupName = r.Category ?? "";
                 if (string.IsNullOrWhiteSpace(currentGroup) ||
@@ -165,7 +137,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                 shade = !shade;
 
-                tr.Cells[0].AddParagraph(r.PackageName ?? "");
+                tr.Cells[0].AddParagraph(cfg.GroupByPackage && string.IsNullOrWhiteSpace(r.PackageName)
+                    ? "NO PACKAGE ASSIGNED" : r.PackageName ?? "");
                 tr.Cells[1].AddParagraph(r.Size ?? "");
                 tr.Cells[2].AddParagraph(r.Description ?? "");
                 tr.Cells[3].AddParagraph(r.Quantity.ToString(CultureInfo.InvariantCulture));
@@ -176,10 +149,32 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             section.AddParagraph().Format.SpaceBefore = MigraUnit.FromCentimeter(0.6);
 
             builder.Save(outPath);
-            }
+        }
 
-            if (cfg.ExportReportsToExcel)
-                ExportExcel(cfg, grouped, note);
+        private static List<Data> Summarize(IEnumerable<Data> rows, bool groupByPackage)
+        {
+            return rows
+                .GroupBy(x => new
+                {
+                    PackageName = groupByPackage ? x.PackageName : "",
+                    x.Category,
+                    x.Description,
+                    x.Size
+                })
+                .Select(g => new Data
+                {
+                    PackageName = g.Key.PackageName,
+                    Category = g.Key.Category,
+                    Description = g.Key.Description,
+                    Size = g.Key.Size,
+                    Quantity = g.Sum(x => x.Quantity)
+                })
+                .OrderBy(x => string.IsNullOrWhiteSpace(x.PackageName) ? 1 : 0)
+                .ThenBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => GetCategorySortOrder(x.Category))
+                .ThenBy(x => TryParseSizeNumber(x.Size))
+                .ThenBy(x => x.Description)
+                .ToList();
         }
 
         private static List<FamilyInstance> CollectFieldMaterialElements(RvtDoc doc)
@@ -218,62 +213,40 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             return IsChecked(typeParameter);
         }
 
-        private static string ResolveFieldMaterialPackageName(
-            RvtDoc doc,
-            FamilyInstance fieldMaterial)
+        private static bool TryResolveFieldMaterialPackage(
+            RvtDoc doc, FamilyInstance fieldMaterial, Func<Element, bool> includeElement, out string packageName)
         {
-            if (doc == null || fieldMaterial == null)
-                return "";
-
-            // The owning assembly is authoritative when the field material is
-            // already part of an assembly.
             if (fieldMaterial.AssemblyInstanceId != ElementId.InvalidElementId)
             {
-                AssemblyInstance assembly =
-                    doc.GetElement(fieldMaterial.AssemblyInstanceId) as AssemblyInstance;
-
-                return Helpers.Elements
-                    .GetStandardProcurementPackageName(doc, assembly);
+                packageName = GetPackageFromOwningAssembly(doc, fieldMaterial);
+                return true;
             }
 
-            // For loose field material, follow both connector sides to their
-            // pipes, treating Victaulic rigid/flex couplings as transparent.
-            // The pipe's owning assembly determines the package using the
-            // exact same assembly-name rule as Assembly Register.
-            List<Element> connectedElements = GetDirectlyConnectedElements(fieldMaterial);
-
-            foreach (Pipe connectedPipe in GetConnectedPipesThroughVictaulicCouplings(
-                fieldMaterial)
-                .OrderBy(x => RevitApiCompatibility.GetElementIdValue(x.Id)))
+            packageName = "";
+            foreach (Element connection in GetLooseItemConnections(fieldMaterial))
             {
-                string connectedPackage = GetPackageFromOwningAssembly(
-                    doc,
-                    connectedPipe);
+                if (!includeElement(connection))
+                    return false;
 
-                if (!string.IsNullOrWhiteSpace(connectedPackage))
-                    return connectedPackage;
+                if (string.IsNullOrWhiteSpace(packageName))
+                    packageName = GetPackageFromOwningAssembly(doc, connection);
             }
 
-            // Some field-material families connect directly to another MEP
-            // component instead of a pipe. Use that component's assembly only;
-            // never use a loose component's own package parameter here.
-            foreach (Element connected in connectedElements
-                .Where(x => !(x is Pipe))
-                .OrderBy(x => RevitApiCompatibility.GetElementIdValue(x.Id)))
-            {
-                string connectedPackage = GetPackageFromOwningAssembly(
-                    doc,
-                    connected);
+            if (string.IsNullOrWhiteSpace(packageName))
+                packageName = Helpers.Elements.GetStandardProcurementPackageName(doc, fieldMaterial);
+            return true;
+        }
 
-                if (!string.IsNullOrWhiteSpace(connectedPackage))
-                    return connectedPackage;
-            }
-
-            // Last resort for a genuinely loose item: use the same standard
-            // instance/type package fallbacks as every other procurement report.
-            return Helpers.Elements.GetStandardProcurementPackageName(
-                doc,
-                fieldMaterial);
+        internal static IEnumerable<Element> GetLooseItemConnections(FamilyInstance fieldMaterial)
+        {
+            // Loose materials can belong to a pipe through a transparent coupling,
+            // or to a directly connected MEP component.
+            return GetConnectedPipesThroughVictaulicCouplings(fieldMaterial)
+                .OrderBy(pipe => RevitApiCompatibility.GetElementIdValue(pipe.Id))
+                .Cast<Element>()
+                .Concat(GetDirectlyConnectedElements(fieldMaterial)
+                    .Where(element => !(element is Pipe))
+                    .OrderBy(element => RevitApiCompatibility.GetElementIdValue(element.Id)));
         }
 
         private static List<Pipe> GetConnectedPipesThroughVictaulicCouplings(
@@ -961,39 +934,15 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             return table;
         }
 
-        private static void ExportExcel(ProcurementConfig cfg, List<Data> grouped, string note)
+        private static void ExportExcel(ProcurementConfig cfg, List<Data> summaryRows, List<Data> eligibleRows, string note)
         {
-            var packageGroups = grouped
+            var packageGroups = eligibleRows
                 .GroupBy(r => r.PackageName ?? "", StringComparer.OrdinalIgnoreCase)
                 .OrderBy(g => string.IsNullOrWhiteSpace(g.Key) ? 1 : 0)
                 .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             bool hasMultiplePackages = packageGroups.Count > 1;
-            bool groupSummaryByPackage = cfg.GroupByPackage && hasMultiplePackages;
-
-            List<Data> summaryRows = groupSummaryByPackage
-                ? grouped
-                : grouped
-                    .GroupBy(r => new
-                    {
-                        Category = r.Category ?? "",
-                        Description = r.Description ?? "",
-                        Size = r.Size ?? ""
-                    })
-                    .Select(g => new Data
-                    {
-                        PackageName = "",
-                        Category = g.Key.Category,
-                        Description = g.Key.Description,
-                        Size = g.Key.Size,
-                        Quantity = g.Sum(x => x.Quantity)
-                    })
-                    .OrderBy(r => GetCategorySortOrder(r.Category))
-                    .ThenBy(r => TryParseSizeNumber(r.Size))
-                    .ThenBy(r => r.Description, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
             var worksheets = new List<ExcelReportExporter.ExcelWorksheet>
             {
                 BuildFieldMaterialExcelSheet(
@@ -1001,7 +950,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     summaryRows,
                     note,
                     null,
-                    groupSummaryByPackage)
+                    cfg.GroupByPackage)
             };
 
             if (cfg.CreatePackageWorksheets && hasMultiplePackages)
@@ -1010,7 +959,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 {
                     worksheets.Add(BuildFieldMaterialExcelSheet(
                         cfg,
-                        packageGroup.ToList(),
+                        Summarize(packageGroup, true),
                         note,
                         ExcelReportExporter.GetPackageWorksheetName(packageGroup.Key),
                         true));

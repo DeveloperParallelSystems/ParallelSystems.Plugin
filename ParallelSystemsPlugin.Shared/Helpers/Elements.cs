@@ -796,60 +796,70 @@ namespace ParallelSystemsPlugin.Helpers
             return string.Join("; ", resolvedNames);
         }
 
-        public static List<SiteMeasureAssemblies> GetSiteMeasureAssemblies(Document revitDoc)
+        internal static Func<Element, bool> ProcurementSiteMeasureFilter(Document doc, bool includeSiteMeasure)
         {
-            var siteMeasureAssemblies = new List<SiteMeasureAssemblies>();
+            if (includeSiteMeasure)
+                return element => true;
 
-            var titleBlocks = new FilteredElementCollector(revitDoc)
-            .OfCategory(BuiltInCategory.OST_TitleBlocks)
-            .WhereElementIsNotElementType()
-            .Cast<FamilyInstance>()
-            .ToList();
-
-            foreach (var block in titleBlocks)
+            var markedIds = new HashSet<ElementId>();
+            var markedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var block in new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_TitleBlocks).WhereElementIsNotElementType())
             {
-                Parameter param = block.LookupParameter("SITE MEASURE");
-                Parameter sheetNumberParam = block.LookupParameter("Sheet Number");
-
-                bool isSiteMeasure = param?.AsInteger() == 1;
-
-                //Debug.WriteLine("SITE MEASURE: " + isSiteMeasure + " | " + block.Name);
-                //Debug.WriteLine("SHEET NUMBER: " + sheetNumberParam?.AsString());
-
-                // 🔹 STEP 1: Get the sheet that owns this title block
-                ViewSheet sheet = revitDoc.GetElement(block.OwnerViewId) as ViewSheet;
-
-                if (sheet == null)
-                {
-                    Debug.WriteLine("NO SHEET FOUND");
+                if (GetStringParam(block, "SITE MEASURE") != "1")
                     continue;
-                }
 
-                // 🔹 STEP 2: Get associated assembly from sheet
-                ElementId assemblyId = sheet.AssociatedAssemblyInstanceId;
-
-                if (assemblyId != ElementId.InvalidElementId)
-                {
-                    AssemblyInstance assembly =
-                        revitDoc.GetElement(assemblyId) as AssemblyInstance;
-
-                    string assemblyName = assembly?.Name ?? "";
-
-                    if (assemblyName == "")
-                        assemblyName = sheetNumberParam?.ToString();
-
-                    if (isSiteMeasure)
-                        siteMeasureAssemblies.Add(new SiteMeasureAssemblies { AssemblyName = assemblyName });
-
-                    //Debug.WriteLine("ASSEMBLY: " + assembly?.Name);
-                }
-                else
-                {
-                    //Debug.WriteLine("NO ASSEMBLY");
-                }
+                var sheet = doc.GetElement(block.OwnerViewId) as ViewSheet;
+                if (sheet != null && sheet.AssociatedAssemblyInstanceId != ElementId.InvalidElementId)
+                    markedIds.Add(sheet.AssociatedAssemblyInstanceId);
             }
 
-            return siteMeasureAssemblies;
+            foreach (AssemblyInstance assembly in new FilteredElementCollector(doc).OfClass(typeof(AssemblyInstance)))
+            {
+                Element type = doc.GetElement(assembly.GetTypeId());
+                string[] identities =
+                {
+                    assembly.Name,
+                    GetStringParam(assembly, "Assembly Name"),
+                    GetStringParam(assembly, "Assembly Number"),
+                    GetStringParam(type, "Assembly Name"),
+                    GetStringParam(type, "Assembly Number")
+                };
+                if (!markedIds.Contains(assembly.Id) && !identities.Any(HasSiteMeasureSuffix))
+                    continue;
+
+                markedIds.Add(assembly.Id);
+                foreach (string identity in identities.Where(value => !string.IsNullOrWhiteSpace(value)))
+                    markedNames.Add(identity.Trim());
+            }
+
+            return element =>
+            {
+                var id = element is AssemblyInstance ? element.Id : element.AssemblyInstanceId;
+                if (markedIds.Contains(id))
+                    return false;
+
+                string name = GetStringParam(element, "Assembly Name").Trim();
+                string number = GetStringParam(element, "Assembly Number").Trim();
+                if (HasSiteMeasureSuffix(name) || HasSiteMeasureSuffix(number))
+                    return false;
+
+                // Loose items may identify their assembly only by name or number.
+                return id != ElementId.InvalidElementId ||
+                    (!markedNames.Contains(name) && !markedNames.Contains(number));
+            };
+        }
+
+        internal static bool HasSiteMeasureSuffix(string assemblyName)
+        {
+            string identity = assemblyName?.TrimEnd();
+            if (string.IsNullOrEmpty(identity) ||
+                !identity.EndsWith("SM", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            // Accept a separate SM marker or one appended to a spool number (087SM),
+            // but not the final letters of an ordinary word such as PRISM.
+            return identity.Length == 2 || !char.IsLetter(identity[identity.Length - 3]);
         }
     }
 }

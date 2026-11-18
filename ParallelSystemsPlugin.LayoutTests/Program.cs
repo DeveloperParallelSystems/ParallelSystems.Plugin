@@ -20,12 +20,18 @@ internal static class Program
         "QR Code"
     };
 
-    private static int Main()
+    private static int Main(string[] args)
     {
         try
         {
             PdfConflictTests.ExcelCutListEntryDoesNotInitializePdf();
+            FittingReportTests.Run();
+            if (args.Contains("--fitting")) return 0;
+            AccessoryReportTests.Run();
+            if (args.Contains("--accessory")) return 0;
             CutListReportTests.Run();
+            ProcurementSiteMeasureSuffixRequiresTerminalMarker();
+            ProcurementFittingWeldTogglePreservesOtherExclusions();
             LabelReportExcelSheetStartsWithSimpleHeaderAndRepeatsProjectDetails();
             ModuleStepAllowsPipingWithoutSupports();
             SlipOnSetbackUsesDynamicNominalDiameterDefaults();
@@ -47,6 +53,34 @@ internal static class Program
         {
             Console.Error.WriteLine("FAIL: " + exception.Message);
             return 1;
+        }
+    }
+
+    private static void ProcurementSiteMeasureSuffixRequiresTerminalMarker()
+    {
+        MethodInfo method = typeof(Elements).GetMethod(
+            "HasSiteMeasureSuffix", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("HasSiteMeasureSuffix was not found.");
+
+        foreach (string identity in new[] { "SM", "SPOOL-087SM", "SPOOL-SM", "SPOOL sm  ", "SPOOL_SM" })
+            AssertEqual(true, (bool)method.Invoke(null, new object[] { identity }), "site-measure suffix: " + identity);
+
+        foreach (string identity in new[] { null, "", "SPOOL-087", "SM-SPOOL", "SPOOL-SM-01", "PRISM", "CHASM", "MECHANISM" })
+            AssertEqual(false, (bool)method.Invoke(null, new object[] { identity }), "ordinary assembly identity: " + identity);
+    }
+
+    private static void ProcurementFittingWeldTogglePreservesOtherExclusions()
+    {
+        MethodInfo method = typeof(BomFittingReport).GetMethod(
+            "IsExcludedCategory", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("IsExcludedCategory was not found.");
+
+        foreach (bool includeWeld in new[] { false, true })
+        {
+            AssertEqual(!includeWeld, (bool)method.Invoke(null, new object[] { "WELD", includeWeld }), "fitting weld toggle");
+            AssertEqual(!includeWeld, (bool)method.Invoke(null, new object[] { "weld", includeWeld }), "case-insensitive fitting weld toggle");
+            AssertEqual(false, (bool)method.Invoke(null, new object[] { "ELBOW", includeWeld }), "ordinary fitting remains eligible");
+            AssertEqual(true, (bool)method.Invoke(null, new object[] { "SHAPED BRANCH", includeWeld }), "shaped-branch exclusion remains active");
         }
     }
 
@@ -213,14 +247,17 @@ internal static class Program
             {
                 new ProcurementConfig(),
                 data,
-                "NOTE: should not be printed in the simple layout",
+                "NOTE: This report does not include site-measured spools and branches",
                 data[0].ProjectPhase,
                 "Package A",
-                true
+                false
             });
 
         AssertEqual("Package A", sheet.Name, "worksheet name");
-        AssertEqual(2, sheet.Rows.Count, "row count");
+        AssertEqual(3, sheet.Rows.Count, "row count");
+        AssertEqual(ExcelReportExporter.RowKind.Note, sheet.Rows[2].Kind, "site-measure note row kind");
+        AssertSequence(new[] { "NOTE: This report does not include site-measured spools and branches" },
+            sheet.Rows[2].Values, "site-measure note");
         AssertEqual(ExcelReportExporter.RowKind.Header, sheet.Rows[0].Kind, "first row kind");
         AssertSequence(ExpectedHeaders, sheet.Rows[0].Values, "headers");
         AssertSequence(

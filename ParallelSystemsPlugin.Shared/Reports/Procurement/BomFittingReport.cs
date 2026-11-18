@@ -47,24 +47,15 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             string dateText = dt.ToString("dddd, dd MMMM yyyy", culture);
 
             // Collect fittings in active view
-            List<FittingRow> rows = CollectFittingsFromActiveView(doc);
+            List<FittingRow> rows = CollectFittingsFromActiveView(doc, cfg.IncludeSiteMeasure);
 
             if(DEBUG_MODE)
                 WriteFittingDebugCsv(doc, cfg, rows, "01_AFTER_COLLECT");
 
-            var siteMeasureAssemblies = Helpers.Elements.GetSiteMeasureAssemblies(doc);
-
-            var siteMeasureNames = siteMeasureAssemblies
-            .Select(x => x.AssemblyName)
-            .ToHashSet();
-
-            bool includeSiteMeasureAssemblies = cfg.IncludeSiteMeasure;
-            rows = rows.Where(x => includeSiteMeasureAssemblies || !siteMeasureNames.Contains(x.AssemblyName)).ToList();
-
             rows = rows
                 .Where(x => !IsExcludedCategory(
                     x.TypeBucket,
-                    cfg.IncludeWeld || cfg.IncludeWeldInFittingReport))
+                    cfg.IncludeWeld))
                 .ToList();
 
 
@@ -75,9 +66,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 WriteFittingDebugCsv(doc, cfg, rows, "02_AFTER_SITE_MEASURE_FILTER");
 
             var byPackage = rows
-                .GroupBy(r => string.IsNullOrWhiteSpace(r.PackageName)
-                    ? NO_PACKAGE_ASSIGNED
-                    : r.PackageName.Trim())
+                .GroupBy(r => ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(r.PackageName),
+                    StringComparer.OrdinalIgnoreCase)
                 .OrderBy(g => string.Equals(
                     g.Key,
                     NO_PACKAGE_ASSIGNED,
@@ -87,6 +77,13 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             if (DEBUG_MODE)
                 WriteFittingSummaryDebugCsv(cfg, byPackage, "03_GROUPED_SUMMARY");
+
+            var master = PrepareSections(byPackage, cfg.GroupByPackage);
+            if (cfg.ExportReportsToExcel)
+            {
+                ExportExcel(cfg, byPackage, master);
+                return;
+            }
 
             PdfDoc pdf = new PdfDoc();
             DefineStyles(pdf);
@@ -112,17 +109,12 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             // Header
             DrawHeader(section, cfg, "BOM Fitting Report", dateText);
 
-            foreach (var packageGroup in byPackage)
+            foreach (var packageGroup in master)
             {
-                AddPackageHeader(section, packageGroup.Key);
+                if (cfg.GroupByPackage)
+                    AddPackageHeader(section, packageGroup.Package);
 
-                var byType = packageGroup
-                    .GroupBy(x => x.TypeBucket)
-                    .OrderBy(g => TypeSortOrder(g.Key))
-                    .ThenBy(g => g.Key)
-                    .ToList();
-
-                foreach (var typeGroup in byType)
+                foreach (var typeGroup in packageGroup.Categories)
                 {
                     string typeBucket = typeGroup.Key;
 
@@ -145,21 +137,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     hr.Cells[1].AddParagraph("Size");
                     hr.Cells[2].AddParagraph("Description");
 
-                    // Aggregate: same type + same size + same description
-                    var aggregated = typeGroup
-                        .GroupBy(x => new { x.SizeText, x.Description })
-                        .Select(g => new
-                        {
-                            Qty = g.Count(),
-                            SizeText = g.Key.SizeText ?? "",
-                            Desc = g.Key.Description ?? "",
-                            SizeSort = g.Max(z => z.SizeSort)
-                        })
-                        .OrderByDescending(x => x.SizeSort)
-                        .ThenBy(x => x.Desc)
-                        .ToList();
-
-                    foreach (var item in aggregated)
+                    foreach (var item in typeGroup)
                     {
                         var r = table.AddRow();
                         r.Cells[0].AddParagraph(item.Qty.ToString());
@@ -175,11 +153,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             var renderer = new PdfDocumentRenderer() { Document = pdf };
             renderer.RenderDocument();
-            if (!cfg.ExportReportsToExcel)
-                renderer.PdfDocument.Save(outPath);
-
-            if (cfg.ExportReportsToExcel)
-                ExportExcel(cfg, byPackage);
+            renderer.PdfDocument.Save(outPath);
         }
 
 
@@ -249,12 +223,62 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             return false;
         }
 
-        private static void ExportExcel(ProcurementConfig cfg, List<IGrouping<string, FittingRow>> byPackage)
+        private sealed class FittingTotal
+        {
+            public string Package { get; set; }
+            public string Category { get; set; }
+            public string SizeText { get; set; }
+            public string Desc { get; set; }
+            public double SizeSort { get; set; }
+            public int Qty { get; set; }
+        }
+
+        private sealed class FittingSection
+        {
+            public string Package { get; set; }
+            public List<IGrouping<string, FittingTotal>> Categories { get; set; }
+        }
+
+        private static List<FittingSection> PrepareSections(
+            IEnumerable<IGrouping<string, FittingRow>> packages, bool groupByPackage)
+        {
+            return packages.SelectMany(package => package.Select(row => new
+                {
+                    Package = groupByPackage ? package.Key : "",
+                    Row = row
+                }))
+                .GroupBy(x => new { x.Package, x.Row.TypeBucket, x.Row.SizeText, x.Row.Description })
+                .Select(g => new FittingTotal
+                {
+                    Package = g.Key.Package,
+                    Category = g.Key.TypeBucket,
+                    SizeText = g.Key.SizeText ?? "",
+                    Desc = g.Key.Description ?? "",
+                    SizeSort = g.Max(x => x.Row.SizeSort),
+                    Qty = g.Count()
+                })
+                .OrderBy(item => TypeSortOrder(item.Category))
+                .ThenBy(item => item.Category)
+                .ThenByDescending(item => item.SizeSort)
+                .ThenBy(item => item.Desc)
+                .GroupBy(item => item.Package, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(package => string.Equals(package.Key, NO_PACKAGE_ASSIGNED, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                .ThenBy(package => package.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(package => new FittingSection
+                {
+                    Package = package.Key,
+                    Categories = package.GroupBy(item => item.Category).ToList()
+                })
+                .ToList();
+        }
+
+        private static void ExportExcel(ProcurementConfig cfg, List<IGrouping<string, FittingRow>> byPackage,
+            List<FittingSection> master)
         {
             string note = "";
             var worksheets = new List<ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet>
             {
-                BuildExcelSheet(cfg, byPackage, note, null)
+                BuildExcelSheet(cfg, master, note, null)
             };
 
             if (cfg.CreatePackageWorksheets && byPackage.Count > 1)
@@ -263,7 +287,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 {
                     worksheets.Add(BuildExcelSheet(
                         cfg,
-                        new[] { packageGroup },
+                        PrepareSections(new[] { packageGroup }, true),
                         note,
                         packageGroup.Key));
                 }
@@ -276,145 +300,53 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private static ParallelSystemsPlugin.Helpers.ExcelReportExporter.ExcelWorksheet BuildExcelSheet(
             ProcurementConfig cfg,
-            IEnumerable<IGrouping<string, FittingRow>> packageGroups,
+            IEnumerable<FittingSection> sections,
             string note,
             string worksheetName)
         {
-            var packageGroupList = packageGroups.ToList();
-            bool isMasterList = string.IsNullOrWhiteSpace(worksheetName) && packageGroupList.Count > 1;
-            bool groupMasterByPackage = isMasterList && cfg.GroupByPackage;
-
             var sheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
-                cfg,
-                "BOM Fitting Report",
-                groupMasterByPackage || !isMasterList
-                    ? new[] { "Package", "Category", "Qty", "Size", "Description" }
-                    : new[] { "Category", "Qty", "Size", "Description" },
-                note);
-            if (groupMasterByPackage || !isMasterList)
-            {
-                sheet.SetColumnWidth(1, 28);
-                sheet.SetColumnWidth(2, 24);
-                sheet.SetColumnWidth(3, 10);
-                sheet.SetColumnWidth(4, 14);
-                sheet.SetColumnWidth(5, 45);
-                sheet.CenterColumns(3);
-            }
-            else
-            {
-                sheet.SetColumnWidth(1, 24);
-                sheet.SetColumnWidth(2, 10);
-                sheet.SetColumnWidth(3, 14);
-                sheet.SetColumnWidth(4, 45);
-                sheet.CenterColumns(2);
-            }
+                cfg, "BOM Fitting Report",
+                new[] { "Category", "Qty", "Size", "Description" }, note);
+            sheet.SetColumnWidth(1, 24);
+            sheet.SetColumnWidth(2, 10);
+            sheet.SetColumnWidth(3, 14);
+            sheet.SetColumnWidth(4, 45);
+            sheet.CenterColumns(2);
             if (!string.IsNullOrWhiteSpace(worksheetName))
                 sheet.Name = worksheetName;
 
             bool alt = false;
-            if (isMasterList)
-            {
-                var masterRows = packageGroupList
-                    .SelectMany(package => package.Select(item => new { Package = package.Key ?? NO_PACKAGE_ASSIGNED, Item = item }))
-                    .GroupBy(x => new
-                    {
-                        Package = cfg.GroupByPackage ? x.Package : "",
-                        x.Item.TypeBucket,
-                        x.Item.SizeText,
-                        x.Item.Description
-                    })
-                    .Select(g => new
-                    {
-                        g.Key.Package,
-                        Category = g.Key.TypeBucket ?? "",
-                        Qty = g.Count(),
-                        SizeText = g.Key.SizeText ?? "",
-                        Description = g.Key.Description ?? "",
-                        SizeSort = g.Max(x => x.Item.SizeSort)
-                    })
-                    .OrderBy(x => TypeSortOrder(x.Category))
-                    .ThenBy(x => x.Category, StringComparer.OrdinalIgnoreCase)
-                    .ThenByDescending(x => x.SizeSort)
-                    .ThenBy(x => x.Description, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(x => x.Package, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+            bool showPackages = cfg.GroupByPackage || worksheetName != null;
 
-                foreach (var item in masterRows)
-                {
-                    if (cfg.GroupByPackage)
-                    {
-                        sheet.Add(
-                            alt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                            item.Package,
-                            item.Category,
-                            item.Qty,
-                            item.SizeText,
-                            item.Description);
-                    }
-                    else
-                    {
-                        sheet.Add(
-                            alt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                            item.Category,
-                            item.Qty,
-                            item.SizeText,
-                            item.Description);
-                    }
-                    alt = !alt;
-                }
-            }
-            else
+            foreach (var packageGroup in sections)
             {
-                foreach (var packageGroup in packageGroupList)
+                var categories = packageGroup.Categories
+                    .Where(group => !IsExcludedCategory(group.Key, cfg.IncludeWeld))
+                    .ToList();
+                if (categories.Count == 0)
+                    continue;
+
+                if (showPackages)
+                    sheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Group, packageGroup.Package);
+
+                foreach (var typeGroup in categories)
                 {
                     sheet.Add(
-                        ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                        packageGroup.Key ?? NO_PACKAGE_ASSIGNED,
-                        "",
+                        GetExcelCategoryRowKind(typeGroup.Key),
+                        typeGroup.Key ?? "",
                         "",
                         "",
                         "");
 
-                    var byType = packageGroup
-                        .GroupBy(x => x.TypeBucket)
-                        .OrderBy(g => TypeSortOrder(g.Key))
-                        .ThenBy(g => g.Key)
-                        .ToList();
-
-                    foreach (var typeGroup in byType)
+                    foreach (var item in typeGroup)
                     {
                         sheet.Add(
-                            GetExcelCategoryRowKind(typeGroup.Key),
+                            alt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
                             "",
-                            typeGroup.Key ?? "",
-                            "",
-                            "",
-                            "");
-
-                        var aggregated = typeGroup
-                            .GroupBy(x => new { x.SizeText, x.Description })
-                            .Select(g => new
-                            {
-                                Qty = g.Count(),
-                                SizeText = g.Key.SizeText ?? "",
-                                Desc = g.Key.Description ?? "",
-                                SizeSort = g.Max(z => z.SizeSort)
-                            })
-                            .OrderByDescending(x => x.SizeSort)
-                            .ThenBy(x => x.Desc)
-                            .ToList();
-
-                        foreach (var item in aggregated)
-                        {
-                            sheet.Add(
-                                alt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                                "",
-                                "",
-                                item.Qty,
-                                item.SizeText,
-                                item.Desc);
-                            alt = !alt;
-                        }
+                            item.Qty,
+                            item.SizeText,
+                            item.Desc);
+                        alt = !alt;
                     }
                 }
             }
@@ -500,8 +432,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         // -----------------------------
         // Collect fittings from active view
         // -----------------------------
-        private static List<FittingRow> CollectFittingsFromActiveView(RvtDoc doc)
+        private static List<FittingRow> CollectFittingsFromActiveView(RvtDoc doc, bool includeSiteMeasure)
         {
+            var includeElement = Helpers.Elements.ProcurementSiteMeasureFilter(doc, includeSiteMeasure);
             if (doc.ActiveView == null) return new List<FittingRow>();
 
             var results = new List<FittingRow>();
@@ -513,7 +446,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             foreach (var e in fittings)
             {
-                if (Helpers.Elements.IsDoNotSchedule(doc, e))
+                if (!includeElement(e) || Helpers.Elements.IsDoNotSchedule(doc, e))
                     continue;
 
                 string assemblyName = "";
@@ -532,9 +465,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                 bool isCustom = GetYesNoParamInstanceOrType(e, PARAM_IS_CUSTOM);
 
-                string bucket = isCustom
-                                ? "CUSTOM FITTING"
-                                : MapToBucket(typeIdentity + " " + rawDesc);
+                string bucket = MapToBucket(typeIdentity + " " + rawDesc);
+                if (isCustom && bucket != "WELD")
+                    bucket = "CUSTOM FITTING";
 
 
                 string sizeText = GetStringParam(e, BuiltInParameter.RBS_CALCULATED_SIZE);
@@ -572,6 +505,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                 string packageName = Helpers.Elements
                     .GetStandardProcurementPackageName(doc, e);
+                if (!includeSiteMeasure && e.AssemblyInstanceId == ElementId.InvalidElementId &&
+                    e is FamilyInstance looseFitting &&
+                    !BomFieldMaterialReport.GetLooseItemConnections(looseFitting).All(includeElement))
+                    continue;
+
                 if (string.IsNullOrWhiteSpace(packageName))
                     packageName = ResolvePackageFromConnectedPipe(doc, e);
 
@@ -653,9 +591,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             RvtDoc doc,
             Element fitting)
         {
-            if (doc == null || fitting == null)
-                return "";
-
             foreach (Pipe pipe in GetConnectedPipesThroughVictaulicCouplings(fitting)
                 .OrderBy(x => RevitApiCompatibility.GetElementIdValue(x.Id)))
             {

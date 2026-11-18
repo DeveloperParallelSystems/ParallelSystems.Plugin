@@ -97,30 +97,26 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             DateTime dt = cfg.Date == default(DateTime) ? DateTime.Today : cfg.Date;
             string dateText = dt.ToString("dddd, dd MMMM yyyy", culture);
 
-            List<Row> rows = CollectAssemblyRowsFromActiveView(doc);
-
-            var siteMeasureAssemblies = Helpers.Elements.GetSiteMeasureAssemblies(doc);
-
-            var siteMeasureNames = siteMeasureAssemblies
-                .Select(x => x.AssemblyName ?? "")
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            bool includeSiteMeasureAssemblies = cfg.IncludeSiteMeasure;
-
-            rows = rows
-                .Where(x => includeSiteMeasureAssemblies || !siteMeasureNames.Contains(x.DrawingNumber ?? ""))
-                .ToList();
+            List<Row> rows = CollectAssemblyRowsFromActiveView(doc, cfg.IncludeSiteMeasure);
 
             if (rows.Count == 0)
                 throw new InvalidOperationException("No assemblies found in the active view for BOM-LOADING REPORT.");
 
             rows = rows
-                .OrderBy(r => r.PackageName, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(r => cfg.GroupByPackage && string.Equals(
+                    r.PackageName, NO_PACKAGE_ASSIGNED, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                .ThenBy(r => cfg.GroupByPackage ? r.PackageName : "", StringComparer.OrdinalIgnoreCase)
                 .ThenBy(r => r.LengthMm)
                 .ThenBy(r => r.DrawingNumber, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.PackageName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(r => r.MaterialGrade)
                 .ToList();
+
+            if (cfg.ExportReportsToExcel)
+            {
+                ExportExcel(cfg, rows);
+                return;
+            }
 
             int totalQty = rows.Sum(r => r.Qty);
             double totalWeight = rows.Sum(r => r.WeightKg);
@@ -146,11 +142,14 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             bool shade = false;
 
-            foreach (var package in rows.GroupBy(r => r.PackageName, StringComparer.OrdinalIgnoreCase))
+            foreach (var package in GetLoadingGroups(rows, cfg.GroupByPackage))
             {
-                var packageRow = table.AddRow();
-                packageRow.VerticalAlignment = VerticalAlignment.Center;
-                packageRow.Cells[0].AddParagraph(package.Key ?? NO_PACKAGE_ASSIGNED);
+                if (cfg.GroupByPackage)
+                {
+                    var packageRow = table.AddRow();
+                    packageRow.VerticalAlignment = VerticalAlignment.Center;
+                    packageRow.Cells[0].AddParagraph(package.Key ?? NO_PACKAGE_ASSIGNED);
+                }
 
                 foreach (var r in package)
                 {
@@ -162,6 +161,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                     shade = !shade;
 
+                    if (!cfg.GroupByPackage)
+                        tr.Cells[0].AddParagraph(r.PackageName);
                     tr.Cells[1].AddParagraph(r.DrawingNumber ?? "");
                     tr.Cells[2].AddParagraph(r.MaterialGrade ?? "");
 
@@ -188,11 +189,12 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             var renderer = new PdfDocumentRenderer { Document = pdf };
             renderer.RenderDocument();
-            if (!cfg.ExportReportsToExcel)
-                renderer.PdfDocument.Save(outPath);
+            renderer.PdfDocument.Save(outPath);
+        }
 
-            if (cfg.ExportReportsToExcel)
-                ExportExcel(cfg, rows);
+        private static IEnumerable<IGrouping<string, Row>> GetLoadingGroups(IEnumerable<Row> rows, bool groupByPackage)
+        {
+            return rows.GroupBy(r => groupByPackage ? r.PackageName : "", StringComparer.OrdinalIgnoreCase);
         }
 
         private static void ExportExcel(
@@ -243,11 +245,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             string worksheetName)
         {
             string note = LOADING_WEIGHT_NOTE;
-            bool isMasterList = string.IsNullOrWhiteSpace(worksheetName) && rows
-                .Select(r => r.PackageName ?? "")
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Skip(1)
-                .Any();
+            bool groupByPackage = cfg.GroupByPackage || !string.IsNullOrWhiteSpace(worksheetName);
 
             var sheet = ParallelSystemsPlugin.Helpers.ExcelReportExporter.CreateReportSheet(
                 cfg,
@@ -274,37 +272,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             var dataRowOffsets = new List<int>();
             int nextRowOffset = 0;
 
-            if (isMasterList)
+            foreach (var package in GetLoadingGroups(rows, groupByPackage))
             {
-                foreach (var r in rows
-                    .OrderBy(x => x.LengthMm)
-                    .ThenBy(x => x.DrawingNumber, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase))
-                {
-                    dataRowOffsets.Add(nextRowOffset);
-                    sheet.Add(
-                        alt
-                            ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData
-                            : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                        r.PackageName ?? NO_PACKAGE_ASSIGNED,
-                        r.DrawingNumber ?? "",
-                        r.MaterialGrade ?? "",
-                        r.Qty,
-                        r.WeightKg,
-                        r.LengthMm,
-                        "",
-                        "",
-                        "",
-                        "",
-                        "");
-
-                    alt = !alt;
-                    nextRowOffset++;
-                }
-            }
-            else
-            {
-                foreach (var package in rows.GroupBy(r => r.PackageName, StringComparer.OrdinalIgnoreCase))
+                if (groupByPackage)
                 {
                     sheet.Add(
                         ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
@@ -320,29 +290,29 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                         "",
                         "");
                     nextRowOffset++;
+                }
 
-                    foreach (var r in package)
-                    {
-                        dataRowOffsets.Add(nextRowOffset);
-                        sheet.Add(
-                            alt
-                                ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData
-                                : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
-                            "",
-                            r.DrawingNumber ?? "",
-                            r.MaterialGrade ?? "",
-                            r.Qty,
-                            r.WeightKg,
-                            r.LengthMm,
-                            "",
-                            "",
-                            "",
-                            "",
-                            "");
+                foreach (var r in package)
+                {
+                    dataRowOffsets.Add(nextRowOffset);
+                    sheet.Add(
+                        alt
+                            ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData
+                            : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
+                        groupByPackage ? "" : r.PackageName,
+                        r.DrawingNumber ?? "",
+                        r.MaterialGrade ?? "",
+                        r.Qty,
+                        r.WeightKg,
+                        r.LengthMm,
+                        "",
+                        "",
+                        "",
+                        "",
+                        "");
 
-                        alt = !alt;
-                        nextRowOffset++;
-                    }
+                    alt = !alt;
+                    nextRowOffset++;
                 }
             }
 
@@ -649,8 +619,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             );
         }
 
-        private static List<Row> CollectAssemblyRowsFromActiveView(RvtDoc doc)
+        private static List<Row> CollectAssemblyRowsFromActiveView(RvtDoc doc, bool includeSiteMeasure)
         {
+            var includeElement = Helpers.Elements.ProcurementSiteMeasureFilter(doc, includeSiteMeasure);
             var res = new List<Row>();
 
             if (doc.ActiveView == null)
@@ -660,6 +631,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .OfClass(typeof(AssemblyInstance))
                 .Cast<AssemblyInstance>()
                 .Where(a => !IsFrameAssembly(doc, a))
+                .Where(a => includeElement(a))
                 .Where(a => !Helpers.Elements.IsDoNotSchedule(doc, a))
                 .ToList();
 
@@ -710,9 +682,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         {
             string packageName = Helpers.Elements
                 .GetStandardProcurementPackageName(doc, assembly);
-            return string.IsNullOrWhiteSpace(packageName)
-                ? NO_PACKAGE_ASSIGNED
-                : packageName;
+            return ParallelSystemsPlugin.Helpers.ExcelReportExporter.GetPackageWorksheetName(packageName);
         }
 
         private static bool IsFrameAssembly(RvtDoc doc, AssemblyInstance assembly)

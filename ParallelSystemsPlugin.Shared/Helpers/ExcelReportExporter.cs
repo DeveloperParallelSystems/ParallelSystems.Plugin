@@ -297,7 +297,7 @@ namespace ParallelSystemsPlugin.Helpers
 
                     int columnNumber = c + 1;
                     bool centerAlign = ShouldCenterAlign(sheet, row.Kind, columnNumber);
-                    int styleIndex = IsFittingCategory(row.Kind) && columnNumber != 2
+                    int styleIndex = IsFittingCategory(row.Kind) && columnNumber != 1
                         ? GetStyleIndex(RowKind.Data, false)
                         : GetStyleIndex(row.Kind, centerAlign);
 
@@ -868,12 +868,12 @@ namespace ParallelSystemsPlugin.Helpers
     <fill><patternFill patternType=""solid""><fgColor rgb=""FFEADCF8""/><bgColor indexed=""64""/></patternFill></fill>
     <fill><patternFill patternType=""solid""><fgColor rgb=""FFF4B183""/><bgColor indexed=""64""/></patternFill></fill>
     <fill><patternFill patternType=""solid""><fgColor rgb=""FFFF0000""/><bgColor indexed=""64""/></patternFill></fill>
-    <fill><patternFill patternType=""solid""><fgColor rgb=""FFA6A6A6""/><bgColor indexed=""64""/></patternFill></fill>
+    <fill><patternFill patternType=""solid""><fgColor rgb=""FFADADAD""/><bgColor indexed=""64""/></patternFill></fill>
     <fill><patternFill patternType=""solid""><fgColor rgb=""FFFFFF00""/><bgColor indexed=""64""/></patternFill></fill>
-    <fill><patternFill patternType=""solid""><fgColor rgb=""FF47D359""/><bgColor indexed=""64""/></patternFill></fill>
-    <fill><patternFill patternType=""solid""><fgColor rgb=""FFF8CBAD""/><bgColor indexed=""64""/></patternFill></fill>
-    <fill><patternFill patternType=""solid""><fgColor rgb=""FF83CCEB""/><bgColor indexed=""64""/></patternFill></fill>
-    <fill><patternFill patternType=""solid""><fgColor rgb=""FFD996D3""/><bgColor indexed=""64""/></patternFill></fill>
+    <fill><patternFill patternType=""solid""><fgColor rgb=""FF45D456""/><bgColor indexed=""64""/></patternFill></fill>
+    <fill><patternFill patternType=""solid""><fgColor rgb=""FFF7C7AC""/><bgColor indexed=""64""/></patternFill></fill>
+    <fill><patternFill patternType=""solid""><fgColor rgb=""FF95DBF8""/><bgColor indexed=""64""/></patternFill></fill>
+    <fill><patternFill patternType=""solid""><fgColor rgb=""FFE49FDD""/><bgColor indexed=""64""/></patternFill></fill>
     <fill><patternFill patternType=""solid""><fgColor rgb=""FFC9B2E8""/><bgColor indexed=""64""/></patternFill></fill>
     <fill><patternFill patternType=""solid""><fgColor rgb=""FFD9EAD3""/><bgColor indexed=""64""/></patternFill></fill>
   </fills>

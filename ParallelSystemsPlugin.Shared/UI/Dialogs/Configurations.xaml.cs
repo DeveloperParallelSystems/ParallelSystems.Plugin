@@ -283,9 +283,7 @@ namespace ParallelSystemsPlugin.UI.Dialogs
             ChkBomAssemblyRegister.IsChecked = config.Procurement.BomAssemblyRegister;
             ChkBomCutList.IsChecked = config.Procurement.BomCutList;
             ChkBomFittingReport.IsChecked = config.Procurement.BomFittingReport;
-            ChkIncludeWeld.IsChecked = config.Procurement.IncludeWeld ||
-                config.Procurement.IncludeWeldInFittingReport ||
-                config.Procurement.IncludeWeldInFieldMaterialReport;
+            ChkIncludeWeld.IsChecked = config.Procurement.IncludeWeld;
             ChkBomLoadingReport.IsChecked = config.Procurement.BomLoadingReport;
             ChkBomPipeReport.IsChecked = config.Procurement.BomPipeReport;
             ChkLabelReport.IsChecked = config.Procurement.LabelReport;
@@ -1305,7 +1303,7 @@ namespace ParallelSystemsPlugin.UI.Dialogs
                 newConfig.Procurement.CutListMaximumLength = ParseDoubleOrDefault(ProcCutListMaximumLengthTextBox.Text, 6000);
                 newConfig.Procurement.CutListBladeThickness = ParseDoubleOrDefault(ProcCutListBladeThicknessTextBox.Text, 2);
                 newConfig.Procurement.CutListNegativeAllowance = ParseDoubleOrDefault(ProcCutListNegativeAllowanceTextBox.Text, 0);
-                newConfig.Procurement.OffcutThreshold = ParseDoubleOrDefault(ProcOffcutThresholdTextBox.Text, 2500);
+                newConfig.Procurement.OffcutThreshold = ParseDoubleOrDefault(ProcOffcutThresholdTextBox.Text, ProcurementConfig.DefaultOffcutThreshold);
                 if (newConfig.Procurement.OffcutThreshold < 0)
                     throw new InvalidOperationException("Offcut Threshold must be zero or greater.");
 

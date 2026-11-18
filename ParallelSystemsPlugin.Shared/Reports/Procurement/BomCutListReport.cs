@@ -27,7 +27,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         private const double FT_TO_MM = 304.8;
 
         // Adjust these if your shared params differ
-        private const string PARAM_MATERIAL = "Segment Description"; // material/grade/segment desc
         private const string PARAM_ASSEMBLY_NAME = "Assembly Name";  // change if your assembly name param differs
 
         // If your end-prep / description param is different, change this:
@@ -50,22 +49,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             double negAllow = (p.CutListNegativeAllowance < 0) ? 0 : p.CutListNegativeAllowance;
 
             // Collect pipes from active view
-            List<PipePiece> pieces = CollectPipePiecesFromActiveView(doc, negAllow);
-
-            var siteMeasureAssemblies = Helpers.Elements.GetSiteMeasureAssemblies(doc);
-
-            var siteMeasureNames = siteMeasureAssemblies
-            .Select(x => x.AssemblyName)
-            .ToHashSet();
-
-            bool includeSiteMeasureAssemblies = p.IncludeSiteMeasure;
-
-            pieces = pieces.Where(x =>
-                includeSiteMeasureAssemblies ||
-                !siteMeasureNames.Any(siteName =>
-                    string.Equals(x.AssemblyName, siteName, StringComparison.OrdinalIgnoreCase) ||
-                    x.AssemblyName.StartsWith(siteName + "_", StringComparison.OrdinalIgnoreCase)))
-                .ToList();
+            List<PipePiece> pieces = CollectPipePiecesFromActiveView(doc, negAllow, p.IncludeSiteMeasure);
 
             if (pieces.Count == 0)
                 throw new InvalidOperationException("No valid pipes found in the active view for BOM-CUT LIST.");
@@ -85,8 +69,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             string note,
             string reportName)
         {
-            bool groupByPackage = !p.ExportReportsToExcel || p.GroupByPackage;
-            string totalWasteText = BuildTotalWasteText(pieces, maxLen, blade, groupByPackage);
+            string totalWasteText = BuildTotalWasteText(pieces, maxLen, blade, p.GroupByPackage);
 
             if (p.ExportReportsToExcel)
             {
@@ -113,7 +96,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 {
                     foreach (var packageGroup in packageGroups)
                     {
-                        List<PipePiece> packagePieces = packageGroup.ToList();
+                        var packagePieces = packageGroup.ToList();
                         worksheets.Add(BuildCutListExcelSheet(
                             p,
                             packagePieces,
@@ -135,7 +118,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 // Excel uses only the XLSX writer and must not initialize PDF
                 // dependencies or interfere with another add-in's PDF runtime.
                 ParallelSystemsPlugin.Classes.PdfRuntime.EnsureInitialized();
-                ExportPdfReport(p, pieces, maxLen, blade, negAllow, note, totalWasteText, reportName);
+                var plan = BuildCuttingPlan(pieces, maxLen, blade, p.GroupByPackage);
+                ExportPdfReport(p, plan, maxLen, blade, negAllow, note, totalWasteText, reportName);
             }
         }
 
@@ -143,7 +127,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private static void ExportPdfReport(
             ProcurementConfig p,
-            List<PipePiece> pieces,
+            List<CuttingGroup> plan,
             double maxLen,
             double blade,
             double negAllow,
@@ -155,13 +139,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             var culture = new CultureInfo("en-US");
             DateTime dt = (p.Date == default(DateTime)) ? DateTime.Today : p.Date;
             string dateText = dt.ToString("dddd, dd MMMM yyyy", culture);
-            var groups = pieces
-                .GroupBy(x => new { x.Package, x.Material, x.SizeText, x.SizeSort })
-                .OrderBy(g => g.Key.Package)
-                .ThenBy(g => g.Key.Material)
-                .ThenByDescending(g => g.Key.SizeSort)
-                .ToList();
-
             // Build PDF
             PdfDoc pdf = new PdfDoc();
             DefineStyles(pdf);
@@ -184,15 +161,12 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 !p.IncludeSiteMeasure
             );
 
-            foreach (var g in groups)
+            foreach (var group in plan)
             {
-                AddGroupHeader(section, p, g.Key.Package, g.Key.Material, g.Key.SizeText, maxLen, blade, negAllow);
-
-                // pack items into 6000mm bars using Best-Fit Decreasing
-                List<PackedBin> bins = PackPieces(g.ToList(), maxLen, blade, OptimizationMode.BestFitDecreasing);
+                AddGroupHeader(section, group, maxLen, blade, negAllow, p.GroupByPackage);
 
                 int pipeId = 0;
-                foreach (var bin in bins)
+                foreach (var bin in group.Bins)
                 {
                     AddPipeIdHeader(section, pipeId, maxLen);
 
@@ -277,29 +251,21 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (!string.IsNullOrWhiteSpace(worksheetName))
                 cutSheet.Name = worksheetName;
 
-            // Every cut list needs the stock-pipe cutting plan, including the main
-            // worksheet when it contains several packages and no package tabs.
             bool groupByPackage = config.GroupByPackage || !string.IsNullOrWhiteSpace(worksheetName);
-            var groups = pieces
-                .GroupBy(x => new { Package = groupByPackage ? x.Package ?? "" : "", x.Material, x.SizeText, x.SizeSort })
-                .OrderBy(g => g.Key.Package)
-                .ThenBy(g => g.Key.Material)
-                .ThenByDescending(g => g.Key.SizeSort)
-                .ToList();
-
+            var plan = BuildCuttingPlan(pieces, maxLen, blade, groupByPackage);
             var cutHeaderRow = cutSheet.Rows.Last();
             cutSheet.Rows.RemoveAt(cutSheet.Rows.Count - 1);
             bool cutHeaderAdded = false;
             bool cutAlt = false;
 
-            foreach (var g in groups)
+            foreach (var group in plan)
             {
                 cutSheet.Add(
                     ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Group,
-                    string.Format(CultureInfo.InvariantCulture, "Package: {0} | Material: {1} | Size: {2} | Stock Length: {3} | Blade: {4} | Negative Allowance: {5}",
-                        GetCutListPackageLabel(g),
-                        g.Key.Material ?? "",
-                        g.Key.SizeText ?? "",
+                    (groupByPackage ? "Package: " + group.Package + " | " : "") +
+                    string.Format(CultureInfo.InvariantCulture, "Material: {0} | Size: {1} | Stock Length: {2} | Blade: {3} | Negative Allowance: {4}",
+                        group.Material ?? "",
+                        group.SizeText ?? "",
                         maxLen,
                         blade,
                         negAllow));
@@ -310,9 +276,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     cutHeaderAdded = true;
                 }
 
-                List<PackedBin> excelBins = PackPieces(g.ToList(), maxLen, blade, OptimizationMode.BestFitDecreasing);
                 int pipeId = 0;
-                foreach (var bin in excelBins)
+                foreach (var bin in group.Bins)
                 {
                     cutSheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.GroupBlue, $"Pipe Id: {pipeId}");
                     double waste = Math.Max(0, maxLen - bin.UsedMm);
@@ -324,8 +289,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                             cutAlt ? ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.AlternateData : ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Data,
                             item.Package ?? "",
                             item.AssemblyName ?? "",
-                            g.Key.SizeText ?? "",
-                            g.Key.Material ?? "",
+                            group.SizeText ?? "",
+                            group.Material ?? "",
                             item.PipeEndPrep ?? "",
                             Math.Round(item.AdjustedLengthMm));
                         cutAlt = !cutAlt;
@@ -351,35 +316,54 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             return cutSheet;
         }
 
-        private static string BuildTotalWasteText(
-            IList<PipePiece> pieces,
-            double maxLen,
-            double blade,
-            bool groupByPackage)
+        private static List<CuttingGroup> BuildCuttingPlan(
+            IEnumerable<PipePiece> pieces, double maxLen, double blade, bool groupByPackage)
         {
-            List<PackedBin> bins = pieces
-                .GroupBy(x => new { Package = groupByPackage ? x.Package ?? "" : "", x.Material, x.SizeText, x.SizeSort })
-                .SelectMany(group => PackPieces(
-                    group.ToList(),
-                    maxLen,
-                    blade,
-                    OptimizationMode.BestFitDecreasing))
+            return pieces
+                .GroupBy(piece => groupByPackage ? piece.Package ?? "" : "", StringComparer.OrdinalIgnoreCase)
+                .OrderBy(package => string.IsNullOrWhiteSpace(package.Key) ? 1 : 0)
+                .ThenBy(package => package.Key, StringComparer.OrdinalIgnoreCase)
+                .SelectMany(package => package
+                    .GroupBy(piece => new { piece.Material, piece.SizeText, piece.SizeSort })
+                    .OrderBy(group => group.Key.Material)
+                    .ThenByDescending(group => group.Key.SizeSort)
+                    .Select(group => new CuttingGroup
+                    {
+                        Package = GetCutListPackageLabel(group),
+                        Material = group.Key.Material,
+                        SizeText = group.Key.SizeText,
+                        Bins = PackPieces(group.ToList(), maxLen, blade, OptimizationMode.BestFitDecreasing)
+                    }))
                 .ToList();
+        }
 
+        private static string GetCutListPackageLabel(IEnumerable<PipePiece> group)
+        {
+            var packages = group.Select(piece => piece.Package ?? "")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(2)
+                .ToList();
+            return packages.Count > 1 ? "ALL PACKAGES" : Helpers.ExcelReportExporter.GetPackageWorksheetName(packages.FirstOrDefault());
+        }
+
+        private static string BuildTotalWasteText(
+            IList<PipePiece> pieces, double maxLen, double blade, bool groupByPackage)
+        {
+            var bins = BuildCuttingPlan(pieces, maxLen, blade, groupByPackage)
+                .SelectMany(group => group.Bins)
+                .ToList();
             double totalWaste = bins.Sum(bin => Math.Round(Math.Max(0, maxLen - bin.UsedMm)));
             double totalStock = bins.Count * maxLen;
             double totalWastePct = totalStock > 0 ? (totalWaste / totalStock) * 100.0 : 0;
             return $"TOTAL WASTE: {Math.Round(totalWaste)} mm ({totalWastePct:F1}%)";
         }
 
-        private static string GetCutListPackageLabel(IEnumerable<PipePiece> pieces)
+        private sealed class CuttingGroup
         {
-            string[] packages = pieces
-                .Select(piece => piece.Package ?? "")
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(2)
-                .ToArray();
-            return packages.Length > 1 ? "ALL PACKAGES" : packages.FirstOrDefault() ?? "";
+            public string Package { get; set; }
+            public string Material { get; set; }
+            public string SizeText { get; set; }
+            public List<PackedBin> Bins { get; set; }
         }
 
         // =========================
@@ -410,8 +394,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         // =========================
         // Collectors
         // =========================
-        private static List<PipePiece> CollectPipePiecesFromActiveView(RvtDoc doc, double negativeAllowance)
+        private static List<PipePiece> CollectPipePiecesFromActiveView(RvtDoc doc, double negativeAllowance, bool includeSiteMeasure)
         {
+            var includeElement = Helpers.Elements.ProcurementSiteMeasureFilter(doc, includeSiteMeasure);
             var viewId = doc.ActiveView?.Id;
 
             var collector = new FilteredElementCollector(doc, viewId)
@@ -424,7 +409,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             foreach (var e in elements)
             {
-                if (Helpers.Elements.IsDoNotSchedule(doc, e))
+                if (!includeElement(e) || Helpers.Elements.IsDoNotSchedule(doc, e))
                     continue;
 
                 double lenFt = GetDoubleParam(e, BuiltInParameter.CURVE_ELEM_LENGTH);
@@ -433,7 +418,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                 string package = Helpers.Elements
                     .GetStandardProcurementPackageName(doc, e);
-                string material = GetStringParam(e, PARAM_MATERIAL);
+                string material = BomPipeReport.GetPipeDescription(doc, e);
                 string assemblyName = GetStringParam(e, PARAM_ASSEMBLY_NAME);
                 if (string.IsNullOrWhiteSpace(assemblyName))
                     assemblyName = Helpers.Elements.GetAssemblyName(doc, e);
@@ -894,10 +879,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             v.Font.Bold = valBold;
         }
 
-        private static void AddGroupHeader(Section section, ProcurementConfig p, string package, string material, string sizeText,
-                                           double maxLen, double blade, double negAllow)
+        private static void AddGroupHeader(Section section, CuttingGroup group,
+                                           double maxLen, double blade, double negAllow, bool groupByPackage)
         {
-            var hdr = section.AddParagraph($"{package} | {material} | {sizeText}");
+            var hdr = section.AddParagraph(
+                (groupByPackage ? group.Package + " | " : "") + $"{group.Material} | {group.SizeText}");
             hdr.Style = "BodyBold";
             hdr.Format.SpaceAfter = Unit.FromPoint(2);
 

@@ -56,19 +56,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             double negAllow = (cfg.CutListNegativeAllowance < 0) ? 0 : cfg.CutListNegativeAllowance;
 
             // ---------------- COLLECT PIPE PIECES ----------------
-            List<PipePiece> pieces = CollectPipePiecesFromActiveView(doc, negAllow);
-
-            var siteMeasureAssemblies = Helpers.Elements.GetSiteMeasureAssemblies(doc);
-
-            var siteMeasureNames = siteMeasureAssemblies
-                .Select(x => x.AssemblyName)
-                .ToHashSet();
-
-            bool includeSiteMeasureAssemblies = cfg.IncludeSiteMeasure;
-
-            pieces = pieces
-                .Where(x => includeSiteMeasureAssemblies || !siteMeasureNames.Contains(x.AssemblyName))
-                .ToList();
+            List<PipePiece> pieces = CollectPipePiecesFromActiveView(doc, negAllow, cfg.IncludeSiteMeasure);
 
             List<string> unnamedPipeIds = pieces
                 .Where(x => string.IsNullOrWhiteSpace(x.Material))
@@ -98,7 +86,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 maxLen,
                 blade,
                 cfg.OffcutThreshold,
-                false);
+                cfg.GroupByPackage);
 
             /*
             AppDialog.Info(
@@ -144,9 +132,19 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             AddMainHeaderRow(table, stockLengthLabel);
 
             bool shade = false;
+            string previousPackage = null;
 
             foreach (var r in pipeSummaries)
             {
+                if (cfg.GroupByPackage && !string.Equals(previousPackage, r.Package, StringComparison.OrdinalIgnoreCase))
+                {
+                    var header = table.AddRow();
+                    header.Cells[0].MergeRight = table.Columns.Count - 1;
+                    header.Cells[0].AddParagraph(ExcelReportExporter.GetPackageWorksheetName(r.Package));
+                    header.Format.Font.Bold = true;
+                    previousPackage = r.Package;
+                }
+
                 var tr = table.AddRow();
                 tr.VerticalAlignment = VerticalAlignment.Center;
 
@@ -179,7 +177,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             // EXPORT EXCEL
             // ==============================
             if (cfg.ExportReportsToExcel)
-                ExportExcel(cfg, pieces, maxLen, blade, note, reportName, stockLengthLabel);
+                ExportExcel(cfg, pieces, pipeSummaries, maxLen, blade, note, reportName, stockLengthLabel);
         }
 
         private static List<PipeSummary> BuildPipeSummaries(
@@ -190,50 +188,44 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             bool groupByPackage)
         {
             return (pieces ?? Enumerable.Empty<PipePiece>())
-                .GroupBy(x => new
-                {
-                    Package = groupByPackage ? x.Package ?? "" : "",
-                    x.Material,
-                    x.SizeText,
-                    x.SizeSort
-                })
-                .OrderBy(g => string.IsNullOrWhiteSpace(g.Key.Package) ? 1 : 0)
-                .ThenBy(g => g.Key.Package, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(g => g.Key.Material)
-                .ThenByDescending(g => g.Key.SizeSort)
-                .Select(g =>
-                {
-                    var bins = PackPieces(
-                        g.ToList(),
-                        maxLen,
-                        blade,
-                        OptimizationMode.BestFitDecreasing);
-
-                    var reusableOffcuts = bins
-                        .Select(bin => new
-                        {
-                            RemainingMm = Math.Max(0, maxLen - bin.UsedMm),
-                            UsedMm = Math.Min(maxLen, bin.UsedMm)
-                        })
-                        .Where(x =>
-                            x.RemainingMm > 0 &&
-                            x.RemainingMm >= Math.Max(0, offcutThreshold))
-                        .ToList();
-
-                    return new PipeSummary
+                .GroupBy(piece => groupByPackage ? piece.Package ?? "" : "", StringComparer.OrdinalIgnoreCase)
+                .OrderBy(package => string.IsNullOrWhiteSpace(package.Key) ? 1 : 0)
+                .ThenBy(package => package.Key, StringComparer.OrdinalIgnoreCase)
+                .SelectMany(package => package
+                    .GroupBy(piece => new { piece.Material, piece.SizeText, piece.SizeSort })
+                    .OrderBy(group => group.Key.Material)
+                    .ThenByDescending(group => group.Key.SizeSort)
+                    .Select(g =>
                     {
-                        Package = string.IsNullOrWhiteSpace(g.Key.Package)
-                            ? ExcelReportExporter.GetPackageWorksheetName(g.Key.Package)
-                            : g.Key.Package,
-                        Size = g.Key.SizeText,
-                        Name = g.Key.Material,
-                        Length = Math.Round(maxLen).ToString(CultureInfo.InvariantCulture),
-                        Count = Math.Max(0, bins.Count - reusableOffcuts.Count),
-                        Offcuts = string.Join(", ", reusableOffcuts
-                            .Select(x => Math.Round(x.UsedMm).ToString(CultureInfo.InvariantCulture) + " mm")),
-                        Note = ""
-                    };
-                })
+                        var bins = PackPieces(
+                            g.ToList(),
+                            maxLen,
+                            blade,
+                            OptimizationMode.BestFitDecreasing);
+
+                        var reusableOffcuts = bins
+                            .Select(bin => new
+                            {
+                                RemainingMm = Math.Max(0, maxLen - bin.UsedMm),
+                                UsedMm = Math.Min(maxLen, bin.UsedMm)
+                            })
+                            .Where(x =>
+                                x.RemainingMm > 0 &&
+                                x.RemainingMm >= Math.Max(0, offcutThreshold))
+                            .ToList();
+
+                        return new PipeSummary
+                        {
+                            Package = package.Key,
+                            Size = g.Key.SizeText,
+                            Name = g.Key.Material,
+                            Length = Math.Round(maxLen).ToString(CultureInfo.InvariantCulture),
+                            Count = Math.Max(0, bins.Count - reusableOffcuts.Count),
+                            Offcuts = string.Join(", ", reusableOffcuts
+                                .Select(x => Math.Round(x.UsedMm).ToString(CultureInfo.InvariantCulture) + " mm")),
+                            Note = ""
+                        };
+                    }))
                 .ToList();
         }
 
@@ -279,6 +271,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         private static void ExportExcel(
             ProcurementConfig cfg,
             List<PipePiece> pieces,
+            List<PipeSummary> pipeSummaries,
             double maxLen,
             double blade,
             string note,
@@ -291,21 +284,15 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            bool showPackageInSummary = cfg.GroupByPackage && packageGroups.Count > 1;
             var worksheets = new List<ExcelReportExporter.ExcelWorksheet>
             {
                 BuildPipeExcelSheet(
                     cfg,
-                    BuildPipeSummaries(
-                        pieces,
-                        maxLen,
-                        blade,
-                        cfg.OffcutThreshold,
-                        showPackageInSummary),
+                    pipeSummaries,
                     note,
                     stockLengthLabel,
                     null,
-                    showPackageInSummary)
+                    cfg.GroupByPackage)
             };
 
             if (cfg.CreatePackageWorksheets && packageGroups.Count > 1)
@@ -362,7 +349,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 {
                     sheet.Add(
                         rowKind,
-                        r.Package ?? "",
+                        ExcelReportExporter.GetPackageWorksheetName(r.Package),
                         r.Size ?? "",
                         r.Name ?? "",
                         r.Length ?? "",
@@ -397,8 +384,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
         // =========================
         // COLLECTORS
         // =========================
-        private static List<PipePiece> CollectPipePiecesFromActiveView(RvtDoc doc, double negativeAllowance)
+        private static List<PipePiece> CollectPipePiecesFromActiveView(RvtDoc doc, double negativeAllowance, bool includeSiteMeasure)
         {
+            var includeElement = Helpers.Elements.ProcurementSiteMeasureFilter(doc, includeSiteMeasure);
             var result = new List<PipePiece>();
 
             if (doc.ActiveView == null)
@@ -412,7 +400,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             foreach (var e in elements)
             {
-                if (Helpers.Elements.IsDoNotSchedule(doc, e))
+                if (!includeElement(e) || Helpers.Elements.IsDoNotSchedule(doc, e))
                     continue;
 
                 double lenFt = GetDoubleParam(e, BuiltInParameter.CURVE_ELEM_LENGTH);
@@ -454,7 +442,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             return result;
         }
 
-        private static string GetPipeDescription(RvtDoc doc, Element pipe)
+        internal static string GetPipeDescription(RvtDoc doc, Element pipe)
         {
             Element pipeType = doc?.GetElement(pipe?.GetTypeId());
             string[] candidates =

@@ -309,7 +309,6 @@ namespace ParallelSystemsPlugin.Helpers
                     CutListMaximumLength = 6000,
                     CutListBladeThickness = 2,
                     CutListNegativeAllowance = 0,
-                    OffcutThreshold = 2500,
                 };
 
                 defaultConfig.ToolsConfig = new ToolsConfig

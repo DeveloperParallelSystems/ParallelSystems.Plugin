@@ -16,7 +16,12 @@ namespace ParallelSystemsPlugin.Models.Configs
         public bool BomAssemblyRegister { get; set; } = true;
         public bool BomCutList { get; set; } = true;
         public bool BomFittingReport { get; set; } = true;
-        public bool IncludeWeld { get; set; } = false;
+        private bool? includeWeld;
+        public bool IncludeWeld
+        {
+            get => includeWeld ?? (IncludeWeldInFittingReport || IncludeWeldInFieldMaterialReport);
+            set => includeWeld = value;
+        }
         // Retained for compatibility with configurations saved before IncludeWeld
         // became one shared procurement-report setting.
         public bool IncludeWeldInFittingReport { get; set; } = false;
@@ -49,7 +54,8 @@ namespace ParallelSystemsPlugin.Models.Configs
         /// Default: 0
         /// </summary>
         public double CutListNegativeAllowance { get; set; } = 0;
-        public double OffcutThreshold { get; set; } = 2500;
+        public const double DefaultOffcutThreshold = 3500;
+        public double OffcutThreshold { get; set; } = DefaultOffcutThreshold;
         public string PublishSite { get; set; } = "";
         public string PublishFileName { get; set; } = "";
         public bool ExportPdf { get; set; } = false;

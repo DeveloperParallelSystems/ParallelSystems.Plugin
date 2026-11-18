@@ -47,22 +47,9 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             string outPath = Path.Combine(cfg.TargetFolder, "LABEL REPORT.pdf");
 
             var data = GenerateLabelData(doc, cfg)
-                .OrderBy(x => x.Package)
+                .OrderBy(x => cfg.GroupByPackage ? x.Package : "", StringComparer.OrdinalIgnoreCase)
                 .ThenBy(x => TryParseInt(x.MarkItem))
                 .ThenBy(x => x.SpoolNumber)
-                .ToList();
-
-            var siteMeasureAssemblies = Helpers.Elements.GetSiteMeasureAssemblies(doc);
-
-            var siteMeasureNames = siteMeasureAssemblies
-                .Select(x => x.AssemblyName)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToHashSet();
-
-            bool includeSiteMeasureAssemblies = cfg.IncludeSiteMeasure;
-
-            data = data
-                .Where(x => includeSiteMeasureAssemblies || !siteMeasureNames.Contains(x.SpoolNumber))
                 .ToList();
 
             string projectPhases = string.Join(", ", data
@@ -113,23 +100,34 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             bool shade = false;
 
-            foreach (var r in data)
+            foreach (var package in GetLabelGroups(data, cfg.GroupByPackage))
             {
-                var tr = table.AddRow();
-                tr.VerticalAlignment = VerticalAlignment.Center;
+                if (cfg.GroupByPackage)
+                {
+                    var groupRow = table.AddRow();
+                    groupRow.Cells[0].MergeRight = table.Columns.Count - 1;
+                    groupRow.Cells[0].AddParagraph(ExcelReportExporter.GetPackageWorksheetName(package.Key));
+                    groupRow.KeepWith = 1;
+                }
 
-                if (shade)
-                    tr.Shading.Color = Colors.WhiteSmoke;
+                foreach (var r in package)
+                {
+                    var tr = table.AddRow();
+                    tr.VerticalAlignment = VerticalAlignment.Center;
 
-                shade = !shade;
+                    if (shade)
+                        tr.Shading.Color = Colors.WhiteSmoke;
 
-                tr.Cells[0].AddParagraph(r.SpoolNumber ?? "");
-                tr.Cells[1].AddParagraph(r.MarkItem ?? "");
-                tr.Cells[2].AddParagraph(r.MaterialGrade ?? "");
-                tr.Cells[3].AddParagraph(r.PipeSize ?? "");
-                tr.Cells[4].AddParagraph(r.PipeEndPrep ?? "");
-                tr.Cells[5].AddParagraph(r.PipeLength ?? "");
-                tr.Cells[6].AddParagraph(QrCodeUrl);
+                    shade = !shade;
+
+                    tr.Cells[0].AddParagraph(r.SpoolNumber ?? "");
+                    tr.Cells[1].AddParagraph(r.MarkItem ?? "");
+                    tr.Cells[2].AddParagraph(r.MaterialGrade ?? "");
+                    tr.Cells[3].AddParagraph(r.PipeSize ?? "");
+                    tr.Cells[4].AddParagraph(r.PipeEndPrep ?? "");
+                    tr.Cells[5].AddParagraph(r.PipeLength ?? "");
+                    tr.Cells[6].AddParagraph(QrCodeUrl);
+                }
             }
 
             section.AddParagraph().Format.SpaceBefore = MigraDoc.DocumentObjectModel.Unit.FromCentimeter(0.6);
@@ -152,7 +150,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            bool showPackageInSummary = cfg.GroupByPackage && packageGroups.Count > 1;
             var worksheets = new List<ExcelReportExporter.ExcelWorksheet>
             {
                 BuildLabelExcelSheet(
@@ -161,7 +158,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     note,
                     projectPhases,
                     null,
-                    showPackageInSummary)
+                    cfg.GroupByPackage)
             };
 
             if (cfg.CreatePackageWorksheets && packageGroups.Count > 1)
@@ -189,7 +186,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             string note,
             string projectPhases,
             string worksheetName,
-            bool includePackageColumn)
+            bool groupByPackage)
         {
             var headers = new[]
             {
@@ -216,30 +213,44 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             bool alternate = false;
 
-            foreach (var r in data)
+            foreach (var package in GetLabelGroups(data, groupByPackage))
             {
-                var values = new List<object>();
-                values.Add(r.ProjectNumber ?? "");
-                values.Add(r.ProjectName ?? "");
-                values.Add(r.ProjectPhase ?? "");
-                values.Add(r.SpoolNumber ?? "");
-                values.Add(r.MarkItem ?? "");
-                values.Add(r.MaterialGrade ?? "");
-                values.Add(r.PipeSize ?? "");
-                values.Add(r.PipeEndPrep ?? "");
-                values.Add(r.PipeLength ?? "");
-                values.Add(QrCodeUrl);
+                if (groupByPackage)
+                    sheet.Add(ExcelReportExporter.RowKind.Group, ExcelReportExporter.GetPackageWorksheetName(package.Key));
 
-                sheet.Add(
-                    alternate
-                        ? ExcelReportExporter.RowKind.AlternateData
-                        : ExcelReportExporter.RowKind.Data,
-                    values.ToArray());
+                foreach (var r in package)
+                {
+                    var values = new List<object>();
+                    values.Add(r.ProjectNumber ?? "");
+                    values.Add(r.ProjectName ?? "");
+                    values.Add(r.ProjectPhase ?? "");
+                    values.Add(r.SpoolNumber ?? "");
+                    values.Add(r.MarkItem ?? "");
+                    values.Add(r.MaterialGrade ?? "");
+                    values.Add(r.PipeSize ?? "");
+                    values.Add(r.PipeEndPrep ?? "");
+                    values.Add(r.PipeLength ?? "");
+                    values.Add(QrCodeUrl);
 
-                alternate = !alternate;
+                    sheet.Add(
+                        alternate
+                            ? ExcelReportExporter.RowKind.AlternateData
+                            : ExcelReportExporter.RowKind.Data,
+                        values.ToArray());
+
+                    alternate = !alternate;
+                }
             }
 
+            if (!string.IsNullOrWhiteSpace(note))
+                sheet.Add(ExcelReportExporter.RowKind.Note, note);
+
             return sheet;
+        }
+
+        private static IEnumerable<IGrouping<string, LabelData>> GetLabelGroups(IEnumerable<LabelData> data, bool groupByPackage)
+        {
+            return data.GroupBy(r => groupByPackage ? r.Package ?? "" : "", StringComparer.OrdinalIgnoreCase);
         }
 
         private static void AddMainHeaderRow(Table table)
@@ -282,9 +293,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (doc.ActiveView == null)
                 return labels;
 
+            var includeElement = Helpers.Elements.ProcurementSiteMeasureFilter(doc, cfg.IncludeSiteMeasure);
             var assemblies = new FilteredElementCollector(doc, doc.ActiveView.Id)
                 .OfClass(typeof(AssemblyInstance))
                 .Cast<AssemblyInstance>()
+                .Where(assembly => includeElement(assembly))
                 .Where(assembly => !Helpers.Elements.IsDoNotSchedule(doc, assembly))
                 .ToList();
 
@@ -309,7 +322,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     if (element == null)
                         continue;
 
-                    if (Helpers.Elements.IsDoNotSchedule(doc, element))
+                    if (!includeElement(element) || Helpers.Elements.IsDoNotSchedule(doc, element))
                         continue;
 
                     if (IsShapedBranch(doc, element))
