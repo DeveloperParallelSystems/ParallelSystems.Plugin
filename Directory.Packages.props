@@ -3,6 +3,10 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <PackageVersion Include="Revit_All_Main_Versions_API_x64" Version="[2025.0.0]" />
+    <!-- This file is imported before RevitVersion is set. Include WPF temporary projects. -->
+    <PackageVersion Update="Revit_All_Main_Versions_API_x64" Version="[2026.0.0]"
+                    Condition="$(MSBuildProjectName.StartsWith('ParallelSystemsPlugin.2026'))" />
     <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.1" />
   </ItemGroup>

@@ -17,6 +17,9 @@
     <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
 
     <RevitInstallDir Condition="'$(RevitInstallDir)' == ''">$(ProgramW6432)\Autodesk\Revit $(RevitVersion)</RevitInstallDir>
+    <!-- 2025/2026 references must not follow an installed Revit upgrade to .NET 10. -->
+    <RevitReferenceDir Condition="'$(RevitReferenceDir)' == '' And ('$(RevitVersion)' == '2025' Or '$(RevitVersion)' == '2026')">$(PkgRevit_All_Main_Versions_API_x64)\lib\net8.0</RevitReferenceDir>
+    <RevitReferenceDir Condition="'$(RevitReferenceDir)' == ''">$(RevitInstallDir)</RevitReferenceDir>
     <DeployToRevitOnBuild Condition="'$(DeployToRevitOnBuild)' == ''">true</DeployToRevitOnBuild>
     <RevitAddinGuid>{9157A868-2963-49BD-9371-884BE896B286}</RevitAddinGuid>
   </PropertyGroup>
@@ -50,15 +53,15 @@
 
   <ItemGroup>
     <Reference Include="RevitAPI">
-      <HintPath>$(RevitInstallDir)\RevitAPI.dll</HintPath>
+      <HintPath>$(RevitReferenceDir)\RevitAPI.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="RevitAPIUI">
-      <HintPath>$(RevitInstallDir)\RevitAPIUI.dll</HintPath>
+      <HintPath>$(RevitReferenceDir)\RevitAPIUI.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="AdWindows">
-      <HintPath>$(RevitInstallDir)\AdWindows.dll</HintPath>
+      <HintPath>$(RevitReferenceDir)\AdWindows.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

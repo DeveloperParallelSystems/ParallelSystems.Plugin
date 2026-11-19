@@ -13,12 +13,12 @@
   <Target Name="ValidateRevitReferences" BeforeTargets="ResolveReferences">
     <Error Condition="'$(RevitVersion)' == ''"
            Text="RevitVersion was not configured for $(MSBuildProjectName)." />
-    <Error Condition="!Exists('$(RevitInstallDir)\RevitAPI.dll')"
-           Text="Revit $(RevitVersion) API was not found at '$(RevitInstallDir)'. Install Revit $(RevitVersion) or override RevitInstallDir." />
-    <Error Condition="!Exists('$(RevitInstallDir)\RevitAPIUI.dll')"
-           Text="RevitAPIUI.dll was not found at '$(RevitInstallDir)'." />
-    <Error Condition="!Exists('$(RevitInstallDir)\AdWindows.dll')"
-           Text="AdWindows.dll was not found at '$(RevitInstallDir)'." />
+    <Error Condition="!Exists('$(RevitReferenceDir)\RevitAPI.dll')"
+           Text="Revit $(RevitVersion) API was not found at '$(RevitReferenceDir)'. Restore NuGet packages for Revit 2025/2026 or supply RevitReferenceDir with matching API DLLs; other adapters default to RevitInstallDir." />
+    <Error Condition="!Exists('$(RevitReferenceDir)\RevitAPIUI.dll')"
+           Text="RevitAPIUI.dll was not found at '$(RevitReferenceDir)'." />
+    <Error Condition="!Exists('$(RevitReferenceDir)\AdWindows.dll')"
+           Text="AdWindows.dll was not found at '$(RevitReferenceDir)'." />
   </Target>
 
   <Target Name="RejectCopiedAutodeskAssemblies" AfterTargets="Build">

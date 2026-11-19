@@ -1,11 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RevitVersion>2025</RevitVersion>
+    <!-- Compile against the original 2025 API to retain .NET 8 compatibility. -->
     <TargetFramework>net8.0-windows</TargetFramework>
     <AssemblyName>ParallelSystemsPlugin.2025</AssemblyName>
     <DefineConstants>$(DefineConstants);REVIT2025;REVIT2022_OR_GREATER;REVIT2024_OR_GREATER;REVIT2025_OR_GREATER;REVIT_MODERN_DOTNET</DefineConstants>
     <Version>1.18.1</Version>
   </PropertyGroup>
+
+  <!-- Only obtain reference files: never include Autodesk assemblies as runtime assets. -->
+  <ItemGroup>
+    <PackageReference Include="Revit_All_Main_Versions_API_x64"
+                      GeneratePathProperty="true"
+                      ExcludeAssets="all"
+                      PrivateAssets="all" />
+  </ItemGroup>
 
   <Import Project="..\Build\RevitAdapter.Common.props" />
   <Import Project="..\ParallelSystemsPlugin.Shared\ParallelSystemsPlugin.Shared.projitems" Label="Shared" />
