@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+    <Compile Include="../../ParallelSystemsPlugin.Shared/LiveSession/LiveSessionServer.cs" Link="LiveSessionServer.cs" />
+    <Compile Include="../../ParallelSystemsPlugin.Shared/LiveSession/LiveSessionRequestQueue.cs" Link="LiveSessionRequestQueue.cs" />
+    <Compile Include="../../ParallelSystemsPlugin.Shared/LiveSession/DynamoGraphFile.cs" Link="DynamoGraphFile.cs" />
+    <Compile Include="../../ParallelSystemsPlugin.Shared/LiveSession/DynamoReflection.cs" Link="DynamoReflection.cs" />
+    <Compile Include="../../ParallelSystemsPlugin.Shared/LiveSession/DynamoLiveSession.cs" Link="DynamoLiveSession.cs" />
+    <Compile Include="../../ParallelSystemsPlugin.Shared/LiveSession/LiveDocumentRegistry.cs" Link="LiveDocumentRegistry.cs" />
+  </ItemGroup>
+</Project>

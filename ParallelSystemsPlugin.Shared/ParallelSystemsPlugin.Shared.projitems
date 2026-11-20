@@ -13,6 +13,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)App.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)LiveSession\LiveSessionServer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)LiveSession\LiveSessionRequestQueue.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)LiveSession\LiveSessionBridge.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)LiveSession\LiveSessionCommands.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)LiveSession\DynamoGraphFile.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)LiveSession\DynamoReflection.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)LiveSession\DynamoLiveSession.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)LiveSession\LiveDocumentRegistry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProductLifecycle.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\LegacyUpdaterBootstrap.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\UpdateDiscardCloseScope.cs" />

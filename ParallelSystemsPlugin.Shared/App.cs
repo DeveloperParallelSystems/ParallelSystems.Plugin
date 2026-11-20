@@ -845,6 +845,8 @@ namespace ParallelSystemsPlugin
             SettingsPanelMenu.Build(
                 settingsPanel);
 
+            LiveSession.LiveSessionBridge.AddRibbonButton(settingsPanel);
+
             RibbonPanel toolsPanel =
                 GetOrCreatePanel(
                     app,
@@ -1014,6 +1016,7 @@ namespace ParallelSystemsPlugin
         public Result OnShutdown(
             UIControlledApplication app)
         {
+            LiveSession.LiveSessionBridge.Stop();
             _updateExitHandler?.Dispose();
             _updateExitHandler = null;
             try
