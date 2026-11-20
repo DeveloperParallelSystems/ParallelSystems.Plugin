@@ -453,42 +453,38 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private static string GetReportDescription(FamilyInstance fi)
         {
-            string typeDescription =
-                GetStringParameter(fi.Symbol, "Description") ??
-                GetStringParameter(fi, "Description") ??
-                GetStringParameter(fi.Symbol, "BOM Description") ??
-                GetStringParameter(fi, "BOM Description") ??
-                GetStringParameter(fi.Symbol, "Procurement Description") ??
-                GetStringParameter(fi, "Procurement Description");
+            // Field Material uses Description only, instance before type.
+            string description = GetStringParameter(fi, "Description");
+            if (string.IsNullOrWhiteSpace(description))
+                description = GetStringParameter(fi.Symbol, "Description");
 
-            string manufacturer = GetStringParameter(fi.Symbol, "Manufacturer");
-            string familyName = fi.Symbol?.Family?.Name ?? "";
-            string typeName = fi.Symbol?.Name ?? "";
+            string familyName = fi.Symbol?.FamilyName ?? fi.Symbol?.Family?.Name ?? "";
+            string typeName = fi.Symbol?.Name ?? fi.Name ?? "";
 
-            if (!string.IsNullOrWhiteSpace(typeDescription))
+            return BuildDescription(familyName, typeName, description);
+        }
+
+        private static string BuildDescription(string familyName, string typeName, string description)
+        {
+            string detail = (description ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(detail))
+                return detail;
+
+            // Requested short names apply only to identifiable Victaulic coupling subtypes.
+            // Family/type values help distinguish generic descriptions but are not printed.
+            string[] words = string.Join(" ", familyName ?? "", typeName ?? "", detail)
+                .ToUpperInvariant()
+                .Split(new[] { ' ', '-', '_', '(', ')', '/', '|', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            bool victaulic = words.Contains("VIC") || words.Contains("VICTAULIC") || words.Contains("QUICKVIC");
+            bool coupling = words.Contains("COUPLING") || words.Contains("COUPLINGS");
+            bool rigid = words.Contains("RIGID");
+            bool flexible = words.Contains("FLEX") || words.Contains("FLEXIBLE");
+            if (victaulic && coupling && rigid != flexible)
             {
-                if (IsFlowMeter(fi) && !string.IsNullOrWhiteSpace(manufacturer))
-                {
-                    if (!typeDescription.ToUpperInvariant().Contains(manufacturer.ToUpperInvariant()))
-                    {
-                        return string.Format(
-                            CultureInfo.InvariantCulture,
-                            "{0} - {1}",
-                            manufacturer.ToUpperInvariant(),
-                            typeDescription.ToUpperInvariant());
-                    }
-                }
-
-                return typeDescription.Trim();
+                return rigid ? "VIC RIGID COUPLING" : "VIC FLEXIBLE COUPLING";
             }
 
-            if (!string.IsNullOrWhiteSpace(typeName) &&
-                !string.Equals(typeName, "Standard", StringComparison.OrdinalIgnoreCase))
-            {
-                return typeName.Trim();
-            }
-
-            return familyName.Trim();
+            return detail;
         }
 
         private static bool IsFlowMeter(FamilyInstance fi)

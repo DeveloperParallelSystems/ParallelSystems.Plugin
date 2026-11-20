@@ -393,13 +393,16 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (doc == null || assembly == null || element == null)
                 return "";
 
-            // Keep original working pipe material logic.
+            // Prefer this pipe's model values before the assembly-level fallback.
             if (element is Pipe pipe)
             {
-                string materialGrade = Elements.GetMaterialGrade(doc, assembly)
-                    ?? pipe.LookupParameter("Material Grade")?.AsString()
-                    ?? pipe.LookupParameter("Material")?.AsValueString()
-                    ?? pipe.PipeType?.LookupParameter("Material")?.AsValueString();
+                string materialGrade = GetParamString(pipe, "Segment Description", "Material Grade", "Material");
+
+                if (string.IsNullOrWhiteSpace(materialGrade))
+                    materialGrade = GetParamString(pipe.PipeType, "Segment Description", "Material Grade", "Material");
+
+                if (string.IsNullOrWhiteSpace(materialGrade))
+                    materialGrade = Elements.GetMaterialGrade(doc, assembly);
 
                 return CleanText(materialGrade);
             }
@@ -679,7 +682,10 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                 try
                 {
-                    value = p.AsString();
+                    value = p.StorageType == StorageType.String ? p.AsString() : p.AsValueString();
+
+                    if (string.IsNullOrWhiteSpace(value) && p.StorageType == StorageType.ElementId)
+                        value = element.Document.GetElement(p.AsElementId())?.Name;
 
                     if (string.IsNullOrWhiteSpace(value))
                         value = p.AsValueString();
@@ -704,18 +710,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private static string NormalizeMaterialGrade(string value)
         {
-            value = CleanText(value);
-
-            if (string.IsNullOrWhiteSpace(value))
-                return "";
-
-            if (value.IndexOf("SHAPED BRANCH", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "BRANCH-SS SCH10 (C-E)";
-
-            if (value.IndexOf("BRANCH-SS SCH10", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "BRANCH-SS SCH10 (C-E)";
-
-            return value;
+            return CleanText(value);
         }
 
         private static string NormalizeFittingPipeSize(string value)

@@ -462,10 +462,11 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
                 string typeIdentity = GetElementTypeIdentity(e);
                 string rawDesc = GetBestDescription(e);
+                string classificationDescription = FirstNonEmptyParam(e, "Type", "Description", "Family and Type", "Type Name");
 
                 bool isCustom = GetYesNoParamInstanceOrType(e, PARAM_IS_CUSTOM);
 
-                string bucket = MapToBucket(typeIdentity + " " + rawDesc);
+                string bucket = MapToBucket(typeIdentity + " " + classificationDescription);
                 if (isCustom && bucket != "WELD")
                     bucket = "CUSTOM FITTING";
 
@@ -478,30 +479,17 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 if (string.IsNullOrWhiteSpace(sizeText))
                     sizeText = ExtractLikelySizeFromText(typeIdentity);
 
-                bool teeSizesAreEqual = AreAllNominalSizesEqual(sizeText);
+                string equalTeeDescription = bucket == "TEE" && AreAllNominalSizesEqual(sizeText)
+                    ? GetStringParamInstanceOrType(e, "Description BOM") : "";
                 sizeText = NormalizeSizeText(sizeText);
 
                 double sizeSort = ExtractFirstNumber(sizeText);
 
-                string finalDesc = BuildReportDescription(
-                    e,
-                    bucket,
-                    rawDesc,
-                    typeIdentity,
-                    teeSizesAreEqual);
+                string finalDesc = BuildReportDescription(rawDesc, typeIdentity);
 
-                // Manual report does not show these "Standard" non-connectors.
-                // They are being picked up by OST_PipeFitting but are not BOM fitting items.
-                if (string.Equals(finalDesc, "Standard", StringComparison.OrdinalIgnoreCase))
+                // Keep established placeholder exclusions independent of display parameter precedence.
+                if (ShouldSkipFitting(typeIdentity, classificationDescription, bucket, equalTeeDescription))
                     continue;
-
-                // The Tri-Clamp 050DN and Ferrule rows are two Revit elements for the same physical custom fitting.
-                // Keep only the Ferrule description row, skip the Tri-Clamp placeholder.
-                if (typeIdentity.IndexOf("Tri-Clamp", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    rawDesc.Equals("050DN", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
 
                 string packageName = Helpers.Elements
                     .GetStandardProcurementPackageName(doc, e);
@@ -577,14 +565,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private static string NormalizeMaterialGrade(string materialGrade)
         {
-            string value = (materialGrade ?? "").Trim();
-            int specificationSeparator = value.IndexOf(
-                " - ",
-                StringComparison.Ordinal);
-
-            return specificationSeparator > 0
-                ? value.Substring(0, specificationSeparator).Trim()
-                : value;
+            return (materialGrade ?? "").Trim();
         }
 
         private static string ResolvePackageFromConnectedPipe(
@@ -789,13 +770,15 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
         private static string GetBestDescription(Element e)
         {
-            //string typeId = GetElementTypeIdentity(e);
-            //if (!string.IsNullOrWhiteSpace(typeId))
-            //    return typeId;
-
             Helpers.Elements.AddToDebugLog(e);
 
-            return FirstNonEmptyParam(e, "Type", "Description", "Family and Type", "Type Name") ?? "";
+            // Match Filter Items: dedicated descriptions first, instance before type.
+            string description = FirstNonEmptyParamInstanceOrType(
+                e, "BOM Description", "Description BOM", "Procurement Description", "Description");
+            if (!string.IsNullOrWhiteSpace(description))
+                return description;
+
+            return FirstNonEmptyParam(e, "Type", "Family and Type", "Type Name") ?? "";
         }
 
         private static string GetElementTypeIdentity(Element e)
@@ -862,55 +845,36 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             }
         }
 
-        private static string BuildReportDescription(
-    Element e,
-    string bucket,
-    string rawDesc,
-    string typeIdentity,
-    bool teeSizesAreEqual)
+        private static string BuildReportDescription(string rawDesc, string typeIdentity)
         {
-            string source = ((typeIdentity ?? "") + " " + (rawDesc ?? "")).Trim();
-            string upper = source.ToUpperInvariant();
+            // All categories use model values without material, schedule or specification substitutions.
+            return (string.IsNullOrWhiteSpace(rawDesc) ? typeIdentity ?? "" : rawDesc).Trim();
+        }
+
+        private static bool ShouldSkipFitting(string typeIdentity, string classificationDescription, string bucket, string equalTeeDescription)
+        {
+            string identity = typeIdentity ?? "";
+            string description = classificationDescription ?? "";
+            if (identity.IndexOf("Tri-Clamp", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                description.Equals("050DN", StringComparison.OrdinalIgnoreCase))
+                return true;
 
             if (bucket == "CUSTOM FITTING")
-                return "HYDROFLOW FERRULE - SCH10 - SS";
-
-            if (bucket == "TEE" && teeSizesAreEqual)
-            {
-                string bomDescription = GetStringParamInstanceOrType(e, "Description BOM");
-                if (!string.IsNullOrWhiteSpace(bomDescription))
-                    return NormalizeDescription(bomDescription);
-            }
+                return false;
+            string source = (identity + " " + description).ToUpperInvariant();
+            if (bucket == "ELBOW" && !source.Contains("VICTAULIC") && !source.Contains("VIC SS"))
+                return false;
+            if (bucket == "TEE" && !string.IsNullOrWhiteSpace(equalTeeDescription))
+                return string.Equals(equalTeeDescription.Trim(), "Standard", StringComparison.OrdinalIgnoreCase);
 
             if (bucket == "WELD")
             {
-                if (upper.Contains("FLANGE") && upper.Contains("EXTERNAL"))
-                    return "FLANGE FILLET WELD EXTERNAL - CLASS 3-AS4041";
-
-                if (upper.Contains("FLANGE") && upper.Contains("FILLET WELD"))
-                    return "FLANGE FILLET WELD INTERNAL - CLASS 3-AS4041";
-
-                if (upper.Contains("STAINLESS-0MM-WELD GAP"))
-                    return "STAINLESS-0MM GAP-CLASS 3-AS4041";
+                if ((source.Contains("FLANGE") && (source.Contains("EXTERNAL") || source.Contains("FILLET WELD"))) ||
+                    source.Contains("STAINLESS-0MM-WELD GAP"))
+                    return false;
             }
 
-            if (bucket == "SOCKET")
-                return NormalizeDescription(rawDesc);
-
-            if (bucket == "ELBOW")
-            {
-                if (upper.Contains("VICTAULIC") || upper.Contains("VIC SS"))
-                    return NormalizeDescription(rawDesc);
-
-                string angle = GetElbowAngleText(e);
-
-                if (!string.IsNullOrWhiteSpace(angle))
-                    return "LR ELBOW - BW - " + angle + " - STD WT - CS";
-
-                return "LR ELBOW - BW - SCH10-316/L-SS";
-            }
-
-            return NormalizeDescription(rawDesc);
+            return string.Equals(description.Trim(), "Standard", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool AreAllNominalSizesEqual(string sizeText)
@@ -919,37 +883,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 .Cast<Match>()
                 .Select(match => double.Parse(match.Value, CultureInfo.InvariantCulture))
                 .ToList();
-
             return sizes.Count >= 2 && sizes.All(size => Math.Abs(size - sizes[0]) < 0.001);
-        }
-
-        private static string GetElbowAngleText(Element e)
-        {
-            string raw = FirstNonEmptyParamInstanceOrType(
-                e,
-                "Angle",
-                "Angle 1",
-                "Elbow Angle",
-                "Bend Angle",
-                "Nominal Angle",
-                "Fitting Angle"
-            );
-
-            if (string.IsNullOrWhiteSpace(raw))
-                return "";
-
-            double n = ExtractFirstNumber(raw);
-
-            if (n <= 0)
-                return "";
-
-            // Revit angle may be displayed as degrees already.
-            if (n > 6.5)
-                return Math.Round(n).ToString(CultureInfo.InvariantCulture) + "DEG";
-
-            // If stored in radians.
-            double deg = n * 180.0 / Math.PI;
-            return Math.Round(deg).ToString(CultureInfo.InvariantCulture) + "DEG";
         }
 
         private static string FirstNonEmptyParamInstanceOrType(Element e, params string[] names)
@@ -966,25 +900,6 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             }
 
             return "";
-        }
-
-        private static string NormalizeDescription(string text)
-        {
-            string s = (text ?? "").Trim();
-
-            if (string.IsNullOrWhiteSpace(s))
-                return "";
-
-            s = s.Replace("COUPLING150LB", "COUPLING 150LB");
-            s = s.Replace("STAINLESS-0MM-WELD GAP", "STAINLESS-0MM GAP");
-
-            if (s.Equals("DN50 FERRULES - SCH10 - SS", StringComparison.OrdinalIgnoreCase))
-                return "HYDROFLOW FERRULE - SCH10 - SS";
-
-            if (s.Equals("050DN", StringComparison.OrdinalIgnoreCase))
-                return "HYDROFLOW FERRULE - SCH10 - SS";
-
-            return s;
         }
 
         private static string NormalizeSizeText(string sizeText)

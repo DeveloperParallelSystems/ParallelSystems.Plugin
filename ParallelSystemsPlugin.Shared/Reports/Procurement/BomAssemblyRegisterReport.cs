@@ -473,6 +473,14 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                 }
             }
 
+            sheet.Add(
+                ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Total,
+                "",
+                "SUM",
+                rows.Sum(r => r.Qty),
+                "",
+                "");
+
             if (!string.IsNullOrWhiteSpace(note))
             {
                 sheet.Add(ParallelSystemsPlugin.Helpers.ExcelReportExporter.RowKind.Blank);
@@ -824,6 +832,14 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                     row.Cells[4].AddParagraph("");
                 }
             }
+
+            var totalRow = table.AddRow();
+            totalRow.TopPadding = Unit.FromPoint(3);
+            totalRow.BottomPadding = Unit.FromPoint(3);
+            totalRow.Format.Font.Bold = true;
+            totalRow.Cells[1].AddParagraph("SUM");
+            totalRow.Cells[2].AddParagraph(rows.Sum(r => r.Qty).ToString(CultureInfo.InvariantCulture));
+            totalRow.Cells[2].Format.Alignment = ParagraphAlignment.Center;
 
             section.AddParagraph().Format.SpaceAfter = Unit.FromCentimeter(0.5);
 

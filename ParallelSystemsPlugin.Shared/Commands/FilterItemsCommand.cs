@@ -244,6 +244,7 @@ namespace ParallelSystemsPlugin.Commands
             string[] names =
             {
                 "BOM Description",
+                "Description BOM",
                 "Procurement Description",
                 "Description"
             };

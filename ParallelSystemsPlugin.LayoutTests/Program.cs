@@ -25,6 +25,29 @@ internal static class Program
         try
         {
             PdfConflictTests.ExcelCutListEntryDoesNotInitializePdf();
+            if (args.Contains("--description-audit"))
+            {
+                LabelDescriptionTests.Run();
+                PipeDescriptionTests.Run();
+                AssemblyLoadingDescriptionTests.Run();
+                FieldMaterialReportTests.Run();
+                FittingReportTests.Run();
+                AccessoryReportTests.Run();
+                AssemblyRegisterReportTests.RunExcel();
+                AssemblyRegisterReportTests.RunPdf();
+                return 0;
+            }
+            LabelDescriptionTests.Run();
+            PipeDescriptionTests.Run();
+            AssemblyLoadingDescriptionTests.Run();
+            FieldMaterialReportTests.Run();
+            if (args.Contains("--field-material")) return 0;
+            AssemblyRegisterReportTests.RunExcel();
+            if (args.Contains("--assembly-register"))
+            {
+                AssemblyRegisterReportTests.RunPdf();
+                return 0;
+            }
             FittingReportTests.Run();
             if (args.Contains("--fitting")) return 0;
             AccessoryReportTests.Run();
@@ -41,6 +64,7 @@ internal static class Program
             SmoothBranchBRepUsesHighPrecisionDeviationBudget();
             AssemblyIdentityMarkerNamesAreSafeAndUnique();
             PdfConflictTests.PdfExportStillChecksConflicts();
+            AssemblyRegisterReportTests.RunPdf();
             Console.WriteLine("PASS: Label report Excel sheet uses the simple row-based layout.");
             Console.WriteLine("PASS: Module STEP allows piping without support components.");
             Console.WriteLine("PASS: Slip-on setback resolves dynamically from nominal diameter.");

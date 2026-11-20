@@ -402,7 +402,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             // Match Filter Items: use family/type identity and prefer the dedicated
             // BOM/procurement description, reading the instance before its type.
             string description = "";
-            foreach (string name in new[] { "BOM Description", "Procurement Description", "Description" })
+            foreach (string name in new[] { "BOM Description", "Description BOM", "Procurement Description", "Description" })
             {
                 description = GetParameter(item, name);
                 if (string.IsNullOrWhiteSpace(description))
@@ -429,7 +429,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             string detail = (description ?? "").Trim();
             if (string.IsNullOrWhiteSpace(identity))
-                return string.IsNullOrWhiteSpace(detail) ? "Component" : detail;
+                return detail;
             if (!string.IsNullOrWhiteSpace(detail) &&
                 identity.IndexOf(detail, StringComparison.OrdinalIgnoreCase) < 0)
             {
