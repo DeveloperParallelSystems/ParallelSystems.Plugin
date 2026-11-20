@@ -10,8 +10,35 @@ The solution supports:
 - Revit 2022 — .NET Framework 4.8
 - Revit 2023 — .NET Framework 4.8
 - Revit 2024 — .NET Framework 4.8
-- Revit 2025 — .NET 8 Windows
-- Revit 2026 — .NET 8 Windows
+- Revit 2025 — .NET 8 Windows (compiled against the original 2025 API)
+- Revit 2026 — .NET 8 Windows (compiled against the original 2026 API)
+
+The Revit 2025 and 2026 adapters restore their build references from the community-maintained
+`Revit_All_Main_Versions_API_x64` NuGet package, pinned to exactly `2025.0.0` and
+`2026.0.0` respectively. They do not reference the installed Revit DLLs, so updating Revit to 2025.5 or 2026.5
+does not change the compiler inputs or require targeting .NET 10. Build normally:
+
+```powershell
+.\Build\Build-All.ps1 -RevitVersion 2025
+.\Build\Build-All.ps1 -RevitVersion 2026
+```
+
+The package supplies build references only. Autodesk DLLs are never copied to the
+add-in output or installer; Revit supplies its own assemblies at runtime. The
+installer still consumes each adapter's `bin/x64/Release` directory.
+Validate the resulting .NET 8 add-ins in original Revit 2025/2026 and their .5 updates before
+release; compilation alone does not establish runtime compatibility.
+
+To use DLLs from your own original Revit 2025 or 2026 installation instead, place
+`RevitAPI.dll`, `RevitAPIUI.dll`, and `AdWindows.dll` together and override the
+reference directory (use matching-year .NET 8-era DLLs, not the .5 DLLs):
+
+```powershell
+dotnet build .\ParallelSystemsPlugin.2025\ParallelSystemsPlugin.2025.csproj -c Release -p:Platform=x64 -p:DeployToRevitOnBuild=false -p:RevitReferenceDir=C:\RevitReferences\2025
+dotnet build .\ParallelSystemsPlugin.2026\ParallelSystemsPlugin.2026.csproj -c Release -p:Platform=x64 -p:DeployToRevitOnBuild=false -p:RevitReferenceDir=C:\RevitReferences\2026
+```
+
+Other adapters continue to default to `RevitInstallDir`.
 
 The actual plugin code is maintained in:
 
