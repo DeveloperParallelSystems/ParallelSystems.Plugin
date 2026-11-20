@@ -1,5 +1,14 @@
 ﻿# Changelog
 
+## 1.18.3 - Procurement Report Corrections (2026-11-20)
+
+- Added a final SUM row to Assembly Register Excel and PDF exports, including package worksheet totals.
+- Removed fixed fitting descriptions and material/specification substitutions. Report descriptions use model values, including the Description BOM parameter, while retaining existing placeholder exclusions.
+- Shortened Field Material descriptions to the model Description parameter. Identified Victaulic rigid and flexible couplings use the requested VIC RIGID COUPLING and VIC FLEXIBLE COUPLING names; other descriptions remain unchanged.
+- Removed generic Accessory and Field Material description fallbacks and forced Label Report branch specifications. Label pipes prefer their own material values before assembly fallbacks.
+- Verified model description/material text across Accessory, Assembly Register, Cut List, Field Material, Fitting, Loading, Pipe and Label reports with regression checks.
+- Centralized Revit 2021–2026 release metadata at version 1.18.3, including assembly/file versions 1.18.3.0 and splash/tracker version fallbacks.
+
 ## 1.17.10 - Flange Configuration and STEP Bolt Holes (Internal / Unreleased)
 
 - Separated Excel cut-list export from PDF initialization and rendering so PDFsharp assemblies loaded by other add-ins, including ProSheets, do not block the XLSX output. PDF export retains its dependency validation.

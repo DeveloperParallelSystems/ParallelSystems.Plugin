@@ -1,8 +1,8 @@
-﻿# Developer Notes
+# Developer Notes
 
 ## Current Internal Build
 
-- Revit plugin version: **1.17.10**
+- Revit plugin version: **1.18.3**
 - Release: **Internal / Unreleased**
 - Monitoring architecture generation: **V2**
 - Production tracker schema: **3**
@@ -10,24 +10,24 @@
 - Supported Revit adapters: **2021 through 2026**
 - Native STEP export: **Revit 2025 and 2026**
 
-The monitoring architecture V2 label is not the Revit plugin release number. Backend and Frontend package metadata can remain 2.0.0 as architecture/application metadata. The user-facing Revit product, Revit assemblies, About screen, and production tracker pluginVersion must identify the plugin as 1.17.10.
+The monitoring architecture V2 label is not the Revit plugin release number. Backend and Frontend package metadata can remain 2.0.0 as architecture/application metadata. The user-facing Revit product, Revit assemblies, About screen, and production tracker pluginVersion must identify the plugin as 1.18.3.
 
 ## Authoritative Version Sources
 
 `ParallelSystems.Plugin/Directory.Build.props` sets:
 
 ```text
-Version                 1.17.10
-AssemblyVersion         1.17.10.0
-FileVersion             1.17.10.0
-InformationalVersion    1.17.10
+Version                 1.18.3
+AssemblyVersion         1.18.3.0
+FileVersion             1.18.3.0
+InformationalVersion    1.18.3
 ```
 
 `IncludeSourceRevisionInInformationalVersion` is false.
 
 `AboutDialog.xaml.cs` reads AssemblyInformationalVersion first, falls back to file/assembly version, removes any +sourceRevision suffix, and trims a final .0 field.
 
-`TimesheetTracker.cs` uses the same assembly informational version, strips a +suffix, trims .0, and sends 1.17.10 in TrackerCheckpointRequest.PluginVersion. It sends SchemaVersion 3 when the tracker is enabled.
+`TimesheetTracker.cs` uses the same assembly informational version, strips a +suffix, trims .0, and sends 1.18.3 in TrackerCheckpointRequest.PluginVersion. It sends SchemaVersion 3 when the tracker is enabled.
 
 ## Project Launch Architecture
 
@@ -38,6 +38,13 @@ InformationalVersion    1.17.10
 `ProjectSetupValidator` is read-only and version-independent. It evaluates actual worksharing/cloud flags, workset names, loaded required link types, host Grid/Level monitoring evidence, confirmations, and explicit not-applicable reasons. Historical completion metadata is separate from current compliance.
 
 All native-command differences are confined to `Compatibility/RevitApiCompatibility.cs`. Revit 2022–2026 compile the `SaveAsCloudModel`, `ManageLinks`, and `CopyMonitorSelectLink` postable commands. The Revit 2021 compile excludes the unavailable enum members and reports a manual handoff for cloud saving and Copy/Monitor; it still posts Manage Links. No undocumented command identifiers, keyboard automation, OAuth credentials, or APS project/folder IDs are used.
+
+## Release Focus in 1.18.3
+
+- Revit 2021–2026 adapters inherit version metadata from Directory.Build.props; adapter projects do not override Version.
+- Assembly Register totals Qty on the main sheet, package sheets and PDF. Procurement descriptions retain model material/specification text instead of synthesized fitting or label values.
+- Field Material intentionally uses Description only, with the approved Victaulic rigid/flexible short-name exceptions. Family/type names are classification evidence and are not printed in that report's description.
+- Run `dotnet run --project ParallelSystemsPlugin.LayoutTests -p:DeployToRevitOnBuild=false -- --description-audit` to verify the report description and total regressions.
 
 ## Release Focus in 1.17.10
 
@@ -161,7 +168,7 @@ Header ND and Detailing command classes remain in source but are not built onto 
 
 The Procurement tab provides an Excel/PDF radio choice plus stock length, blade thickness, negative allowance, and offcut-threshold inputs. New configuration defaults select Excel, exclude site-measured work, and use a 3500 mm reusable-offcut threshold.
 
-The Fabrication tab and Atlas STEP lookup both load the packaged `Atlas-Flange-Dimensions.psv` through `AtlasFlangeReferenceCatalog`. The read-only view covers six ASME B16.5 classes, AS 2129 Tables D/E/F/H, PN16 AS 4087, and PN16 EN 1092. Its component type, reference-table, and nominal-size selectors filter the in-memory view only; version 1.17.10 does not persist user edits or overrides. During STEP generation, `FabricationStepService.FlangeGeometry.cs` matches the same immutable data by a supported table token in the flange family/type name plus the nominal diameter of its round physical connectors.
+The Fabrication tab and Atlas STEP lookup both load the packaged `Atlas-Flange-Dimensions.psv` through `AtlasFlangeReferenceCatalog`. The read-only view covers six ASME B16.5 classes, AS 2129 Tables D/E/F/H, PN16 AS 4087, and PN16 EN 1092. Its component type, reference-table, and nominal-size selectors filter the in-memory view only; version 1.18.3 does not persist user edits or overrides. During STEP generation, `FabricationStepService.FlangeGeometry.cs` matches the same immutable data by a supported table token in the flange family/type name plus the nominal diameter of its round physical connectors.
 
 The Pipe End Prep tab trims saved output names and treats blank End 1, End 2, or End Prep fields as intentionally unmapped. `MapPipesCommand` preflights each non-blank name across the active-view pipes. Partial presence, non-Text storage, read-only parameters, and type bindings block the command before its mapping transaction. Missing definitions are created through a temporary shared-parameter file with a deterministic name-derived GUID and bound as Text instance parameters to Pipes; compatible existing instance bindings are extended to include Pipes. The prior shared-parameter-file path is restored, the temporary file is removed when safe, and fresh pipe wrappers are collected for a second preflight before mapping.
 
@@ -391,7 +398,7 @@ The in-dialog Markdown renderer supports headings beginning with `#`, `##`, and 
 Before release:
 
 - Build the target Revit adapter on Windows with the installed Revit API assemblies.
-- Open About and confirm `Version: 1.17.10` with no Git suffix.
+- Open About and confirm `Version: 1.18.3` with no Git suffix.
 - Confirm installed Docs files load.
 - Exercise every active ribbon panel.
 - Test Pipe End Prep with each output configured independently, all outputs blank, a missing parameter, an existing compatible parameter not bound to Pipes, and partial, non-Text, read-only, and type-bound parameters. Confirm blocking cases do not partially update pipe values.

@@ -1,15 +1,15 @@
-﻿# Parallel Systems Revit Plugin - User Manual
+# Parallel Systems Revit Plugin - User Manual
 
 ## Current Build
 
-- Version: **1.17.10**
+- Version: **1.18.3**
 - Release: **Internal / Unreleased**
 - Supported Revit adapters in this solution: **2021 through 2026**
 - Native Fabrication STEP export: **Revit 2025 and 2026**
 - Monitoring architecture generation: **V2**
 - Monitoring flow: **Revit Plugin -> HTTPS API -> PostgreSQL -> React Web Application**
 
-The public plugin version is 1.17.10. The V2 label used in monitoring and deployment documentation describes the monitoring architecture generation; it is not the Revit plugin release number.
+The public plugin version is 1.18.3. The V2 label used in monitoring and deployment documentation describes the monitoring architecture generation; it is not the Revit plugin release number.
 
 ## Project Launch — 01.1 Project Setup
 
@@ -20,6 +20,12 @@ Use **Save Setup Information** to write Project Name and Project Number to Revit
 For a local project, configure the two initial worksets and any additional worksets before enabling worksharing. Revit clears Undo history when worksharing is enabled, so the command requires confirmation. Cloud saving, Manage Links, and Copy/Monitor remain native Revit workflows. Revit 2022–2026 can launch all three workflows from Project Launch. Revit 2021 launches Manage Links directly and provides manual menu instructions for Save As Cloud Model and Copy/Monitor. In every version, status is based on the actual model after Refresh/Recheck—not on whether a launcher button was selected.
 
 **Complete 01.1** is available only when the active project, required information, naming confirmation, worksharing, configured worksets, cloud worksharing, links, and Grid/Level coordination pass validation. Copy/Monitor may be marked not required only with an explicit reason. Completion records the Revit user, UTC time, and plugin version, but does not hide later compliance failures.
+
+## What Is New in 1.18.3
+
+- Assembly Register adds a final SUM row for Qty in Excel and PDF, including package worksheet totals.
+- Procurement reports use model descriptions and material specifications, with fixed fitting and label specification replacements removed.
+- Field Material uses the model Description without the family/type prefix. Identified Victaulic couplings use the approved short descriptions VIC RIGID COUPLING and VIC FLEXIBLE COUPLING; other items keep their model descriptions.
 
 ## What Is New in 1.17.10
 
@@ -283,7 +289,7 @@ The Configurations window contains six active tabs.
 - Filters the reference by configuration type (currently Flange), reference table, and nominal size.
 - Shows only nominal-size and dimension fields. The PN16 tables retain raised-face height, and EN 1092 retains its separate blind and SOW thickness columns. Weight columns are intentionally omitted.
 - Switches the adjacent diagram to match the selected table family. Select the diagram to open a large, resizable view. The panel also provides both a website link and a packaged offline PDF.
-- Is read-only in version 1.17.10. The displayed values cannot currently be edited or overridden from the Configurations window.
+- Is read-only in version 1.18.3. The displayed values cannot currently be edited or overridden from the Configurations window.
 
 **Tools**
 
@@ -343,7 +349,7 @@ The Detailing command class remains in the source, but no Detailing panel is cre
 
 - User Manual displays this installed guide.
 - What's New displays the installed CHANGELOG.md.
-- About displays the product description, Version 1.17.10, Internal / Unreleased status, and assembly build timestamp.
+- About displays the product description, Version 1.18.3, Internal / Unreleased status, and assembly build timestamp.
 - Open Full Manual opens the installed UserManual.md.
 - Open Change Log opens the installed CHANGELOG.md.
 - Developer Notes opens the installed DEVELOPERS.md.
@@ -398,7 +404,7 @@ The production Revit tracker sends:
 
 ```text
 Tracker schema version: 3
-Plugin version: 1.17.10
+Plugin version: 1.18.3
 ```
 
 The backend accepts tracker schema versions 2 and 3 for deployment compatibility.
@@ -512,7 +518,7 @@ The source solution is separated into:
 - scripts: local start/stop, tracker configuration, test checkpoint, and failed-message recovery.
 - docs: architecture, mapping, policy, deployment, validation, migration, and test guidance.
 
-The monitoring architecture is V2, while the Revit plugin release is 1.17.10.
+The monitoring architecture is V2, while the Revit plugin release is 1.18.3.
 
 No MSMQ, old Activity Queue Service, or central workstation SQLite database is part of the active architecture.
 
@@ -574,7 +580,7 @@ No MSMQ, old Activity Queue Service, or central workstation SQLite database is p
 - Confirm Revit was closed before deployment.
 - Rebuild the adapter matching the installed Revit year.
 - Replace both the deployed DLL and PDB.
-- Confirm Directory.Build.props contains Version and InformationalVersion 1.17.10.
+- Confirm Directory.Build.props contains Version and InformationalVersion 1.18.3.
 - Confirm the installed Docs folder was copied beside the DLL.
 - Restart Revit.
 

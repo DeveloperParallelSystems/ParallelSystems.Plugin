@@ -1,4 +1,4 @@
-﻿<Window x:Class="ParallelSystemPlugin.UI.StartupSplashWindow"
+<Window x:Class="ParallelSystemPlugin.UI.StartupSplashWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Parallel Systems Revit Plugin"
@@ -257,7 +257,7 @@
                                    Foreground="{StaticResource DarkGreen}"/>
 
                         <TextBlock x:Name="VersionLabel"
-                                   Text="Version 1.17.10"
+                                   Text="Version 1.18.3"
                                    Margin="0,7,0,0"/>
 
                         <TextBlock Text="Internal / Unreleased"

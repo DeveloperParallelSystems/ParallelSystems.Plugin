@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Reflection;
 using System.Windows;
@@ -83,7 +83,7 @@ namespace ParallelSystemPlugin.UI
                     version = assembly.GetName().Version?.ToString();
 
                 if (string.IsNullOrWhiteSpace(version))
-                    return "1.17.10";
+                    return "1.18.3";
 
                 int suffixIndex = version.IndexOf('+');
                 if (suffixIndex >= 0)
@@ -96,7 +96,7 @@ namespace ParallelSystemPlugin.UI
             }
             catch
             {
-                return "1.17.10";
+                return "1.18.3";
             }
         }
     }
