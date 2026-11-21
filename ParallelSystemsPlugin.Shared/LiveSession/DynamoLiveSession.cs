@@ -234,7 +234,8 @@ namespace ParallelSystemsPlugin.LiveSession
                 Seen = true;
                 Succeeded = (bool)DynamoReflection.Get(args, "EvaluationSucceeded");
                 TookPlace = (bool)DynamoReflection.Get(args, "EvaluationTookPlace");
-                Error = (DynamoReflection.Optional(args, "Error") as Exception)?.Message;
+                // Dynamo throws when Error is queried after a successful evaluation.
+                Error = Succeeded ? null : (DynamoReflection.Optional(args, "Error") as Exception)?.Message;
             }
         }
     }

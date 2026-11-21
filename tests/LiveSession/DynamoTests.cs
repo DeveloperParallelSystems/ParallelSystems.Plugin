@@ -122,7 +122,8 @@ internal static class DynamoTests
     {
         public bool EvaluationSucceeded => true;
         public bool EvaluationTookPlace => true;
-        public Exception Error => null;
+        // Match the real Dynamo event contract: success has no readable Error.
+        public Exception Error => throw new InvalidOperationException("Evaluation success, no error message recorded.");
     }
     public sealed class FakeWorkspace
     {
