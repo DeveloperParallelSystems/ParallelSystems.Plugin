@@ -4,7 +4,14 @@ namespace ParallelSystemsPlugin.Models.Configs
 {
     public class ProcurementConfig
     {
-        public string CompanyLogoPath { get; set; } = "";
+        private string companyLogoPath = "";
+        public string CompanyLogoPath
+        {
+            get => !string.IsNullOrWhiteSpace(companyLogoPath) && System.IO.File.Exists(companyLogoPath)
+                ? companyLogoPath
+                : ParallelSystemsPlugin.Helpers.ProcurementBranding.GetDefaultCompanyLogoPath();
+            set => companyLogoPath = value;
+        }
         public string ClientLogoPath { get; set; } = "";
         public string JobNumber { get; set; } = "";
         public string JobName { get; set; } = "";

@@ -11,6 +11,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\ParallelSystemsPlugin.Shared\UI\Assets\ParallelSystemsWebsiteLogo.png"
+                      LogicalName="ParallelSystemsPlugin.Procurement.CompanyLogo.png" />
     <PackageReference Include="DocumentFormat.OpenXml" />
     <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>

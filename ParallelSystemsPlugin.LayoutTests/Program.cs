@@ -24,6 +24,7 @@ internal static class Program
     {
         try
         {
+            CompanyLogoTests.Run();
             PdfConflictTests.ExcelCutListEntryDoesNotInitializePdf();
             if (args.Contains("--description-audit"))
             {
