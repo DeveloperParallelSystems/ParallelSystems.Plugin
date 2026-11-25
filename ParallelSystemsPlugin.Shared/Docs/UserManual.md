@@ -272,6 +272,7 @@ The Configurations window contains six active tabs.
 - Output Details: target folder, report date, cut-list maximum length, blade thickness, negative allowance, and reusable-offcut threshold.
 - Reports: Assembly Register, Cut List, Fitting Report, Loading Report, Pipe Report, Label Report, Field Material Report, and Accessory Report. Select Excel or PDF under Output Format.
 - The shared options appear in this order: `Include Site-Measure Items`, `Include Weld Items`, `Group Summary by Package`, and `Create Package Worksheets`.
+- Field Material Report includes active-view items marked `Vic_Field Material` regardless of `Include Site-Measure Items`, including items in or connected to site-measured assemblies. Do Not Schedule and Include Weld rules still apply.
 - `Group Summary by Package` affects only the main worksheet of package-based Excel reports and is disabled by default. When enabled, applicable summary rows remain separated by package. When disabled, matching component rows are combined across packages and the summary omits the Package column where the report layout supports aggregation.
 - `Create Package Worksheets` is disabled by default. When disabled, every Excel workbook contains only its main report worksheet. When enabled and multiple packages are represented, one worksheet per package is appended after the main worksheet.
 - `Include Weld Items` is one shared setting for every report where weld filtering applies, currently Fitting Report and Field Material Report. When disabled, weld rows are omitted from those reports.

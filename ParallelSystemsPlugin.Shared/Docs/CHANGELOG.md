@@ -2,6 +2,8 @@
 
 ## 1.18.3 - Procurement Report Corrections (2026-11-20)
 
+- Field Material Report includes active-view field material even when the item or its connections are site-measured and Include Site-Measure Items is disabled. Package lookup no longer excludes these items.
+- Procurement Company Logo defaults to the bundled Parallel Systems image, including when a saved logo path is blank or missing. The image is available locally for Excel and PDF exports without browsing for a file.
 - Added a final SUM row to Assembly Register Excel and PDF exports, including package worksheet totals.
 - Removed fixed fitting descriptions and material/specification substitutions. Report descriptions use model values, including the Description BOM parameter, while retaining existing placeholder exclusions.
 - Shortened Field Material descriptions to the model Description parameter. Identified Victaulic rigid and flexible couplings use the requested VIC RIGID COUPLING and VIC FLEXIBLE COUPLING names; other descriptions remain unchanged.

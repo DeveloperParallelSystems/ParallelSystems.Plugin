@@ -45,9 +45,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             if (ExportDebugCsv)
                 ExportFieldMaterialDebugCsv(doc, cfg);
 
-            var includeElement = Helpers.Elements.ProcurementSiteMeasureFilter(doc, cfg.IncludeSiteMeasure);
+            // Field material is required on site even when its own/connected assembly is site-measured.
             var fieldMaterials = CollectFieldMaterialElements(doc)
-                .Where(fi => includeElement(fi))
                 .Where(fi => !Helpers.Elements.IsDoNotSchedule(doc, fi))
                 .Where(IsFieldMaterial)
                 .ToList();
@@ -55,9 +54,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             var eligibleRows = fieldMaterials
                 .Select(fi =>
                 {
-                    if (!TryResolveFieldMaterialPackage(doc, fi, includeElement, out string packageName))
-                        return null;
-
+                    string packageName = ResolveFieldMaterialPackage(doc, fi);
                     string description = GetReportDescription(fi);
 
                     return new Data
@@ -69,8 +66,8 @@ namespace ParallelSystemsPlugin.Reports.Procurement
                         Quantity = 1
                     };
                 })
-                .Where(x => x != null && (cfg.IncludeWeld ||
-                    !string.Equals(x.Category, "WELD", StringComparison.OrdinalIgnoreCase)))
+                .Where(x => cfg.IncludeWeld ||
+                    !string.Equals(x.Category, "WELD", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             var summaryRows = Summarize(eligibleRows, cfg.GroupByPackage);
@@ -101,7 +98,7 @@ namespace ParallelSystemsPlugin.Reports.Procurement
 
             PdfLayoutHelpers.DrawHeader(section, cfg, "FIELD MATERIAL REPORT", dateText);
 
-            PdfLayoutHelpers.AddFooter(section, note, !cfg.IncludeSiteMeasure);
+            PdfLayoutHelpers.AddFooter(section, note);
 
             bool shade = false;
             string currentGroup = "";
@@ -213,28 +210,22 @@ namespace ParallelSystemsPlugin.Reports.Procurement
             return IsChecked(typeParameter);
         }
 
-        private static bool TryResolveFieldMaterialPackage(
-            RvtDoc doc, FamilyInstance fieldMaterial, Func<Element, bool> includeElement, out string packageName)
+        private static string ResolveFieldMaterialPackage(RvtDoc doc, FamilyInstance fieldMaterial)
         {
             if (fieldMaterial.AssemblyInstanceId != ElementId.InvalidElementId)
-            {
-                packageName = GetPackageFromOwningAssembly(doc, fieldMaterial);
-                return true;
-            }
+                return GetPackageFromOwningAssembly(doc, fieldMaterial);
 
-            packageName = "";
+            // Connections supply package metadata only; SM status must not exclude the item.
+            string packageName = "";
             foreach (Element connection in GetLooseItemConnections(fieldMaterial))
             {
-                if (!includeElement(connection))
-                    return false;
-
                 if (string.IsNullOrWhiteSpace(packageName))
                     packageName = GetPackageFromOwningAssembly(doc, connection);
             }
 
             if (string.IsNullOrWhiteSpace(packageName))
                 packageName = Helpers.Elements.GetStandardProcurementPackageName(doc, fieldMaterial);
-            return true;
+            return packageName;
         }
 
         internal static IEnumerable<Element> GetLooseItemConnections(FamilyInstance fieldMaterial)
